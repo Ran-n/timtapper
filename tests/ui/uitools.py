@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.940076
-Revised: 2026/10/11 16:27:25.383954
+Revised: 2026/10/11 23:25:32.932497
 
 Walk a Flet control tree and fire handlers without a running client.
 """
@@ -65,7 +65,7 @@ async def fire(handler, control=None, **event_fields):
 
 async def pick_leader(sheet: ft.BottomSheet, leader_id: int, code: str) -> None:
     """Search the picker by code (as a user would) and tap the result."""
-    _title, field, results = sheet.content.content.controls
+    field, results = by_data(sheet, "leader-search"), by_data(sheet, "leader-results")
     field.value = code
     await fire(field.on_change, field)
     option = next(c for c in results.controls if c.data == leader_id)

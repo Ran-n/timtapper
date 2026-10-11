@@ -2,12 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.221073
-Revised: 2026/10/11 17:20:12.554445
+Revised: 2026/10/11 23:25:31.944909
 
 Leader catalogue persistence: upsert from LeaderRecords, read as plain Leader values.
 """
 
 import json
+import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -134,3 +136,32 @@ def search(leaders: list[Leader], query: str) -> list[Leader]:
         for leader in leaders
         if all(w in f"{leader.name} {leader.code} {' '.join(leader.colors)}".lower() for w in words)
     ]
+
+
+def filter_leaders(
+    leaders: list[Leader], query: str, colors: frozenset[str] = frozenset(), set_code: str | None = None
+) -> list[Leader]:
+    """`search`, then keep leaders having every selected color (AND narrows) and, if given, that set."""
+    return [
+        leader
+        for leader in search(leaders, query)
+        if colors <= set(leader.colors) and (not set_code or leader.set_code == set_code)
+    ]
+
+
+# Main sets first, then extra boosters, starters, promo packs; any other prefix after those.
+_SET_PREFIX_ORDER = ("OP", "EB", "ST", "PRB")
+
+
+def _set_sort_key(code: str) -> tuple:
+    match = re.fullmatch(r"([A-Z]+)(\d+)", code)
+    if not match:
+        return (2, 0, code, 0)
+    prefix, number = match[1], int(match[2])
+    rank = _SET_PREFIX_ORDER.index(prefix) if prefix in _SET_PREFIX_ORDER else len(_SET_PREFIX_ORDER)
+    return (0 if rank < len(_SET_PREFIX_ORDER) else 1, rank, prefix, -number)
+
+
+def set_codes(leaders: Iterable[Leader]) -> list[str]:
+    """Distinct set codes, newest first within OP, EB, ST, PRB, other prefixes, then unparsable codes."""
+    return sorted({leader.set_code for leader in leaders if leader.set_code}, key=_set_sort_key)

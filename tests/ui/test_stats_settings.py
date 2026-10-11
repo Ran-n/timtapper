@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.861081
-Revised: 2026/10/11 17:20:13.506113
+Revised: 2026/10/11 23:25:32.785119
 """
 
 import datetime as dt
@@ -81,7 +81,7 @@ async def test_stats_share(ctx, sample_event, monkeypatch, tag, title):
 async def test_picker_search_and_limit(ctx):
     picked = []
     sheet = build_picker(ctx, "Pick", picked.append)
-    _title, field, results = sheet.content.content.controls
+    field, results = by_data(sheet, "leader-search"), by_data(sheet, "leader-results")
     assert len(results.controls) == MAX_RESULTS
     field.value = "zzzz-no-match"
     await fire(field.on_change, field)

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.420418
-Revised: 2026/10/11 17:10:30.429110
+Revised: 2026/10/11 23:25:32.398740
 
 Small building blocks reused across screens.
 """
@@ -149,19 +149,69 @@ def record_pill(rec: Record, scheme: Scheme) -> ft.Control:
     return pill(f"{rec.label()} · {percent(rec.win_rate)}" if rec.games else "—", rate_color(rec, scheme), scheme)
 
 
-def result_badge(result: str | None, scheme: Scheme, size: int = 36) -> ft.Control:
+def _badge(content: ft.Control, bgcolor: str, *, width: int, height: int) -> ft.Container:
+    """The square-ish slot round rows line up their indicators in."""
     return ft.Container(
-        width=size,
-        height=size,
-        border_radius=size // 3,
+        width=width,
+        height=height,
+        border_radius=height // 3,
         alignment=ft.Alignment.CENTER,
-        bgcolor=scheme.results[result] if result else ft.Colors.SURFACE_CONTAINER_HIGHEST,
-        content=ft.Text(
+        bgcolor=bgcolor,
+        content=content,
+    )
+
+
+def result_badge(result: str | None, scheme: Scheme, size: int = 36) -> ft.Control:
+    return _badge(
+        ft.Text(
             result or "…",
             size=size * 0.4,
             font_family=FONT_HEAVY,
             color=scheme.on_accent if result else ft.Colors.ON_SURFACE_VARIANT,
         ),
+        scheme.results[result] if result else ft.Colors.SURFACE_CONTAINER_HIGHEST,
+        width=size,
+        height=size,
+    )
+
+
+def turn_badge(went_first: bool | None, scheme: Scheme, first: str, second: str, size: int = 36) -> ft.Control:
+    """`first`/`second` when known, a muted dash when not; labels come translated from the caller."""
+    known = went_first is not None
+    return _badge(
+        ft.Text(
+            (first if went_first else second) if known else "—",
+            size=size * 0.36,
+            font_family=FONT_HEAVY if known else None,
+            color=scheme.fg if known else ft.Colors.ON_SURFACE_VARIANT,
+        ),
+        scheme.surface_high if known else ft.Colors.SURFACE_CONTAINER_HIGHEST,
+        width=size + 4,
+        height=size,
+    )
+
+
+def die_badge(won_die_roll: bool | None, scheme: Scheme, size: int = 36) -> ft.Control:
+    """A die, plus a check (won) or a cross (lost): shape and colour, so it reads without colour."""
+    icon_size = size * 0.5
+    if won_die_roll is None:
+        content: ft.Control = ft.Icon(ft.Icons.CASINO, size=icon_size, color=ft.Colors.ON_SURFACE_VARIANT)
+    else:
+        mark, color = (ft.Icons.CHECK, scheme.success) if won_die_roll else (ft.Icons.CLOSE, scheme.error)
+        content = ft.Row(
+            [
+                ft.Icon(ft.Icons.CASINO, size=icon_size, color=scheme.fg),
+                ft.Icon(mark, size=icon_size * 0.8, color=color),
+            ],
+            spacing=0,
+            tight=True,
+            alignment=ft.MainAxisAlignment.CENTER,
+        )
+    return _badge(
+        content,
+        scheme.surface_high if won_die_roll is not None else ft.Colors.SURFACE_CONTAINER_HIGHEST,
+        width=size + 8,
+        height=size,
     )
 
 

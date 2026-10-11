@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:45.093250
-Revised: 2026/10/11 16:27:25.526319
+Revised: 2026/10/11 23:25:32.551584
 
 Every string the code translates exists in every language, and no table carries stale keys.
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from i18n import _EVENT_TYPE_LABELS, LANGUAGES, event_type_label, translator
+from i18n import _EVENT_TYPE_LABELS, COLOR_LABELS, LANGUAGES, color_label, event_type_label, translator
 from i18n.translations import TRANSLATIONS
 
 APP_DIR = Path(__file__).resolve().parent.parent / "src" / "timtapper"
@@ -21,7 +21,7 @@ APP_DIR = Path(__file__).resolve().parent.parent / "src" / "timtapper"
 
 def used_keys() -> set[str]:
     """String literals passed to `_()`, `ctx._()` or `self.ctx._()` anywhere in the app."""
-    keys = set(_EVENT_TYPE_LABELS.values())
+    keys = set(_EVENT_TYPE_LABELS.values()) | set(COLOR_LABELS)
     for path in APP_DIR.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not (isinstance(node, ast.Call) and node.args):
@@ -71,3 +71,9 @@ def test_event_type_labels():
     _ = translator("gl")
     assert event_type_label(_, "online") == "En liña"
     assert event_type_label(_, "bogus") == "Outro"
+
+
+def test_color_labels():
+    assert color_label(translator("gl"), "Red") == "Vermello"
+    assert color_label(translator("es"), "Yellow") == "Amarillo"
+    assert [color_label(translator("en"), c) for c in COLOR_LABELS] == list(COLOR_LABELS)

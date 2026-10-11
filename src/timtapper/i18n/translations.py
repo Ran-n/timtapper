@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.159067
-Revised: 2026/10/11 17:20:12.966075
+Revised: 2026/10/11 23:25:32.094086
 
 Translation tables, keyed by the English source string exactly as written
 in the code. English (EN) is built from the ES key set so it stays a
@@ -65,6 +65,7 @@ ES = {
     "Delete": "Borrar",
     "Cancel": "Cancelar",
     "Delete event": "Borrar evento",
+    "More options": "Más opciones",
     "Delete this event?": "¿Borrar este evento?",
     "The event and all its rounds will be removed. This can't be undone.": (
         "Se eliminarán el evento y todas sus rondas. No se puede deshacer."
@@ -73,6 +74,14 @@ ES = {
     "Could not save: {error}": "No se pudo guardar: {error}",
     # leader picker
     "Search name, code or color": "Busca por nombre, código o color",
+    "Set": "Set",
+    "All sets": "Todos los sets",
+    "Red": "Rojo",
+    "Green": "Verde",
+    "Blue": "Azul",
+    "Purple": "Morado",
+    "Black": "Negro",
+    "Yellow": "Amarillo",
     "No leader matches": "Ningún líder coincide",
     # stats
     "All leaders": "Todos los líderes",
@@ -100,6 +109,9 @@ ES = {
     "{rate} win rate": "{rate} de victorias",
     "1st": "1º",
     "2nd": "2º",
+    "Result — tap to change": "Resultado — toca para cambiar",
+    "Turn order — tap to change": "Orden de turno — toca para cambiar",
+    "Die roll — tap to change": "Dado — toca para cambiar",
     "+{n} more": "+{n} más",
     "No rounds logged yet": "Aún no hay rondas registradas",
     "Opponent": "Rival",
@@ -212,6 +224,7 @@ GL = {
     "Delete": "Borrar",
     "Cancel": "Cancelar",
     "Delete event": "Borrar evento",
+    "More options": "Máis opcións",
     "Delete this event?": "Borrar este evento?",
     "The event and all its rounds will be removed. This can't be undone.": (
         "Eliminaranse o evento e todas as súas roldas. Non se pode desfacer."
@@ -220,6 +233,14 @@ GL = {
     "Could not save: {error}": "Non se puido gardar: {error}",
     # leader picker
     "Search name, code or color": "Busca por nome, código ou cor",
+    "Set": "Set",
+    "All sets": "Todos os sets",
+    "Red": "Vermello",
+    "Green": "Verde",
+    "Blue": "Azul",
+    "Purple": "Morado",
+    "Black": "Negro",
+    "Yellow": "Amarelo",
     "No leader matches": "Ningún líder coincide",
     # stats
     "All leaders": "Todos os líderes",
@@ -247,6 +268,9 @@ GL = {
     "{rate} win rate": "{rate} de vitorias",
     "1st": "1º",
     "2nd": "2º",
+    "Result — tap to change": "Resultado — toca para cambiar",
+    "Turn order — tap to change": "Orde de quenda — toca para cambiar",
+    "Die roll — tap to change": "Dado — toca para cambiar",
     "+{n} more": "+{n} máis",
     "No rounds logged yet": "Aínda non hai roldas rexistradas",
     "Opponent": "Rival",

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.676210
-Revised: 2026/10/11 16:57:39.266654
+Revised: 2026/10/11 23:25:32.169180
 
 Screen routing. Tabs (/events, /stats, /settings) replace the view stack;
 /event/<id> is pushed on top so Android's back button returns to the list.
@@ -63,12 +63,20 @@ def build_view(ctx: AppContext, route: str) -> ft.View:
             scroll=ft.ScrollMode.AUTO,
             appbar=ft.AppBar(
                 title=ft.Text(_("Event")),
+                # rare, destructive actions sit behind ⋮ rather than one tap away
                 actions=[
-                    ft.IconButton(
-                        ft.Icons.DELETE_OUTLINE,
-                        tooltip=_("Delete event"),
-                        on_click=lambda _e: screen.delete_event(),
-                        data="delete-event",
+                    ft.PopupMenuButton(
+                        icon=ft.Icons.MORE_VERT,
+                        tooltip=_("More options"),
+                        items=[
+                            ft.PopupMenuItem(
+                                content=ft.Text(_("Delete event"), color=ft.Colors.ERROR),
+                                icon=ft.Icon(ft.Icons.DELETE_OUTLINE, color=ft.Colors.ERROR),
+                                on_click=lambda _e: screen.delete_event(),
+                                data="delete-event",
+                            )
+                        ],
+                        data="event-menu",
                     )
                 ],
             ),

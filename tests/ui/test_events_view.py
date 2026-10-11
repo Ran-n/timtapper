@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.709234
-Revised: 2026/10/11 17:13:51.857220
+Revised: 2026/10/12 01:06:46.782830
 """
 
 import datetime as dt
@@ -63,3 +63,11 @@ def test_tile_shows_leader_portrait_or_placeholder(ctx, sample_event, events):
     code = ctx.leaders_by_id[sample_event.leader_id].code
     assert isinstance(with_leader.content, ft.Image) and with_leader.content.src == f"leaders/{code}.webp"
     assert isinstance(without.content, ft.Icon)
+
+
+def test_event_name_has_its_own_row(ctx, sample_event):
+    body, _fab = events_view.build(ctx)
+    texts_column = body[0].content.controls[2]
+    name, leader_row = texts_column.controls[0], texts_column.controls[1]
+    assert name.data == "event-name" and name.value == "Sunday locals"
+    assert "2-1 · 67%" in texts(leader_row)  # the record pill moved beside the leader name

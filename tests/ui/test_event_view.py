@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.780273
-Revised: 2026/10/11 16:57:39.861520
+Revised: 2026/10/11 23:25:32.699873
 """
 
 import datetime as dt
@@ -11,7 +11,7 @@ import flet as ft
 import pytest
 
 from ui.event_view import EventScreen
-from uitools import by_data, fire, pick_leader, texts
+from uitools import by_data, fire, pick_leader, texts, walk
 
 
 @pytest.fixture
@@ -160,3 +160,75 @@ def test_empty_event_hint(ctx, events):
     s = EventScreen(ctx, ev.id)
     s.build()
     assert any("No rounds yet" in t for t in texts(s.body))
+
+
+# ---- tap-to-cycle indicators on the collapsed row ------------------------------------
+async def tap(screen, round_no: int, tag: str) -> None:
+    target = by_data(by_data(screen.body, f"round-{round_no}"), f"{tag}-cycle")
+    await fire(target.on_click, target)
+
+
+def round_of(events, sample_event, round_no: int):
+    return next(r for r in events.get(sample_event.id).rounds if r.round_no == round_no)
+
+
+async def test_result_cycles_through_all_values(screen, events, sample_event):
+    seen = []
+    for _ in range(4):
+        await tap(screen, 4, "result")
+        seen.append(round_of(events, sample_event, 4).result)
+    assert seen == ["W", "L", "D", None]
+
+
+async def test_turn_cycles(screen, events, sample_event):
+    seen = []
+    for _ in range(3):
+        await tap(screen, 3, "turn")
+        seen.append(round_of(events, sample_event, 3).went_first)
+    assert seen == [True, False, None]
+
+
+async def test_die_cycles(screen, events, sample_event):
+    seen = []
+    for _ in range(3):
+        await tap(screen, 3, "die")
+        seen.append(round_of(events, sample_event, 3).won_die_roll)
+    assert seen == [True, False, None]
+
+
+async def test_cycling_keeps_expansion_state(screen):
+    await tap(screen, 4, "result")  # pending round 4 starts expanded
+    await tap(screen, 1, "result")  # decided round 1 starts collapsed
+    assert by_data(screen.body, "round-4").expanded
+    assert not by_data(screen.body, "round-1").expanded
+
+
+async def test_cycle_rejected_edit_shows_error(screen, ctx, page, monkeypatch, events, sample_event):
+    from events.repository import EventError
+
+    def refuse(*_a, **_k):
+        raise EventError("nope")
+
+    monkeypatch.setattr(ctx.events, "update_round", refuse)
+    await tap(screen, 4, "result")
+    assert isinstance(page.dialogs[-1], ft.SnackBar) and page.dialogs[-1].data == "error"
+    assert round_of(events, sample_event, 4).result is None
+
+
+def test_collapsed_row_shows_turn_and_die(screen):
+    first = by_data(screen.body, "round-1")  # went first, won the roll
+    second = by_data(screen.body, "round-2")  # went second, lost the roll
+    unknown = by_data(screen.body, "round-3")
+    assert "1st" in texts(first.trailing) and "2nd" in texts(second.trailing) and "—" in texts(unknown.trailing)
+    icons = lambda tile: [c.icon for c in walk(by_data(tile, "die-cycle")) if isinstance(c, ft.Icon)]  # noqa: E731
+    assert icons(first) == [ft.Icons.CASINO, ft.Icons.CHECK]
+    assert icons(second) == [ft.Icons.CASINO, ft.Icons.CLOSE]
+    assert icons(unknown) == [ft.Icons.CASINO]
+
+
+def test_indicators_have_tooltips_and_touch_size(screen):
+    tile = by_data(screen.body, "round-1")
+    for tag, tip in (("turn", "Turn order"), ("die", "Die roll"), ("result", "Result")):
+        target = by_data(tile, f"{tag}-cycle")
+        assert target.tooltip.startswith(tip)
+        assert target.content.width >= 36 and target.content.height >= 36

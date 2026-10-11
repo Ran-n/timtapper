@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/11 17:48:43.605439
+Revised: 2026/10/11 22:12:02.034235
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
@@ -32,6 +32,9 @@ def shape_window(page: ft.Page) -> None:
     for name, value in PHONE_WINDOW.items():
         setattr(window, name, value)
     window.alignment = ft.Alignment.CENTER
+    # flush now: awaiting a service (SharedPreferences) before the first update makes
+    # the desktop client open at its default size and drop these settings
+    page.update()
 
 
 def open_database() -> Database:

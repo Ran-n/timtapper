@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/11 17:48:50.564745 )
+[//]: # (+ Revised: 	2026/10/12 01:13:08.046055 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,23 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- Added color chips and a set dropdown to the leader picker: a leader must have every selected color, sets run newest first (OP, EB, ST, PRB), and filters reset each time the picker opens
+- Added turn order and die roll to every round row next to the result; tapping any of the three cycles its value and saves it without expanding the row
+- Added `scripts/make_screenshots.py`, which takes the README screenshots from the real app on a throwaway demo database (Windows only)
+- Added screenshots of the events list, an event, the leader picker, stats, settings, the light theme and a share card to the README
+
+### Changed
+
+- Changed the event screen's delete button into a ⋮ menu holding "Delete event", so a destructive action is no longer one tap away
+- Changed event tiles to give the event name its own line, with the record pill beside the leader name, so names are no longer cut short
+- Changed the README into a fuller overview: grouped features, screenshots and a section on regenerating them
+
+### Fixed
+
+- Fixed the desktop window ignoring its phone shape and opening at 1280 × 720: the size is now applied before the saved preferences are read
 
 ## [0.2.0] — 2026-10-11
 

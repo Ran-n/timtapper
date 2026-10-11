@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.952473
-Revised: 2026/10/11 16:57:39.415057
+Revised: 2026/10/11 23:25:32.248026
 
 Event screen: everything edited in place — name, type, date, own leader and
 notes in the header; each round as an expandable tile with its result, turn
@@ -11,13 +11,13 @@ so the round being played is one tap away.
 """
 
 import datetime as dt
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import flet as ft
 
 from catalog.repository import Leader
 from core.logging import get_logger
-from db.models import EVENT_TYPES
+from db.models import EVENT_TYPES, RESULTS
 from events.repository import Event, EventError, Round
 from i18n import event_type_label
 from share import render
@@ -31,14 +31,28 @@ from ui.widgets import (
     caption,
     card,
     confirm,
+    die_badge,
     leader_row,
     rate_color,
     result_badge,
     section,
+    turn_badge,
     update_if_mounted,
 )
 
 _log = get_logger("ui.event")
+
+# what one tap on a round row's indicator steps through, ending back at "unknown"
+RESULT_CYCLE = (None, *RESULTS)
+TRISTATE_CYCLE = (None, True, False)
+
+
+def _next[T](value: T, cycle: Sequence[T]) -> T:
+    """The element after `value` in `cycle`, wrapping; an unknown value starts the cycle over."""
+    try:
+        return cycle[(cycle.index(value) + 1) % len(cycle)]
+    except ValueError:
+        return cycle[0]
 
 
 class EventScreen:
@@ -238,6 +252,56 @@ class EventScreen:
                 self.expanded.discard(r.id)
             self._save_round(r.id, result=value)
 
+        def cycler(
+            tag: str, field: str, current: object, cycle: Sequence, badge: ft.Control, tooltip: str
+        ) -> ft.Container:
+            def on_tap(_e) -> None:
+                value = _next(current, cycle)
+                _log.info("round %d: %s %s -> %s", r.id, field, current, value)
+                self._save_round(r.id, **{field: value})
+
+            # an inner tap target wins Flutter's gesture arena, so the tile neither expands nor collapses
+            return ft.Container(
+                content=badge,
+                on_click=on_tap,
+                ink=True,
+                border_radius=12,
+                tooltip=tooltip,
+                data=f"{tag}-cycle",
+            )
+
+        scheme = self.ctx.scheme
+        indicators = ft.Row(
+            [
+                cycler(
+                    "turn",
+                    "went_first",
+                    r.went_first,
+                    TRISTATE_CYCLE,
+                    turn_badge(r.went_first, scheme, _("1st"), _("2nd")),
+                    _("Turn order — tap to change"),
+                ),
+                cycler(
+                    "die",
+                    "won_die_roll",
+                    r.won_die_roll,
+                    TRISTATE_CYCLE,
+                    die_badge(r.won_die_roll, scheme),
+                    _("Die roll — tap to change"),
+                ),
+                cycler(
+                    "result",
+                    "result",
+                    r.result,
+                    RESULT_CYCLE,
+                    result_badge(r.result, scheme),
+                    _("Result — tap to change"),
+                ),
+            ],
+            spacing=4,
+            tight=True,
+        )
+
         label = _("TC") if r.top_cut else f"R{r.round_no}"
         edge = ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
         editors = ft.Column(
@@ -291,13 +355,15 @@ class EventScreen:
             title=ft.Row([
                 ft.Text(
                     label,
-                    width=36,
+                    width=28,
                     font_family=FONT_HEAVY,
                     color=ft.Colors.TERTIARY if r.top_cut else ft.Colors.ON_SURFACE_VARIANT,
                 ),
                 leader_row(opponent, _("Unknown leader"), size=15, show_code=False),
             ]),
-            trailing=result_badge(r.result, self.ctx.scheme),
+            trailing=indicators,
+            # trimmed side padding: at 360 px the three indicators would otherwise squeeze out the opponent's name
+            tile_padding=ft.Padding(12, 0, 8, 0),
             expanded=r.id in self.expanded,
             maintain_state=True,
             on_change=on_expand,

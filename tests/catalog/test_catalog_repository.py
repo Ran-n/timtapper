@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.019766
-Revised: 2026/10/11 17:20:13.374592
+Revised: 2026/10/11 23:25:32.473903
 """
 
 import datetime as dt
@@ -12,9 +12,11 @@ from catalog.repository import (
     BUNDLED_LEADERS,
     Leader,
     LeaderRepository,
+    filter_leaders,
     load_bundled,
     load_bundled_sources,
     search,
+    set_codes,
 )
 
 
@@ -95,3 +97,54 @@ def test_search():
     assert [ld.id for ld in search(pool, "luffy purple")] == [3]
     assert [ld.id for ld in search(pool, "op01-001")] == [1]
     assert search(pool, "nami") == []
+
+
+# ---- picker filters ---------------------------------------------------------------
+FILTER_POOL = [
+    Leader(1, "OP01-001", "Roronoa Zoro", "OP01", ("Red",)),
+    Leader(2, "OP01-003", "Monkey.D.Luffy", "OP01", ("Red", "Green")),
+    Leader(3, "ST10-002", "Monkey.D.Luffy", "ST10", ("Red", "Purple")),
+    Leader(4, "OP09-001", "Shanks", "OP09", ("Red",)),
+    Leader(5, "XX-1", "Placeholder", None, ("Green",)),
+]
+
+
+def test_filter_by_one_color():
+    assert [ld.id for ld in filter_leaders(FILTER_POOL, "", frozenset({"Green"}))] == [2, 5]
+
+
+def test_filter_by_two_colors_is_and():
+    assert [ld.id for ld in filter_leaders(FILTER_POOL, "", frozenset({"Red", "Green"}))] == [2]
+
+
+def test_filter_by_set():
+    assert [ld.id for ld in filter_leaders(FILTER_POOL, "", set_code="OP01")] == [1, 2]
+    assert all(ld.set_code is not None for ld in filter_leaders(FILTER_POOL, "", set_code="XX"))
+    assert filter_leaders(FILTER_POOL, "", set_code="XX") == []
+
+
+def test_filter_combines_query_colors_and_set():
+    assert [ld.id for ld in filter_leaders(FILTER_POOL, "luffy", frozenset({"Red"}), "ST10")] == [3]
+    assert filter_leaders(FILTER_POOL, "zoro", frozenset({"Green"}), "OP01") == []
+
+
+def test_filter_with_nothing_selected_equals_search():
+    for query in ("", "luffy", "red", "nami"):
+        assert filter_leaders(FILTER_POOL, query) == search(FILTER_POOL, query)
+
+
+def test_filter_keeps_order():
+    reordered = list(reversed(FILTER_POOL))
+    assert [ld.id for ld in filter_leaders(reordered, "", frozenset({"Red"}))] == [4, 3, 2, 1]
+
+
+def test_set_codes_order():
+    codes = ["OP01", "XYZ", "ST30", "PRB01", "OP17", "EB04", "ST01", "EB01", "PRB02", "AB2", None, "OP17"]
+    pool = [Leader(i, f"C{i}", "n", code, ()) for i, code in enumerate(codes)]
+    assert set_codes(pool) == ["OP17", "OP01", "EB04", "EB01", "ST30", "ST01", "PRB02", "PRB01", "AB2", "XYZ"]
+
+
+def test_set_codes_of_bundled_catalogue_starts_with_newest_main_set(leaders):
+    codes = set_codes(leaders.all())
+    op = [c for c in codes if c.startswith("OP")]
+    assert codes[0] == op[0] and op == sorted(op, key=lambda c: -int(c[2:]))

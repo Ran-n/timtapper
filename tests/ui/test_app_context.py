@@ -2,17 +2,19 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/11 17:48:43.684524
+Revised: 2026/10/11 23:25:32.625478
 """
 
 import flet as ft
 import pytest
 
 import main
+from events.repository import EventError
 from share.deliver import Delivery
 from ui import app as app_mod
 from ui import context as context_mod
 from ui.app import TABS, build_view, install_routing
+from uitools import fire
 
 
 # ---- routing ------------------------------------------------------------------
@@ -32,7 +34,35 @@ def test_only_events_app_bar_carries_the_logo(ctx, route, has_logo):
 def test_event_view_has_back_stack_and_delete(ctx, sample_event):
     view = build_view(ctx, f"/event/{sample_event.id}")
     assert view.navigation_bar is None
-    assert view.appbar.actions[0].data == "delete-event"
+    (menu,) = view.appbar.actions
+    assert isinstance(menu, ft.PopupMenuButton) and menu.data == "event-menu" and menu.icon == ft.Icons.MORE_VERT
+    assert [item.data for item in menu.items] == ["delete-event"]
+
+
+def delete_item(ctx, sample_event):
+    return build_view(ctx, f"/event/{sample_event.id}").appbar.actions[0].items[0]
+
+
+async def test_event_menu_delete_confirms_and_deletes(ctx, page, events, sample_event):
+    item = delete_item(ctx, sample_event)
+    await fire(item.on_click, item)
+    dialog = page.dialogs[-1]
+    assert isinstance(dialog, ft.AlertDialog) and dialog.title.value == "Delete this event?"
+    assert events.get(sample_event.id)  # nothing gone until confirmed
+    yes = dialog.actions[1]
+    await fire(yes.on_click, yes)
+    with pytest.raises(EventError):
+        events.get(sample_event.id)
+    assert page.routes[-1] == "/events"
+
+
+async def test_event_menu_delete_cancel_keeps_event(ctx, page, events, sample_event):
+    item = delete_item(ctx, sample_event)
+    await fire(item.on_click, item)
+    cancel = page.dialogs[-1].actions[0]
+    await fire(cancel.on_click, cancel)
+    assert page.dialogs == []
+    assert events.get(sample_event.id).name == "Sunday locals"
 
 
 @pytest.mark.parametrize("route", ["/event/999999", "/event/abc"])
@@ -181,6 +211,20 @@ async def test_main_renders_first_screen(page, monkeypatch):
     assert (page.window.min_width, page.window.min_height) == (360, 640)
     assert page.window.alignment == ft.Alignment.CENTER
     assert [t.__name__ for t in page.tasks] == ["run_if_due"]  # leader check runs after the first screen
+    page.on_disconnect(None)
+
+
+async def test_main_flushes_window_before_awaiting_prefs(page, monkeypatch):
+    seen = []
+
+    class Prefs:
+        async def get(self, key):
+            seen.append((page.updates, page.window.width))
+            return None
+
+    monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
+    await main.main(page)
+    assert seen and all(updates >= 1 and width == 412 for updates, width in seen)
     page.on_disconnect(None)
 
 

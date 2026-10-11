@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.863138
-Revised: 2026/10/11 17:13:51.771259
+Revised: 2026/10/12 01:06:46.602159
 
 Events tab: every event newest first, with its record; FAB starts a new one.
 """
@@ -34,12 +34,22 @@ def event_tile(ctx: AppContext, event: Event) -> ft.Control:
                 leader_portrait(leader, 56),
                 ft.Column(
                     [
+                        # the name gets the full width; the record pill sits beside the (shorter) leader name
+                        ft.Text(
+                            event.name,
+                            size=17,
+                            font_family=FONT_HEAVY,
+                            max_lines=1,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            data="event-name",
+                        ),
                         ft.Row(
                             [
                                 ft.Text(
-                                    event.name,
-                                    size=17,
-                                    font_family=FONT_HEAVY,
+                                    leader.name if leader else _("No leader chosen"),
+                                    size=14,
+                                    font_family=FONT_SEMIBOLD if leader else None,
+                                    color=None if leader else muted,
                                     expand=True,
                                     max_lines=1,
                                     overflow=ft.TextOverflow.ELLIPSIS,
@@ -47,14 +57,6 @@ def event_tile(ctx: AppContext, event: Event) -> ft.Control:
                                 record_pill(record_of(event), ctx.scheme),
                             ],
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        ),
-                        ft.Text(
-                            leader.name if leader else _("No leader chosen"),
-                            size=14,
-                            font_family=FONT_SEMIBOLD if leader else None,
-                            color=None if leader else muted,
-                            max_lines=1,
-                            overflow=ft.TextOverflow.ELLIPSIS,
                         ),
                         ft.Row(
                             [

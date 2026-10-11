@@ -1,44 +1,81 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/11 17:45:11.487873 )
+[//]: # (+ Revised: 	2026/10/12 01:04:16.696968 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
 
-<p align="center"><img src="docs/logo.png" alt="timtapper" width="480"></p>
+<p align="center"><img src="docs/logo.png" alt="timtapper" width="420"></p>
 
-Local-first match tracker for the **One Piece Trading Card Game**, built with Flet for Android and desktop. Log your
-testing sessions, locals and majors round by round, see your matchup stats, and share them as images. There are no
-accounts, no server and no sync: everything stays on your device.
+<p align="center">
+  <b>Match tracker for the One Piece Trading Card Game.</b><br>
+  Log every round, see your matchups, share your results. Android and desktop, fully offline.
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/events.png" alt="Events list" width="200">
+  <img src="docs/screenshots/event.png" alt="An event and its rounds" width="200">
+  <img src="docs/screenshots/stats.png" alt="Stats" width="200">
+  <img src="docs/screenshots/picker.png" alt="Leader picker with color and set filters" width="200">
+</p>
+
+timtapper is local-first: there are no accounts, no server and no sync. Your events live in a SQLite database on your
+device, and a JSON backup moves them to another install.
 
 ## Features
 
-- **Events**: testing, locals, regional, national, online or other. Each event has a name, date, your leader and notes.
-- **Rounds**: opponent's leader, result (W/L/D), turn order, die roll, top cut and notes, all edited in place. A round
-  can be logged as soon as you sit down and given its result when the game ends.
+### Log as you play
+
+- **Events**: testing, locals, regional, national, online or other, each with a name, date, your leader and notes.
+- **Rounds**: opponent's leader, result (W/L/D), turn order, die roll, top cut and notes, all edited in place, with no
+  forms or dialogs. Log a round when you sit down and give it a result when the game ends; rounds still being played
+  stay open.
+- **One-tap round rows**: turn order, die roll and result show on every round row. Tap one to cycle its value.
+- **Leader picker**: search by name, code or color, then narrow by color chips (a leader must have every color you
+  select) and by set. The opponents you face most come first.
+
+### Understand your results
+
 - **Stats**: overall record and win rate, going 1st vs 2nd, won vs lost die roll, best and worst matchup (3+ games),
-  recent form, and a full matchup table. Filter by your leader and by event type.
-- **Share images** (1080×1350 PNG, rendered on-device): event result card, matchup card and overall summary card. On
-  Android they open the system share sheet; on desktop you get a save dialog.
-- **Leader catalogue**: 138 leaders up to OP17 are bundled, each with a small portrait cropped from its card art, so
-  the app works offline. New sets arrive on their own: once a day, at startup, the app asks
-  [optcgapi.com](https://optcgapi.com) for its list of sets (a few KB) and downloads the leaders and portraits only when
-  a new set is listed. Failures are logged and retried on the next start. *Settings → Update leaders* forces a refresh.
-- **Backup**: export every event to a JSON file and restore it on any install.
-- **Languages**: English, Español, Galego, each shown with its flag in the picker.
+  recent form and a full matchup table. Filter by your leader and by event type.
+- **Share images**: 1080×1350 PNG cards rendered on-device for an event, a matchup or your overall summary. On Android
+  they open the system share sheet; on desktop you get a save dialog.
+
+<p align="center">
+  <img src="docs/screenshots/share-card.png" alt="Event share card" width="320">
+</p>
+
+### Make it yours
+
 - **Themes**: Gruvbox (default), Catppuccin, Nord, Solarized, Tokyo Night and Classic, each with a light and a dark
-  palette; follow the system or force light/dark. Typeset in Poppins.
+  palette. Follow the system or force light or dark. Typeset in Poppins.
+- **Languages**: English, Español, Galego.
+- **Desktop**: the window opens phone-shaped (412 × 892), so the layout is the same as on a phone; resize it freely
+  down to 360 × 640.
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="Settings in the light Gruvbox theme" width="200">
+  <img src="docs/screenshots/events-light.png" alt="Events list in the light Gruvbox theme" width="200">
+</p>
+
+### Always current, always yours
+
+- **Leader catalogue**: 138 leaders up to OP17 ship with the app, each with a small portrait cropped from its card art,
+  so it works offline. New sets arrive on their own: once a day, at startup, the app asks
+  [optcgapi.com](https://optcgapi.com) for its list of sets (a few KB) and downloads leaders and portraits only when a
+  new set is listed. Failures are logged and retried on the next start. *Settings → Update leaders* forces a refresh.
+- **Backup**: export every event to a JSON file and restore it on any install.
 
 ## Stack
 
-| Layer      | Technology                                                       |
-|------------|------------------------------------------------------------------|
-| UI         | Flet 1.0 (Android APK + desktop)                                 |
-| Storage    | SQLite via SQLAlchemy 2.0, schema migrated by Alembic on startup |
-| Images     | Pillow, with the Poppins font bundled (OFL)                      |
-| Leaders    | Bundled JSON + optcgapi.com (httpx)                              |
-| Tooling    | uv, ruff, pytest (+ hypothesis, respx)                           |
+| Layer   | Technology                                                       |
+|---------|------------------------------------------------------------------|
+| UI      | Flet 1.0 (Android APK + desktop)                                 |
+| Storage | SQLite via SQLAlchemy 2.0, schema migrated by Alembic on startup |
+| Images  | Pillow, with the Poppins font bundled (OFL)                      |
+| Leaders | Bundled JSON + optcgapi.com (httpx)                              |
+| Tooling | uv, ruff, pytest (+ hypothesis, respx)                           |
 
 ## Requirements
 
@@ -71,6 +108,16 @@ uv run flet build apk --split-per-abi
 
 Always pass `--split-per-abi`. Without it, `flet build` leaves stale per-ABI APKs in `build/apk/`. If in doubt, delete
 the whole `build/` folder first.
+
+## Update the README screenshots
+
+```sh
+uv run python scripts/make_screenshots.py
+```
+
+It opens the app on a throwaway database seeded with demo events, walks the screens and saves them to
+`docs/screenshots/`, plus an event share card. Your own data is never touched. Windows only (Flet's own page capture
+returns nothing on desktop, so the script grabs the window with Pillow); keep the window uncovered while it runs.
 
 ## Refresh the bundled leaders
 
@@ -115,8 +162,9 @@ src/timtapper/          Flet app root (flet build packages this folder)
   i18n/                 en/es/gl tables keyed by English source strings
   ui/                   screens (events, event, stats, settings), picker, widgets
   assets/               fonts, icon (png/ico), logo_mark, bundled leaders.json + leaders/*.webp portraits
-scripts/                build_leaders.py, fetch_davyback_portraits.py, make_icon.py (icons, logo_mark + docs/logo.png)
-docs/                   logo.png wordmark for the README
+scripts/                build_leaders.py, fetch_davyback_portraits.py, make_icon.py (icons, logo_mark +
+                        docs/logo.png), make_screenshots.py (docs/screenshots/)
+docs/                   logo.png wordmark and screenshots/ for the README
 tests/                  mirrors src/timtapper
 ```
 

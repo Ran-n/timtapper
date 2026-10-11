@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:22:24.719836
-Revised: 2026/10/11 17:22:24.719836
+Revised: 2026/10/11 23:25:32.858754
 
 The app's logo widget and the assets scripts/make_icon.py draws for it.
 """
@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 from core.paths import ASSETS_DIR
-from ui.widgets import LOGO_MARK, empty_state, logo
+from ui.widgets import LOGO_MARK, die_badge, empty_state, logo, result_badge, turn_badge
 from uitools import by_data, texts
 
 
@@ -44,3 +44,38 @@ def test_logo_mark_is_square_and_transparent():
 def test_app_icons_are_bundled(name, fmt):
     with Image.open(ASSETS_DIR / name) as img:
         assert img.format == fmt
+
+
+# ---- round row indicators ----------------------------------------------------------
+@pytest.fixture
+def scheme():
+    from ui.theme import DEFAULT_THEME, THEMES
+
+    return THEMES[DEFAULT_THEME].scheme(dark=True)
+
+
+def icons(control) -> list:
+    from uitools import walk
+
+    return [(c.icon, c.color) for c in walk(control) if isinstance(c, ft.Icon)]
+
+
+def test_turn_badge_states(scheme):
+    assert texts(turn_badge(True, scheme, "1st", "2nd")) == ["1st"]
+    assert texts(turn_badge(False, scheme, "1st", "2nd")) == ["2nd"]
+    unknown = turn_badge(None, scheme, "1st", "2nd")
+    assert texts(unknown) == ["—"] and unknown.content.color == ft.Colors.ON_SURFACE_VARIANT
+    assert turn_badge(True, scheme, "1st", "2nd").content.color == scheme.fg
+
+
+def test_die_badge_states(scheme):
+    assert icons(die_badge(True, scheme)) == [(ft.Icons.CASINO, scheme.fg), (ft.Icons.CHECK, scheme.success)]
+    assert icons(die_badge(False, scheme)) == [(ft.Icons.CASINO, scheme.fg), (ft.Icons.CLOSE, scheme.error)]
+    assert icons(die_badge(None, scheme)) == [(ft.Icons.CASINO, ft.Colors.ON_SURFACE_VARIANT)]
+
+
+def test_badges_line_up_with_result_badge(scheme):
+    heights = {
+        b.height for b in (result_badge("W", scheme), turn_badge(None, scheme, "a", "b"), die_badge(None, scheme))
+    }
+    assert heights == {36}

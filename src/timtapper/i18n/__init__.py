@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.229018
-Revised: 2026/10/11 16:27:22.814980
+Revised: 2026/10/11 23:25:32.020858
 
 UI languages. Translation tables (translations.py) are keyed by the English
 source string, so `_("Events")` works the same in every language and a
@@ -17,6 +17,7 @@ from collections.abc import Callable
 
 import flet as ft
 
+from db.models import COLORS
 from i18n.translations import TRANSLATIONS
 
 DEFAULT_LANG = "en"
@@ -60,3 +61,11 @@ def tr(page: ft.Page) -> Translate:
 
 def event_type_label(_: Translate, key: str) -> str:
     return _(_EVENT_TYPE_LABELS.get(key, "Other"))
+
+
+# card colors are stored by their English name, which is also the translation key
+COLOR_LABELS = COLORS
+
+
+def color_label(_: Translate, color: str) -> str:
+    return _(color)
