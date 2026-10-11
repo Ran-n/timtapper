@@ -1,0 +1,77 @@
+[project]
+name = "timtapper"
+version = "0.1.0"
+description = "Local-first One Piece TCG match tracker (Flet, Android + desktop) with shareable stat images."
+readme = "README.md"
+authors = [{ name = "Ran#" }]
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+dependencies = [
+    "flet==1.0.*",
+    "sqlalchemy>=2.0.40",
+    "alembic>=1.16",
+    "httpx>=0.28",
+    # flet's mobile build occasionally drops transitive deps it doesn't see
+    # listed directly (flet-dev/flet#5376); httpx needs certifi at runtime.
+    "certifi>=2025.6.15",
+    # no exact pin: pypi.flet.dev's Android wheels lag PyPI proper
+    "pillow>=11.1",
+]
+
+[project.scripts]
+timtapper = "timtapper.launcher:run"
+
+[project.optional-dependencies]
+desktop = ["flet[all]==1.0.*"]
+
+[dependency-groups]
+dev = ["flet[all]==1.0.*", "pytest>=8", "pytest-asyncio>=1.1", "respx>=0.22", "hypothesis>=6.100", "pytest-cov>=5"]
+
+[tool.flet]
+product = "Timtapper"
+org = "com.breren"
+description = "One Piece TCG match tracker"
+
+[tool.flet.app]
+path = "src/timtapper"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/timtapper"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src/timtapper"]
+markers = [
+    "property: hypothesis-driven property-based test",
+    "snapshot: compares rendered output against a checked-in baseline",
+    "live: hits the real optcgapi.com endpoint (network) — kept out of the default run",
+]
+addopts = "-m \"not live\""
+
+[tool.coverage.run]
+source = ["src/timtapper"]
+branch = true
+
+[tool.ruff]
+src = ["src", "src/timtapper"]
+target-version = "py314"
+line-length = 120
+preview = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = []
+
+# flet runs src/timtapper as the app root, so these top-level packages are ours
+[tool.ruff.lint.isort]
+known-first-party = ["catalog", "core", "db", "events", "i18n", "share", "stats", "backup", "ui", "main", "uitools"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
