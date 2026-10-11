@@ -2,14 +2,23 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.098982
-Revised: 2026/10/11 16:27:24.571156
+Revised: 2026/10/11 17:20:13.275773
 """
 
 import httpx
 import pytest
 import respx
 
-from catalog.optcgapi import BASE_URL, CatalogError, LeaderRecord, clean_name, fetch_leaders, parse_leaders, set_code_of
+from catalog.optcgapi import (
+    BASE_URL,
+    CatalogError,
+    LeaderRecord,
+    clean_name,
+    fetch_leaders,
+    fetch_sources,
+    parse_leaders,
+    set_code_of,
+)
 
 
 def card(code, name, color="Red", image_id=None, card_type="Leader", set_name="Romance Dawn"):
@@ -123,6 +132,44 @@ def test_fetch_leaders_uses_given_client():
     with httpx.Client(transport=transport) as client:
         assert [r.name for r in fetch_leaders(client)] == ["Newgate"]
         assert not client.is_closed
+
+
+@respx.mock
+def test_fetch_sources_merges_sets_and_decks_sorted_unique():
+    respx.get(f"{BASE_URL}/allSets/").respond(
+        json=[{"set_id": "OP-02"}, {"set_id": "OP-01"}, {"set_id": "OP-01"}, {"set_name": "no id"}, "junk"]
+    )
+    respx.get(f"{BASE_URL}/allDecks/").respond(json=[{"structure_deck_id": "ST-01"}])
+    assert fetch_sources() == ("OP-01", "OP-02", "ST-01")
+
+
+@respx.mock
+def test_fetch_sources_empty():
+    respx.get(f"{BASE_URL}/allSets/").respond(json=[])
+    respx.get(f"{BASE_URL}/allDecks/").respond(json=[])
+    with pytest.raises(CatalogError, match="no sets"):
+        fetch_sources()
+
+
+@respx.mock
+@pytest.mark.parametrize("failure", [{"status_code": 500}, {"json": {"error": "nope"}}, {"text": "<html>"}])
+def test_fetch_sources_errors(failure):
+    respx.get(f"{BASE_URL}/allSets/").respond(**failure)
+    with pytest.raises(CatalogError):
+        fetch_sources()
+
+
+def test_fetch_sources_uses_given_client():
+    transport = httpx.MockTransport(lambda req: httpx.Response(200, json=[{"set_id": "OP-01"}]))
+    with httpx.Client(transport=transport) as client:
+        assert fetch_sources(client) == ("OP-01",)
+        assert not client.is_closed
+
+
+@pytest.mark.live
+def test_live_optcgapi_lists_sets():
+    sources = fetch_sources()
+    assert "OP-01" in sources and "ST-01" in sources
 
 
 @pytest.mark.live

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.676210
-Revised: 2026/10/11 16:27:23.334484
+Revised: 2026/10/11 16:57:39.266654
 
 Screen routing. Tabs (/events, /stats, /settings) replace the view stack;
 /event/<id> is pushed on top so Android's back button returns to the list.
@@ -20,6 +20,7 @@ from ui.context import AppContext
 from ui.event_view import EventScreen
 from ui.settings_view import SettingsScreen
 from ui.stats_view import StatsScreen
+from ui.widgets import logo
 
 _log = get_logger("ui.app")
 
@@ -84,7 +85,12 @@ def build_view(ctx: AppContext, route: str) -> ft.View:
     return ft.View(
         route=route,
         scroll=ft.ScrollMode.AUTO,
-        appbar=ft.AppBar(title=ft.Text(title)),
+        appbar=ft.AppBar(
+            # the home tab carries the mark; the others keep the plain title
+            leading=ft.Container(logo(32), padding=ft.Padding(16, 0, 0, 0)) if route == "/events" else None,
+            leading_width=56 if route == "/events" else None,
+            title=ft.Text(title),
+        ),
         navigation_bar=navbar(ctx, route),
         floating_action_button=fab,
         controls=_scroll_body(body),
@@ -122,12 +128,17 @@ def install_routing(ctx: AppContext) -> Callable[..., None]:
         timer.daemon = True  # never hold up process exit
         timer.start()
 
-    def language_changed() -> None:
+    def rebuild_top() -> None:
         if page.views:
             page.views[-1] = build_view(ctx, page.views[-1].route)
             page.update()
 
+    def brightness_changed(_e) -> None:
+        if ctx.theme_mode == "system":  # the other palette is now on screen
+            ctx.appearance_changed()
+
     page.on_route_change = route_change
     page.on_view_pop = view_pop
-    ctx.on_language_change = language_changed
+    page.on_platform_brightness_change = brightness_changed
+    ctx.on_appearance_change = rebuild_top
     return route_change

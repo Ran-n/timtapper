@@ -2,18 +2,19 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/11 16:27:24.136086
+Revised: 2026/10/11 17:22:24.818267
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
-database, applies migrations, syncs the bundled leader list, then shows the
-events tab. Everything stays on the device: there is no server.
+database, applies migrations, syncs the bundled leader list, shows the events
+tab, then checks in the background for leaders from newly released sets.
+Everything stays on the device: there is no server.
 """
 
 import flet as ft
 
 from catalog.repository import LeaderRepository, load_bundled
 from core.logging import get_logger, setup_logging
-from core.paths import db_path
+from core.paths import ASSETS_DIR, db_path
 from db import Database
 from ui.app import install_routing
 from ui.context import AppContext
@@ -30,6 +31,7 @@ def open_database() -> Database:
 
 async def main(page: ft.Page) -> None:
     page.title = "timtapper"
+    page.window.icon = str(ASSETS_DIR / "icon.ico")  # Windows only; other platforms take the built app's icon
     try:
         db = open_database()
     except Exception as exc:
@@ -48,6 +50,7 @@ async def main(page: ft.Page) -> None:
     route_change = install_routing(ctx)
     _log.info("started (%d leaders, db %s)", len(ctx.leaders), db.path)
     route_change()
+    page.run_task(ctx.leader_updates.run_if_due)
 
 
 def run() -> None:

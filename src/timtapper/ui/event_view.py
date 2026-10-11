@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.952473
-Revised: 2026/10/11 16:27:23.563250
+Revised: 2026/10/11 16:57:39.415057
 
 Event screen: everything edited in place — name, type, date, own leader and
 notes in the header; each round as an expandable tile with its result, turn
@@ -21,10 +21,22 @@ from db.models import EVENT_TYPES
 from events.repository import Event, EventError, Round
 from i18n import event_type_label
 from share import render
-from stats.compute import record_of
+from stats.compute import percent, record_of
 from ui.context import AppContext
 from ui.leader_picker import open_picker
-from ui.widgets import confirm, leader_row, record_text, result_badge, section, update_if_mounted
+from ui.theme import FONT_HEAVY
+from ui.widgets import (
+    RADIUS,
+    big_number,
+    caption,
+    card,
+    confirm,
+    leader_row,
+    rate_color,
+    result_badge,
+    section,
+    update_if_mounted,
+)
 
 _log = get_logger("ui.event")
 
@@ -120,28 +132,31 @@ class EventScreen:
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            ft.Container(
-                padding=12,
-                border_radius=16,
-                bgcolor=ft.Colors.SURFACE_CONTAINER,
-                ink=True,
+            card(
+                ft.Row(
+                    [
+                        ft.Column(
+                            [
+                                caption(_("Playing")),
+                                leader_row(self.ctx.leaders_by_id.get(ev.leader_id), _("Tap to choose your leader")),
+                            ],
+                            spacing=4,
+                            expand=True,
+                        ),
+                        ft.Column(
+                            [
+                                caption(_("Record")),
+                                big_number(rec.label() if rec.games else "—", rate_color(rec, self.ctx.scheme), 24),
+                                caption(percent(rec.win_rate), visible=rec.games > 0),
+                            ],
+                            spacing=0,
+                            horizontal_alignment=ft.CrossAxisAlignment.END,
+                        ),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
                 on_click=pick_own_leader,
                 data="own-leader",
-                content=ft.Row([
-                    ft.Column(
-                        [
-                            ft.Text(_("Playing"), size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                            leader_row(self.ctx.leaders_by_id.get(ev.leader_id), _("Tap to choose your leader")),
-                        ],
-                        spacing=4,
-                        expand=True,
-                    ),
-                    ft.Column(
-                        [ft.Text(_("Record"), size=12, color=ft.Colors.ON_SURFACE_VARIANT), record_text(rec, 20)],
-                        spacing=4,
-                        horizontal_alignment=ft.CrossAxisAlignment.END,
-                    ),
-                ]),
             ),
             ft.TextField(
                 value=ev.notes,
@@ -224,6 +239,7 @@ class EventScreen:
             self._save_round(r.id, result=value)
 
         label = _("TC") if r.top_cut else f"R{r.round_no}"
+        edge = ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
         editors = ft.Column(
             [
                 self._segmented([("W", _("Win")), ("L", _("Loss")), ("D", _("Draw"))], r.result, set_result, "result"),
@@ -276,20 +292,20 @@ class EventScreen:
                 ft.Text(
                     label,
                     width=36,
-                    weight=ft.FontWeight.BOLD,
+                    font_family=FONT_HEAVY,
                     color=ft.Colors.TERTIARY if r.top_cut else ft.Colors.ON_SURFACE_VARIANT,
                 ),
                 leader_row(opponent, _("Unknown leader"), size=15, show_code=False),
             ]),
-            trailing=result_badge(r.result),
+            trailing=result_badge(r.result, self.ctx.scheme),
             expanded=r.id in self.expanded,
             maintain_state=True,
             on_change=on_expand,
             controls=[ft.Container(padding=ft.Padding(12, 0, 12, 12), content=editors)],
             bgcolor=ft.Colors.SURFACE_CONTAINER,
             collapsed_bgcolor=ft.Colors.SURFACE_CONTAINER,
-            shape=ft.RoundedRectangleBorder(radius=16),
-            collapsed_shape=ft.RoundedRectangleBorder(radius=16),
+            shape=ft.RoundedRectangleBorder(radius=RADIUS, side=edge),
+            collapsed_shape=ft.RoundedRectangleBorder(radius=RADIUS, side=edge),
             data=f"round-{r.round_no}",
         )
 
@@ -317,8 +333,13 @@ class EventScreen:
             *self._header(),
             section(_("Rounds")),
             *rounds,
-            ft.FilledTonalButton(
-                content=_("Add round"), icon=ft.Icons.ADD, height=48, on_click=self._add_round, data="add-round"
+            ft.OutlinedButton(
+                content=_("Add round"),
+                icon=ft.Icons.ADD,
+                height=52,
+                style=ft.ButtonStyle(side=ft.BorderSide(1.5, ft.Colors.PRIMARY), color=ft.Colors.PRIMARY),
+                on_click=self._add_round,
+                data="add-round",
             ),
             ft.Container(height=24),
         ]

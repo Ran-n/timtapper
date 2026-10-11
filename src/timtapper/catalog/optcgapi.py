@@ -2,14 +2,17 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.147840
-Revised: 2026/10/11 16:27:21.549308
+Revised: 2026/10/11 17:20:12.440882
 
 Leader data from optcgapi.com — a public, read-only card API. Used both by
 scripts/build_leaders.py (to refresh the leaders.json bundled with the app)
-and by the in-app "Update leaders" action, so the two never parse differently.
+and by the in-app leader update (manual or automatic), so the two never parse
+differently.
 """
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import httpx
@@ -20,6 +23,9 @@ _log = get_logger("catalog.optcgapi")
 
 BASE_URL = "https://optcgapi.com/api"
 ENDPOINTS = ("allSetCards", "allSTCards")
+# Small lists of every released booster / starter deck (a few KB, vs MBs for the
+# card lists): a new id here means a new set is out and the leaders need a refresh.
+SOURCE_ENDPOINTS = {"allSets": "set_id", "allDecks": "structure_deck_id"}
 IMAGE_URL = "https://optcgapi.com/media/static/Card_Images/{code}.jpg"
 _COLORS = {"Red", "Green", "Blue", "Purple", "Black", "Yellow"}
 # "Monkey.D.Luffy (003)", "Sanji (PRB01-001)", "Trafalgar Law - OP14-001",
@@ -90,32 +96,55 @@ def parse_leaders(cards: list[dict]) -> list[LeaderRecord]:
     return sorted(leaders.values(), key=lambda r: r.code)
 
 
-def fetch_leaders(client: httpx.Client | None = None) -> list[LeaderRecord]:
-    """Download every set + starter deck and extract the leaders. Raises CatalogError."""
-    owns_client = client is None
-    client = client or httpx.Client(timeout=60, follow_redirects=True)
-    cards: list[dict] = []
+@contextmanager
+def _session(client: httpx.Client | None) -> Iterator[httpx.Client]:
+    """The caller's client, or a fresh one closed on exit."""
+    if client is not None:
+        yield client
+        return
+    with httpx.Client(timeout=60, follow_redirects=True) as own:
+        yield own
+
+
+def _get_list(client: httpx.Client, endpoint: str) -> list:
+    """GET a JSON list from the API. Raises CatalogError."""
+    url = f"{BASE_URL}/{endpoint}/"
+    _log.info("fetching %s", url)
     try:
-        for endpoint in ENDPOINTS:
-            url = f"{BASE_URL}/{endpoint}/"
-            _log.info("fetching %s", url)
-            response = client.get(url)
-            response.raise_for_status()
-            payload = response.json()
-            if not isinstance(payload, list):
-                raise CatalogError(f"{endpoint}: expected a list, got {type(payload).__name__}")
-            cards.extend(payload)
+        response = client.get(url)
+        response.raise_for_status()
+        payload = response.json()
     except httpx.HTTPError as exc:
-        _log.warning("leader download failed: %s", exc)
+        _log.warning("%s download failed: %s", endpoint, exc)
         raise CatalogError(str(exc)) from exc
     except ValueError as exc:  # invalid JSON
-        _log.warning("leader download returned invalid JSON: %s", exc)
+        _log.warning("%s returned invalid JSON: %s", endpoint, exc)
         raise CatalogError(str(exc)) from exc
-    finally:
-        if owns_client:
-            client.close()
+    if not isinstance(payload, list):
+        raise CatalogError(f"{endpoint}: expected a list, got {type(payload).__name__}")
+    return payload
+
+
+def fetch_leaders(client: httpx.Client | None = None) -> list[LeaderRecord]:
+    """Download every set + starter deck and extract the leaders. Raises CatalogError."""
+    with _session(client) as c:
+        cards = [card for endpoint in ENDPOINTS for card in _get_list(c, endpoint)]
     leaders = parse_leaders(cards)
     if not leaders:
         raise CatalogError("no leaders found in the downloaded card lists")
     _log.info("downloaded %d leaders", len(leaders))
     return leaders
+
+
+def fetch_sources(client: httpx.Client | None = None) -> tuple[str, ...]:
+    """Ids of every released set and starter deck, sorted (e.g. "OP-01", "ST-21"). Raises CatalogError."""
+    with _session(client) as c:
+        ids = {
+            str(item[key])
+            for endpoint, key in SOURCE_ENDPOINTS.items()
+            for item in _get_list(c, endpoint)
+            if isinstance(item, dict) and item.get(key)
+        }
+    if not ids:
+        raise CatalogError("no sets found in the set lists")
+    return tuple(sorted(ids))

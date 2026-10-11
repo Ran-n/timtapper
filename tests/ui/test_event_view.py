@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.780273
-Revised: 2026/10/11 16:27:25.234313
+Revised: 2026/10/11 16:57:39.861520
 """
 
 import datetime as dt
@@ -26,7 +26,7 @@ def test_header_shows_event(screen, sample_event, ctx):
     assert by_data(screen.body, "name").value == "Sunday locals"
     assert by_data(screen.body, "type").value == "locals"
     assert ctx.leaders_by_id[sample_event.leader_id].name in shown
-    assert "2-1 · 67%" in shown
+    assert "2-1" in shown and "67%" in shown
 
 
 def test_pending_rounds_start_expanded(screen):

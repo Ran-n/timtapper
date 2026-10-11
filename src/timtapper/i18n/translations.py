@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.159067
-Revised: 2026/10/11 16:27:22.723538
+Revised: 2026/10/11 17:20:12.966075
 
 Translation tables, keyed by the English source string exactly as written
 in the code. English (EN) is built from the ES key set so it stays a
@@ -115,19 +115,23 @@ ES = {
     "System": "Sistema",
     "Light": "Claro",
     "Dark": "Oscuro",
+    "Theme": "Tema",
+    "Classic": "Clásico",
     "Could not save this setting — it applies until the app restarts": (
         "No se pudo guardar este ajuste — se aplicará hasta que reinicies la app"
     ),
     "Leaders": "Líderes",
-    "{n} leaders in the catalogue. Update after a new set releases.": (
-        "{n} líderes en el catálogo. Actualiza cuando salga una colección nueva."
+    "{n} leaders in the catalogue. New sets are added automatically.": (
+        "{n} líderes en el catálogo. Las colecciones nuevas se añaden solas."
     ),
+    "{n} new leaders added": "{n} líderes nuevos añadidos",
     "Update leaders": "Actualizar líderes",
     "Updating…": "Actualizando…",
     "Could not download leaders — check your connection and try again": (
         "No se pudieron descargar los líderes — revisa tu conexión e inténtalo de nuevo"
     ),
     "Leaders updated: {added} new, {updated} changed": "Líderes actualizados: {added} nuevos, {updated} cambiados",
+    "{n} pictures could not be downloaded": "{n} imágenes no se pudieron descargar",
     "Backup": "Copia de seguridad",
     "Your data only lives on this device. Export a backup now and then so you never lose it.": (
         "Tus datos solo están en este dispositivo. Exporta una copia de vez en cuando para no perderlos nunca."
@@ -258,19 +262,23 @@ GL = {
     "System": "Sistema",
     "Light": "Claro",
     "Dark": "Escuro",
+    "Theme": "Tema",
+    "Classic": "Clásico",
     "Could not save this setting — it applies until the app restarts": (
         "Non se puido gardar este axuste — aplicarase ata que reinicies a app"
     ),
     "Leaders": "Líderes",
-    "{n} leaders in the catalogue. Update after a new set releases.": (
-        "{n} líderes no catálogo. Actualiza cando saia unha colección nova."
+    "{n} leaders in the catalogue. New sets are added automatically.": (
+        "{n} líderes no catálogo. As coleccións novas engádense soas."
     ),
+    "{n} new leaders added": "{n} líderes novos engadidos",
     "Update leaders": "Actualizar líderes",
     "Updating…": "Actualizando…",
     "Could not download leaders — check your connection and try again": (
         "Non se puideron descargar os líderes — revisa a túa conexión e téntao de novo"
     ),
     "Leaders updated: {added} new, {updated} changed": "Líderes actualizados: {added} novos, {updated} cambiados",
+    "{n} pictures could not be downloaded": "{n} imaxes non se puideron descargar",
     "Backup": "Copia de seguranza",
     "Your data only lives on this device. Export a backup now and then so you never lose it.": (
         "Os teus datos só están neste dispositivo. Exporta unha copia de cando en vez para non perdelos nunca."

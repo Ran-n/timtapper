@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:45.015285
-Revised: 2026/10/11 16:27:25.456085
+Revised: 2026/10/11 17:20:13.181089
 
 Shared fixtures. Every DB test runs against a real, freshly migrated SQLite
 file (never mocks), seeded with the bundled leader catalogue.
@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from catalog import portraits
 from catalog.repository import LeaderRepository, load_bundled
 from db import Database
 from events.repository import EventRepository
@@ -23,6 +24,9 @@ def _storage(tmp_path, monkeypatch):
     """Keep every file the app writes inside the test's tmp dir."""
     monkeypatch.setenv("FLET_APP_STORAGE_DATA", str(tmp_path / "data"))
     monkeypatch.setenv("FLET_APP_STORAGE_TEMP", str(tmp_path / "temp"))
+    portraits.source.cache_clear()  # its cache would otherwise leak one test's data dir into the next
+    yield
+    portraits.source.cache_clear()
 
 
 @pytest.fixture
@@ -73,7 +77,12 @@ class FakePage(SimpleNamespace):
     """Just enough of ft.Page for building screens outside a running app."""
 
     def __init__(self):
-        super().__init__(dialogs=[], routes=[], views=[], route="/", updates=0)
+        super().__init__(
+            dialogs=[], routes=[], views=[], route="/", updates=0, tasks=[], window=SimpleNamespace(icon=None)
+        )
+
+    def run_task(self, handler, *args):
+        self.tasks.append(handler)
 
     def show_dialog(self, dialog):
         self.dialogs.append(dialog)
@@ -91,6 +100,30 @@ class FakePage(SimpleNamespace):
 @pytest.fixture
 def page():
     return FakePage()
+
+
+class MemoryPrefs:
+    """In-memory stand-in for ft.SharedPreferences (instances share one store, like the real thing)."""
+
+    def __init__(self, store: dict):
+        self.store = store
+
+    async def get(self, key):
+        return self.store.get(key)
+
+    async def set(self, key, value):
+        self.store[key] = value
+        return True
+
+
+@pytest.fixture
+def prefs(monkeypatch):
+    """Saved preferences as a plain dict."""
+    import flet as ft
+
+    store: dict = {}
+    monkeypatch.setattr(ft, "SharedPreferences", lambda: MemoryPrefs(store))
+    return store
 
 
 @pytest.fixture

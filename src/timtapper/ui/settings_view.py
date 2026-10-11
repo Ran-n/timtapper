@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.139229
-Revised: 2026/10/11 16:27:23.709973
+Revised: 2026/10/11 17:20:12.763296
 
 Settings tab: language, theme, leader catalogue refresh, backup export/import, about.
 """
@@ -14,13 +14,14 @@ from pathlib import Path
 import flet as ft
 
 from backup.json_backup import BackupError, export_backup, import_backup
-from catalog.optcgapi import CatalogError, fetch_leaders
+from catalog.optcgapi import CatalogError
 from core.logging import get_logger
 from core.paths import temp_dir
 from core.version import VERSION
 from i18n import LANGUAGES
 from ui.context import AppContext
-from ui.widgets import confirm, section, update_if_mounted
+from ui.theme import FONT_SEMIBOLD, THEMES, AppTheme, is_dark
+from ui.widgets import caption, card, confirm, flag, logo, section, update_if_mounted
 
 _log = get_logger("ui.settings")
 
@@ -41,13 +42,16 @@ class SettingsScreen:
         self.busy = True
         self.refresh()
         try:
-            records = await asyncio.to_thread(fetch_leaders)
-            added, updated = await asyncio.to_thread(self.ctx.leader_repo.upsert, records)
+            result = await self.ctx.leader_updates.run()
         except CatalogError:
             self.ctx.notify(_("Could not download leaders — check your connection and try again"), error=True)
         else:
-            self.ctx.invalidate_leaders()
-            self.ctx.notify(_("Leaders updated: {added} new, {updated} changed").format(added=added, updated=updated))
+            message = _("Leaders updated: {added} new, {updated} changed").format(
+                added=result.added, updated=result.updated
+            )
+            if result.failed_portraits:
+                message += " · " + _("{n} pictures could not be downloaded").format(n=result.failed_portraits)
+            self.ctx.notify(message, error=bool(result.failed_portraits))
         finally:
             self.busy = False
             self.refresh()
@@ -106,6 +110,54 @@ class SettingsScreen:
             do_import,
         )
 
+    # ---- appearance ----------------------------------------------------
+    def _swatch(self, theme: AppTheme) -> ft.Control:
+        """A theme preview drawn in its own colors (in the brightness now on screen)."""
+        ctx = self.ctx
+        s = theme.scheme(is_dark(ctx.page, ctx.theme_mode))
+        selected = theme.key == ctx.theme.key
+
+        async def choose(_e) -> None:
+            await ctx.change_theme(theme.key)
+
+        dots = ft.Row(
+            [
+                ft.Container(width=14, height=14, border_radius=7, bgcolor=c)
+                for c in (s.primary, s.secondary, s.tertiary, s.success, s.error)
+            ],
+            spacing=4,
+        )
+        return ft.Container(
+            col={"xs": 6, "sm": 4},
+            height=84,
+            padding=12,
+            border_radius=16,
+            bgcolor=s.bg,
+            border=ft.Border.all(2.5 if selected else 1, ctx.scheme.primary if selected else s.outline),
+            ink=True,
+            on_click=choose,
+            data=f"theme-{theme.key}",
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Text(
+                                theme.label(ctx._),
+                                font_family=FONT_SEMIBOLD,
+                                color=s.fg,
+                                expand=True,
+                                max_lines=1,
+                                overflow=ft.TextOverflow.ELLIPSIS,
+                            ),
+                            ft.Icon(ft.Icons.CHECK_CIRCLE, size=18, color=s.primary, visible=selected),
+                        ],
+                    ),
+                    dots,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+        )
+
     # ---- layout --------------------------------------------------------
     def _controls(self) -> list[ft.Control]:
         _ = self.ctx._
@@ -113,8 +165,8 @@ class SettingsScreen:
         async def set_lang(e) -> None:
             await self.ctx.change_language(e.control.value)
 
-        async def set_theme(e) -> None:
-            await self.ctx.change_theme(e.control.selected[0])
+        async def set_mode(e) -> None:
+            await self.ctx.change_mode(e.control.selected[0])
 
         leader_count = len(self.ctx.leaders)
         return [
@@ -122,11 +174,14 @@ class SettingsScreen:
             ft.Dropdown(
                 label=_("Language"),
                 value=self.ctx.lang,
-                options=[ft.DropdownOption(key=k, text=name) for k, name in LANGUAGES.items()],
+                leading_icon=flag(self.ctx.lang),
+                options=[ft.DropdownOption(key=k, text=name, leading_icon=flag(k)) for k, name in LANGUAGES.items()],
                 on_select=set_lang,
                 width=float("inf"),
                 data="language",
             ),
+            caption(_("Theme")),
+            ft.ResponsiveRow([self._swatch(t) for t in THEMES.values()], spacing=10, run_spacing=10),
             ft.SegmentedButton(
                 segments=[
                     ft.Segment(value="system", label=_("System"), icon=ft.Icons.BRIGHTNESS_AUTO),
@@ -134,12 +189,13 @@ class SettingsScreen:
                     ft.Segment(value="dark", label=_("Dark"), icon=ft.Icons.DARK_MODE),
                 ],
                 selected=[self.ctx.theme_mode],
-                on_change=set_theme,
-                data="theme",
+                on_change=set_mode,
+                width=float("inf"),
+                data="mode",
             ),
             section(_("Leaders")),
             ft.Text(
-                _("{n} leaders in the catalogue. Update after a new set releases.").format(n=leader_count),
+                _("{n} leaders in the catalogue. New sets are added automatically.").format(n=leader_count),
                 color=ft.Colors.ON_SURFACE_VARIANT,
             ),
             ft.Row([
@@ -169,14 +225,27 @@ class SettingsScreen:
                 wrap=True,
             ),
             section(_("About")),
-            ft.Text(f"timtapper {VERSION}"),
-            ft.Text(
-                _(
-                    "Fan-made tracker. Not affiliated with or endorsed by Bandai, Eiichiro Oda or Shueisha. "
-                    "Leader data from optcgapi.com."
-                ),
-                size=12,
-                color=ft.Colors.ON_SURFACE_VARIANT,
+            card(
+                ft.Row(
+                    [
+                        logo(56),
+                        ft.Column(
+                            [
+                                ft.Text(f"timtapper {VERSION}", font_family=FONT_SEMIBOLD),
+                                caption(
+                                    _(
+                                        "Fan-made tracker. Not affiliated with or endorsed by Bandai, Eiichiro Oda "
+                                        "or Shueisha. Leader data from optcgapi.com."
+                                    )
+                                ),
+                            ],
+                            spacing=4,
+                            expand=True,
+                        ),
+                    ],
+                    spacing=14,
+                    vertical_alignment=ft.CrossAxisAlignment.START,
+                )
             ),
             ft.Container(height=24),
         ]

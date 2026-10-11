@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.228774
-Revised: 2026/10/11 16:27:23.780876
+Revised: 2026/10/11 16:57:39.492034
 
 Stats tab: overall record, splits, recent form and the matchup table, filterable by own leader and event type.
 """
@@ -14,8 +14,19 @@ from i18n import event_type_label
 from share import render
 from stats.compute import Filters, Summary, games, matchups, own_leaders, percent, summarize
 from ui.context import AppContext
-from ui.theme import RESULT_COLORS
-from ui.widgets import leader_row, record_text, section, stat_tile, update_if_mounted
+from ui.theme import FONT_HEAVY
+from ui.widgets import (
+    big_number,
+    caption,
+    card,
+    leader_row,
+    rate_color,
+    record_pill,
+    record_text,
+    section,
+    stat_tile,
+    update_if_mounted,
+)
 
 ALL = "all"
 
@@ -81,6 +92,7 @@ class StatsScreen:
     def _summary(self, s: Summary) -> list[ft.Control]:
         _ = self.ctx._
         by_id = self.ctx.leaders_by_id
+        scheme = self.ctx.scheme
 
         def matchup_tile(label: str, m) -> ft.Control:
             if m is None:
@@ -103,8 +115,8 @@ class StatsScreen:
                     height=28,
                     border_radius=8,
                     alignment=ft.Alignment.CENTER,
-                    bgcolor=RESULT_COLORS[r],
-                    content=ft.Text(r, size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                    bgcolor=scheme.results[r],
+                    content=ft.Text(r, size=12, font_family=FONT_HEAVY, color=scheme.on_accent),
                 )
                 for r in s.recent
             ]
@@ -112,15 +124,46 @@ class StatsScreen:
             spacing=4,
             wrap=True,
         )
+        rate = rate_color(s.record, scheme)
+        hero = card(
+            ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Column(
+                                [caption(_("Win rate")), big_number(percent(s.record.win_rate), rate, 44)],
+                                spacing=0,
+                                expand=True,
+                            ),
+                            ft.Column(
+                                [caption(_("Record")), big_number(s.record.label(), size=22)],
+                                spacing=0,
+                                horizontal_alignment=ft.CrossAxisAlignment.END,
+                            ),
+                            ft.Column(
+                                [caption(_("Events")), big_number(str(s.events), size=22)],
+                                spacing=0,
+                                horizontal_alignment=ft.CrossAxisAlignment.END,
+                            ),
+                        ],
+                        spacing=20,
+                        vertical_alignment=ft.CrossAxisAlignment.END,
+                    ),
+                    ft.ProgressBar(
+                        value=s.record.win_rate if s.record.games else 0,
+                        color=rate,
+                        bgcolor=scheme.surface_highest,
+                        bar_height=8,
+                        border_radius=4,
+                    ),
+                ],
+                spacing=12,
+            ),
+            padding=18,
+            data="hero",
+        )
         return [
-            ft.Row([
-                stat_tile(_("Record"), ft.Text(s.record.label(), size=28, weight=ft.FontWeight.BOLD)),
-                stat_tile(
-                    _("Win rate"),
-                    ft.Text(percent(s.record.win_rate), size=28, weight=ft.FontWeight.BOLD, color=ft.Colors.PRIMARY),
-                ),
-                stat_tile(_("Events"), ft.Text(str(s.events), size=28, weight=ft.FontWeight.BOLD)),
-            ]),
+            hero,
             ft.Row([stat_tile(_("Going 1st"), record_text(s.first)), stat_tile(_("Going 2nd"), record_text(s.second))]),
             ft.Row([
                 stat_tile(_("Won the die roll"), record_text(s.die_won)),
@@ -136,15 +179,14 @@ class StatsScreen:
         if not ms:
             return [ft.Text(_("No games logged yet"), color=ft.Colors.ON_SURFACE_VARIANT)]
         return [
-            ft.Container(
-                padding=ft.Padding(12, 8, 12, 8),
-                border_radius=12,
-                bgcolor=ft.Colors.SURFACE_CONTAINER,
+            card(
+                padding=ft.Padding(12, 10, 12, 10),
+                radius=14,
                 content=ft.Row([
                     leader_row(by_id.get(m.opponent_leader_id), _("Unknown leader"), size=14),
                     ft.Column(
                         [
-                            record_text(m.record, 14),
+                            record_pill(m.record, self.ctx.scheme),
                             ft.Text(
                                 _("1st {first} · 2nd {second}").format(
                                     first=m.first.label() if m.first.games else "—",

@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:37.050848 )
-[//]: # (+ Revised: 	2026/10/11 15:48:37.050848 )
+[//]: # (+ Revised: 	2026/10/11 17:36:52.358334 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 Thank you for your interest in contributing.
@@ -14,6 +14,7 @@ Thank you for your interest in contributing.
 - [Reporting Bugs](#reporting-bugs)
 - [Suggesting Features](#suggesting-features)
 - [Submitting Changes](#submitting-changes)
+- [Backlog](#backlog)
 - [Commit Style](#commit-style)
 - [License](#license)
 
@@ -55,6 +56,12 @@ Open an issue and include:
 5. Open a pull request against `main` and describe *why* the change is needed
 
 One concern per PR — do not bundle unrelated changes.
+
+---
+
+## Backlog
+
+Planned work lives in [TODO.md](TODO.md), one self-contained item each, in priority order (first = next).
 
 ---
 

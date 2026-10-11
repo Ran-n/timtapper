@@ -2,13 +2,20 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.019766
-Revised: 2026/10/11 16:27:24.499387
+Revised: 2026/10/11 17:20:13.374592
 """
 
 import datetime as dt
 
 from catalog.optcgapi import LeaderRecord
-from catalog.repository import BUNDLED_LEADERS, Leader, LeaderRepository, load_bundled, search
+from catalog.repository import (
+    BUNDLED_LEADERS,
+    Leader,
+    LeaderRepository,
+    load_bundled,
+    load_bundled_sources,
+    search,
+)
 
 
 def test_bundled_catalogue_is_sane():
@@ -18,6 +25,18 @@ def test_bundled_catalogue_is_sane():
     assert len(codes) == len(set(codes))
     assert all(r.colors for r in records)
     assert BUNDLED_LEADERS.exists()
+
+
+def test_bundled_sources_list_every_set_once():
+    sources = load_bundled_sources()
+    assert list(sources) == sorted(set(sources))
+    assert {"OP-01", "ST-01"} <= set(sources)
+
+
+def test_bundled_sources_missing_key(tmp_path):
+    old = tmp_path / "leaders.json"
+    old.write_text('{"generated": "2026-01-01", "leaders": []}', encoding="utf-8")
+    assert load_bundled_sources(old) == ()
 
 
 def test_upsert_is_idempotent(seeded_db):

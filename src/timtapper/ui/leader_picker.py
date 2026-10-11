@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.041772
-Revised: 2026/10/11 16:27:23.634621
+Revised: 2026/10/11 16:44:31.754468
 
 Searchable leader picker in a bottom sheet (most-played opponents first).
 """
@@ -58,7 +58,7 @@ def build_picker(ctx: AppContext, title: str, on_pick: Callable[[Leader], Awaita
         prefix_icon=ft.Icons.SEARCH,
         autofocus=True,
         dense=True,
-        border_radius=24,
+        border=ft.OutlineInputBorder(border_radius=24),
         on_change=on_change,
     )
     return ft.BottomSheet(

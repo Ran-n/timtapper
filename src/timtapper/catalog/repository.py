@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.221073
-Revised: 2026/10/11 16:27:21.631004
+Revised: 2026/10/11 17:20:12.554445
 
 Leader catalogue persistence: upsert from LeaderRecords, read as plain Leader values.
 """
@@ -51,6 +51,12 @@ def to_leader(row: LeaderRow) -> Leader:
 def load_bundled(path: Path = BUNDLED_LEADERS) -> list[LeaderRecord]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     return [LeaderRecord.from_json(item) for item in raw["leaders"]]
+
+
+def load_bundled_sources(path: Path = BUNDLED_LEADERS) -> tuple[str, ...]:
+    """Set/deck ids the bundled list was built from (empty for a list built before they were recorded)."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return tuple(raw.get("sources", ()))
 
 
 class LeaderRepository:

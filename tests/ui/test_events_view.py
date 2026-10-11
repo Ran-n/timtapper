@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.709234
-Revised: 2026/10/11 16:27:25.159076
+Revised: 2026/10/11 17:13:51.857220
 """
 
 import datetime as dt
@@ -10,12 +10,13 @@ import datetime as dt
 import flet as ft
 
 from ui import events_view
-from uitools import fire, texts
+from uitools import by_data, fire, texts
 
 
 def test_empty_state(ctx):
     body, fab = events_view.build(ctx)
     assert "No events yet" in texts(body[0])
+    assert by_data(body[0], "logo").src == "logo_mark.png"
     assert isinstance(fab, ft.FloatingActionButton)
 
 
@@ -53,3 +54,12 @@ def test_translated(ctx):
     body, fab = events_view.build(ctx)
     assert "Aínda non hai eventos" in texts(body[0])
     assert fab.content.value == "Novo evento"
+
+
+def test_tile_shows_leader_portrait_or_placeholder(ctx, sample_event, events):
+    events.create("No deck yet", "testing", dt.date(2020, 1, 1))
+    body, _fab = events_view.build(ctx)
+    with_leader, without = (row.content.controls[1] for row in body)
+    code = ctx.leaders_by_id[sample_event.leader_id].code
+    assert isinstance(with_leader.content, ft.Image) and with_leader.content.src == f"leaders/{code}.webp"
+    assert isinstance(without.content, ft.Icon)

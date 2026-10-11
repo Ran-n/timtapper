@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/11 16:33:03.318533 )
+[//]: # (+ Revised: 	2026/10/11 17:45:11.570913 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,19 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- Added automatic leader updates: once a day at startup the app checks optcgapi.com's set list in the background and downloads leaders and portraits only when a new set is listed, with a short notice when new leaders arrive; failures are logged and retried on the next start
+- Added the set ids the bundled list was built from to `leaders.json` (`"sources"`), written by `scripts/build_leaders.py`
+- Added a small portrait next to every leader (events list, picker, event, rounds, stats), a 160 px face crop from the card art (sharp at 56 dp on 3× screens); the 138 bundled leaders ship theirs, and *Update leaders* downloads portraits for new ones
+- Added `scripts/fetch_davyback_portraits.py`, which swaps in davyback.gg's leader icons for the 75 leaders it covers; `build_leaders.py` no longer re-crops those
+- Added `--force` to `scripts/build_leaders.py`, which now also writes the bundled portraits, each cropped around the face set for that card in `scripts/portrait_crops.json` so every portrait shows the leader's face
+- Added the app logo: a red card mid-tap with a rising bar chart over the name "timtapper", its "app" highlighted in gold, as the launcher icon; the bare mark shows in the events app bar, on the empty events screen, in *Settings → About* and as the Windows window icon, and the README carries it as a wordmark (`docs/logo.png`); `scripts/make_icon.py` draws them all
+
+### Changed
+
+- Changed *Update leaders* and the background check to share one update path, so they can never run at the same time
 
 ## [0.1.0] — 2026-10-11
 

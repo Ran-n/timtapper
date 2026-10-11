@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.770833
-Revised: 2026/10/11 16:27:23.411314
+Revised: 2026/10/11 17:20:12.664993
 
 Per-session app context handed to every screen: repositories, the cached
 leader catalogue, translation, notifications, preferences and navigation.
@@ -20,13 +20,15 @@ from db import Database
 from events.repository import EventRepository
 from i18n import Translate, get_lang, set_lang, tr
 from share.deliver import Delivery, deliver
-from ui.theme import apply_theme
+from ui.leader_updates import LeaderUpdater
+from ui.theme import DEFAULT_MODE, AppTheme, Scheme, apply_theme, get_theme, is_dark
 from ui.widgets import make_notifier
 
 _log = get_logger("ui")
 
 PREF_LANG = "timtapper.lang"
-PREF_THEME = "timtapper.theme"
+PREF_THEME = "timtapper.theme"  # mode: system/light/dark (key predates named themes)
+PREF_PALETTE = "timtapper.palette"
 
 
 class AppContext:
@@ -34,11 +36,13 @@ class AppContext:
         self.page = page
         self.db = db
         self.leader_repo = LeaderRepository(db)
+        self.leader_updates = LeaderUpdater(self)
         self.events = EventRepository(db)
-        self.theme_mode = "system"
-        self.notify = make_notifier(page)
+        self.theme_mode = DEFAULT_MODE
+        self.theme: AppTheme = get_theme(None)
+        self.notify = make_notifier(page, lambda: self.scheme)
         self._leaders: list[Leader] | None = None
-        self.on_language_change: Callable[[], None] | None = None
+        self.on_appearance_change: Callable[[], None] | None = None
 
     # ---- translation / preferences ------------------------------------
     @property
@@ -53,10 +57,11 @@ class AppContext:
         try:
             prefs = ft.SharedPreferences()
             set_lang(self.page, await prefs.get(PREF_LANG) or "en")
-            self.theme_mode = await prefs.get(PREF_THEME) or "system"
+            self.theme_mode = await prefs.get(PREF_THEME) or DEFAULT_MODE
+            self.theme = get_theme(await prefs.get(PREF_PALETTE))
         except Exception:
             _log.warning("could not read saved preferences — using defaults", exc_info=True)
-        apply_theme(self.page, self.theme_mode)
+        apply_theme(self.page, self.theme, self.theme_mode)
 
     async def _save_pref(self, key: str, value: str) -> None:
         try:
@@ -69,15 +74,35 @@ class AppContext:
         set_lang(self.page, code)
         _log.info("language set to %s", self.lang)
         await self._save_pref(PREF_LANG, self.lang)
-        if self.on_language_change:
-            self.on_language_change()
+        self.appearance_changed()
 
-    async def change_theme(self, mode: str) -> None:
+    async def change_mode(self, mode: str) -> None:
         self.theme_mode = mode
-        apply_theme(self.page, mode)
-        self.page.update()
-        _log.info("theme set to %s", mode)
+        self._restyle()
+        _log.info("theme mode set to %s", mode)
         await self._save_pref(PREF_THEME, mode)
+
+    async def change_theme(self, key: str) -> None:
+        self.theme = get_theme(key)
+        self._restyle()
+        _log.info("theme set to %s", self.theme.key)
+        await self._save_pref(PREF_PALETTE, self.theme.key)
+
+    def _restyle(self) -> None:
+        apply_theme(self.page, self.theme, self.theme_mode)
+        self.appearance_changed()
+        self.page.update()
+
+    # ---- appearance ---------------------------------------------------
+    @property
+    def scheme(self) -> Scheme:
+        """The palette on screen right now (for literal colors: result fills, snackbars)."""
+        return self.theme.scheme(is_dark(self.page, self.theme_mode))
+
+    def appearance_changed(self) -> None:
+        """Language, theme or device brightness changed: rebuild what's on screen."""
+        if self.on_appearance_change:
+            self.on_appearance_change()
 
     # ---- leaders ------------------------------------------------------
     @property

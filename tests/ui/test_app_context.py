@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/11 16:27:25.076429
+Revised: 2026/10/11 17:20:13.625706
 """
 
 import flet as ft
@@ -23,6 +23,12 @@ def test_tab_views(ctx, route, index):
     assert view.navigation_bar.selected_index == index
 
 
+@pytest.mark.parametrize(("route", "has_logo"), [("/events", True), ("/stats", False), ("/settings", False)])
+def test_only_events_app_bar_carries_the_logo(ctx, route, has_logo):
+    leading = build_view(ctx, route).appbar.leading
+    assert (leading is not None and leading.content.data == "logo") is has_logo
+
+
 def test_event_view_has_back_stack_and_delete(ctx, sample_event):
     view = build_view(ctx, f"/event/{sample_event.id}")
     assert view.navigation_bar is None
@@ -33,7 +39,7 @@ def test_event_view_has_back_stack_and_delete(ctx, sample_event):
 def test_missing_event_falls_back_to_list(ctx, page, route):
     view = build_view(ctx, route)
     assert view.route == "/events"
-    assert page.dialogs[-1].bgcolor == ft.Colors.ERROR
+    assert page.dialogs[-1].data == "error"
 
 
 def test_route_change_stack(ctx, page, sample_event):
@@ -78,7 +84,7 @@ def test_language_change_rebuilds_top_view(ctx, page):
     from i18n import set_lang
 
     set_lang(page, "es")
-    ctx.on_language_change()
+    ctx.on_appearance_change()
     assert page.views[-1].appbar.title.value == "Eventos"
 
 
@@ -111,7 +117,7 @@ async def test_save_pref_failure_is_reported(ctx, monkeypatch, page):
 
     monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
     await ctx.change_theme("dark")
-    assert page.dialogs[-1].bgcolor == ft.Colors.ERROR
+    assert page.dialogs[-1].data == "error"
 
 
 async def test_share_file_success_and_saved(ctx, monkeypatch, page, tmp_path):
@@ -170,6 +176,8 @@ async def test_main_renders_first_screen(page, monkeypatch):
     monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
     await main.main(page)
     assert [v.route for v in page.views] == ["/events"]
+    assert page.window.icon.endswith("icon.ico")
+    assert [t.__name__ for t in page.tasks] == ["run_if_due"]  # leader check runs after the first screen
     page.on_disconnect(None)
 
 
