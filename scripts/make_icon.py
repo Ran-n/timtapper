@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.870382
-Revised: 2026/10/11 17:16:28.633969
+Revised: 2026/10/12 01:20:00.365202
 
 Draw the app logo:
 
@@ -15,8 +15,8 @@ Draw the app logo:
   for in-app use (events app bar, empty events screen, Settings -> About).
 - docs/logo.png (480 tall): icon + "timtapper" wordmark with the "app" highlighted, for the README.
 
-The mark is a red card caught mid-tap (rotating clockwise to rest, the OPTCG
-action the name comes from) with a gold motion arc, carrying a rising bar chart
+The mark is a blue card caught mid-tap (rotating clockwise to rest, the OPTCG
+action the name comes from) with an orange motion arc, carrying a rising bar chart
 for the stats. Everything stays inside the central 66% so Android's adaptive
 icon mask never clips it. Re-run after changing the design:
 
@@ -45,22 +45,23 @@ FONT_HEAVY = ASSETS / "fonts" / "Poppins-ExtraBold.ttf"
 SIZE = 1024
 SS = 4  # supersampling factor; drawn at SIZE*SS then downscaled for clean edges
 
-# Gruvbox dark (the default theme) for the frame, OPTCG red for the card.
+# Gruvbox dark (the default theme) for the frame, OPTCG blue for the card and gruvbox orange (the app's primary)
+# for the accent. Blue + orange reads on light and dark READMEs and isn't a national flag (red + gold was Spain's).
 BG = (29, 32, 33)  # gruvbox bg0_h
 SHADOW = (0, 0, 0, 120)  # translucent so the transparent mark sits on light themes too
-RED = (214, 48, 49)  # theme.CARD_COLORS["Red"]
-RED_EDGE = (176, 34, 36)
-GOLD = (250, 189, 47)  # gruvbox yellow
-GOLD_DEEP = (215, 153, 33)  # gruvbox neutral yellow: wordmark, legible on light and dark
+CARD = (41, 128, 205)  # theme.CARD_COLORS["Blue"]
+CARD_EDGE = (28, 96, 160)
+ACCENT = (254, 128, 25)  # gruvbox bright orange
+ACCENT_DEEP = (214, 93, 14)  # gruvbox neutral orange: wordmark, legible on light and dark
 
 CREAM = (251, 241, 199)  # gruvbox fg0 (light bg)
 
 # "timtapper" split so the "app" inside it can be picked out: (text, highlighted)
 NAME_PARTS = (("timt", False), ("app", True), ("er", False))
 APP_NAME = "".join(text for text, _ in NAME_PARTS)
-# (plain, highlight) colors: cream/gold on the icon's dark frame, red/deep gold on any README background
-ICON_NAME_COLORS = (CREAM, GOLD)
-BANNER_NAME_COLORS = (RED, GOLD_DEEP)
+# (plain, highlight) colors: cream/orange on the icon's dark frame, blue/deep orange on any README background
+ICON_NAME_COLORS = (CREAM, ACCENT)
+BANNER_NAME_COLORS = (CARD, ACCENT_DEEP)
 
 CARD_W, CARD_H, CARD_R = 380, 530, 52
 CARD_CENTER = (500, 540)
@@ -87,8 +88,8 @@ def _card_layer() -> Image.Image:
     cx, cy = CARD_CENTER
     x0, y0, x1, y1 = cx - CARD_W / 2, cy - CARD_H / 2, cx + CARD_W / 2, cy + CARD_H / 2
     d.rounded_rectangle([_s(v) for v in (x0 + 18, y0 + 26, x1 + 18, y1 + 26)], radius=_s(CARD_R), fill=SHADOW)
-    d.rounded_rectangle([_s(v) for v in (x0, y0, x1, y1)], radius=_s(CARD_R), fill=RED_EDGE)
-    d.rounded_rectangle([_s(v) for v in (x0, y0, x1, y1 - 14)], radius=_s(CARD_R), fill=RED)
+    d.rounded_rectangle([_s(v) for v in (x0, y0, x1, y1)], radius=_s(CARD_R), fill=CARD_EDGE)
+    d.rounded_rectangle([_s(v) for v in (x0, y0, x1, y1 - 14)], radius=_s(CARD_R), fill=CARD)
     # inner frame line, like a card border
     inset = 30
     d.rounded_rectangle(
@@ -103,7 +104,7 @@ def _card_layer() -> Image.Image:
     left = cx - (3 * bar_w + 2 * gap) / 2
     for i, h in enumerate(heights):
         bx = left + i * (bar_w + gap)
-        fill = GOLD if i == len(heights) - 1 else CREAM
+        fill = ACCENT if i == len(heights) - 1 else CREAM
         d.rounded_rectangle([_s(v) for v in (bx, base - h, bx + bar_w, base)], radius=_s(18), fill=fill)
     return layer.rotate(TILT, resample=Image.Resampling.BICUBIC, center=(_s(cx), _s(cy)))
 
@@ -114,14 +115,14 @@ def _motion_arc(d: ImageDraw.ImageDraw) -> None:
     r, width = ARC_RADIUS, 40
     mid = r - width / 2  # PIL draws the arc stroke inward from the bounding circle
     box = [_s(v) for v in (cx - r, cy - r, cx + r, cy + r)]
-    d.arc(box, start=ARC_START, end=ARC_END, fill=GOLD, width=_s(width))
+    d.arc(box, start=ARC_START, end=ARC_END, fill=ACCENT, width=_s(width))
 
     def on_mid(deg: float) -> tuple[float, float]:
         a = math.radians(deg)
         return cx + mid * math.cos(a), cy + mid * math.sin(a)
 
     tx, ty = on_mid(ARC_START)  # round cap at the tail
-    d.ellipse([_s(v) for v in (tx - width / 2, ty - width / 2, tx + width / 2, ty + width / 2)], fill=GOLD)
+    d.ellipse([_s(v) for v in (tx - width / 2, ty - width / 2, tx + width / 2, ty + width / 2)], fill=ACCENT)
     # arrowhead: base across the stroke at the arc's end, tip along the clockwise tangent
     a = math.radians(ARC_END)
     bx, by = on_mid(ARC_END)
@@ -131,7 +132,7 @@ def _motion_arc(d: ImageDraw.ImageDraw) -> None:
     tip = (bx + tangent[0] * length, by + tangent[1] * length)
     outer = (bx + normal[0] * spread, by + normal[1] * spread)
     inner = (bx - normal[0] * spread, by - normal[1] * spread)
-    d.polygon([(_s(x), _s(y)) for x, y in (tip, outer, inner)], fill=GOLD)
+    d.polygon([(_s(x), _s(y)) for x, y in (tip, outer, inner)], fill=ACCENT)
 
 
 def _draw_name(d: ImageDraw.ImageDraw, x: float, y: float, font: ImageFont.FreeTypeFont, colors: tuple) -> None:

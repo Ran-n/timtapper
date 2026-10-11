@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/12 01:13:16.417967 )
+[//]: # (+ Revised: 	2026/10/12 01:22:39.315563 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+
+- Changed the logo from a red card with a gold arc (Spain's flag colors) to a blue card with an orange arc, in the launcher icon, window icon, in-app mark and README wordmark
+
+### Fixed
+
+- Fixed the version shown in *Settings → About*, which still read 0.2.0 after the 0.3.0 release
 
 ## [0.3.0] — 2026-10-12
 
