@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/11 17:45:11.570913 )
+[//]: # (+ Revised: 	2026/10/11 17:48:50.564745 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.2.0] — 2026-10-11
 
 ### Added
 
@@ -23,6 +25,7 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Changed
 
+- Changed the desktop window to open phone-shaped (412 × 892, centred, no smaller than 360 × 640), so the mobile layout looks the same as on a phone
 - Changed *Update leaders* and the background check to share one update path, so they can never run at the same time
 
 ## [0.1.0] — 2026-10-11

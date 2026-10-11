@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/11 17:20:13.625706
+Revised: 2026/10/11 17:48:43.684524
 """
 
 import flet as ft
@@ -177,6 +177,9 @@ async def test_main_renders_first_screen(page, monkeypatch):
     await main.main(page)
     assert [v.route for v in page.views] == ["/events"]
     assert page.window.icon.endswith("icon.ico")
+    assert (page.window.width, page.window.height) == (412, 892)
+    assert (page.window.min_width, page.window.min_height) == (360, 640)
+    assert page.window.alignment == ft.Alignment.CENTER
     assert [t.__name__ for t in page.tasks] == ["run_if_due"]  # leader check runs after the first screen
     page.on_disconnect(None)
 

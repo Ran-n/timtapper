@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/11 17:22:24.818267
+Revised: 2026/10/11 17:48:43.605439
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
@@ -21,6 +21,18 @@ from ui.context import AppContext
 
 _log = get_logger("main")
 
+# Desktop window shaped like a phone (logical dp of a typical 6.5" handset), so the
+# mobile-first layout looks the same everywhere; mobile and web ignore these.
+PHONE_WINDOW = {"width": 412, "height": 892, "min_width": 360, "min_height": 640}
+
+
+def shape_window(page: ft.Page) -> None:
+    window = page.window
+    window.icon = str(ASSETS_DIR / "icon.ico")  # Windows only; other platforms take the built app's icon
+    for name, value in PHONE_WINDOW.items():
+        setattr(window, name, value)
+    window.alignment = ft.Alignment.CENTER
+
 
 def open_database() -> Database:
     db = Database(db_path())
@@ -31,7 +43,7 @@ def open_database() -> Database:
 
 async def main(page: ft.Page) -> None:
     page.title = "timtapper"
-    page.window.icon = str(ASSETS_DIR / "icon.ico")  # Windows only; other platforms take the built app's icon
+    shape_window(page)
     try:
         db = open_database()
     except Exception as exc:
