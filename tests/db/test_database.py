@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.253199
-Revised: 2026/10/12 18:01:07.758189
+Revised: 2026/10/12 19:13:16.193736
 """
 
 import compileall
@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from db import Database
 from db import database as database_module
-from db.database import _MIGRATIONS_DIR, alembic_config
+from db.database import MIGRATIONS_DIR, alembic_config
 from db.models import COLORS, EVENT_TYPES, Color, Event, EventType, Match
 
 
@@ -51,7 +51,7 @@ def test_migrations_downgrade_and_upgrade_cleanly(tmp_path):
 
 def _sourceless_copy(dest: Path) -> Path:
     """The migrations as `flet build` ships them: legacy .pyc beside each module, no .py sources."""
-    shutil.copytree(_MIGRATIONS_DIR, dest, ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(MIGRATIONS_DIR, dest, ignore=shutil.ignore_patterns("__pycache__"))
     assert compileall.compile_dir(dest, legacy=True, quiet=1)
     for source in dest.rglob("*.py"):
         source.unlink()
@@ -61,7 +61,7 @@ def _sourceless_copy(dest: Path) -> Path:
 @pytest.mark.regression
 def test_migrate_runs_compiled_only_migrations(tmp_path, monkeypatch):
     """The 0.5.0 APK opened on "no such table: color": Alembic skipped the .pyc-only revisions."""
-    monkeypatch.setattr(database_module, "_MIGRATIONS_DIR", _sourceless_copy(tmp_path / "migrations"))
+    monkeypatch.setattr(database_module, "MIGRATIONS_DIR", _sourceless_copy(tmp_path / "migrations"))
     database = Database(tmp_path / "apk.db")
     database.migrate()
     assert {"color", "event", "match"} <= set(inspect(database.engine).get_table_names())
@@ -73,9 +73,9 @@ def test_migrate_runs_compiled_only_migrations(tmp_path, monkeypatch):
 def test_migrate_refuses_to_run_without_migrations(tmp_path, monkeypatch):
     """No revisions found must fail loudly, not leave an empty database behind."""
     empty = tmp_path / "migrations"
-    shutil.copytree(_MIGRATIONS_DIR, empty, ignore=shutil.ignore_patterns("__pycache__", "versions"))
+    shutil.copytree(MIGRATIONS_DIR, empty, ignore=shutil.ignore_patterns("__pycache__", "versions"))
     (empty / "versions").mkdir()
-    monkeypatch.setattr(database_module, "_MIGRATIONS_DIR", empty)
+    monkeypatch.setattr(database_module, "MIGRATIONS_DIR", empty)
     database = Database(tmp_path / "empty.db")
     with pytest.raises(RuntimeError, match="no migrations found"):
         database.migrate()

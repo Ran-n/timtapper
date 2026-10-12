@@ -2,13 +2,15 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/12 16:55:01.298188
+Revised: 2026/10/12 19:13:15.871785
 """
 
 import flet as ft
 import pytest
 
 import main
+from core.version import VERSION
+from db import Database
 from events.repository import EventError
 from share.deliver import Delivery
 from ui import app as app_mod
@@ -237,7 +239,29 @@ async def test_main_reports_database_failure(page, monkeypatch):
 
     monkeypatch.setattr(main, "open_database", broken)
     await main.main(page)
-    assert "disk full" in added[0].content.value
+    message, report = added[0].content.controls
+    assert "disk full" in message.value
+    assert report.data == "startup-report" and report.selectable
+    assert report.value.startswith(f"timtapper {VERSION} ")
+    assert "migrations:" in report.value
+
+
+async def test_startup_failure_report_carries_the_migration_log(page, monkeypatch):
+    """A phone has no debugger: what Alembic did must be on the failure screen itself."""
+    added = []
+    page.add = added.append
+
+    def broken():
+        db = Database(main.db_path())
+        db.migrate()
+        db.dispose()
+        raise OSError("failed after migrating")
+
+    monkeypatch.setattr(main, "open_database", broken)
+    await main.main(page)
+    report = added[0].content.controls[1].value
+    assert "Running upgrade  -> 0001" in report
+    assert "alembic_version: [('0003',)]" in report
 
 
 @pytest.mark.parametrize("handler", ["on_close", "on_disconnect"])

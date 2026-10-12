@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/12 18:04:12.899001 )
+[//]: # (+ Revised: 	2026/10/12 19:16:13.812200 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- Added a startup report under the "could not open its database" error: app, Python, SQLite, SQLAlchemy and Alembic versions, the database file with its tables and migration stamp, the bundled migration files and the log of the attempt, selectable so it can be copied off a phone
 
 ## [0.5.1] — 2026-10-12
 

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.803606
-Revised: 2026/10/12 18:01:07.680738
+Revised: 2026/10/12 19:13:14.893855
 
 The on-device database: one SQLite file, schema owned by Alembic (migrations
 ship inside the app and run on every start, so an app update never wipes or
@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from core.logging import get_logger
 
 _log = get_logger("db")
-_MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 
 
 def _enable_foreign_keys(dbapi_conn, _record) -> None:
@@ -37,7 +37,7 @@ def alembic_config(engine: Engine | None = None, migrations_dir: Path | None = N
     `sourceless`: `flet build` ships the app as .pyc only, and without it Alembic skips revision files
     that have no .py beside them, so a fresh install found no migrations and got no tables."""
     cfg = Config()
-    cfg.set_main_option("script_location", str(migrations_dir or _MIGRATIONS_DIR))
+    cfg.set_main_option("script_location", str(migrations_dir or MIGRATIONS_DIR))
     cfg.set_main_option("sourceless", "true")
     if engine is not None:
         cfg.attributes["connection_engine"] = engine

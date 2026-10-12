@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/11 22:12:02.034235
+Revised: 2026/10/12 19:13:13.879481
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
@@ -13,9 +13,11 @@ Everything stays on the device: there is no server.
 import flet as ft
 
 from catalog.repository import LeaderRepository, load_bundled
-from core.logging import get_logger, setup_logging
+from core.logging import APP_LOGGER, LogTail, get_logger, setup_logging
 from core.paths import ASSETS_DIR, db_path
 from db import Database
+from db.database import MIGRATIONS_DIR
+from db.diagnostics import startup_report
 from ui.app import install_routing
 from ui.context import AppContext
 
@@ -44,14 +46,34 @@ def open_database() -> Database:
     return db
 
 
+def show_startup_failure(page: ft.Page, exc: Exception, tail: LogTail) -> None:
+    """The error, then what the app could see (selectable, so it can be copied off a phone)."""
+    report = startup_report(db_path(), MIGRATIONS_DIR, tail.lines)
+    page.add(
+        ft.SafeArea(
+            ft.Column(
+                [
+                    ft.Text(f"timtapper could not open its database: {type(exc).__name__}: {exc}"),
+                    ft.Text(report, selectable=True, size=12, font_family="monospace", data="startup-report"),
+                ],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
+            expand=True,
+        )
+    )
+
+
 async def main(page: ft.Page) -> None:
     page.title = "timtapper"
     shape_window(page)
+    tail = LogTail()
     try:
-        db = open_database()
+        with tail.attached("alembic", APP_LOGGER):
+            db = open_database()
     except Exception as exc:
         _log.exception("could not open the database")
-        page.add(ft.SafeArea(ft.Text(f"timtapper could not open its database: {type(exc).__name__}: {exc}")))
+        show_startup_failure(page, exc, tail)
         return
 
     ctx = AppContext(page, db)
