@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.709234
-Revised: 2026/10/12 01:37:36.081622
+Revised: 2026/10/12 02:17:26.178782
 """
 
 import datetime as dt
@@ -10,7 +10,7 @@ import datetime as dt
 import flet as ft
 
 from ui import events_view
-from uitools import by_data, fire, texts
+from uitools import by_data, fire, texts, walk
 
 
 def test_empty_state(ctx):
@@ -91,3 +91,51 @@ def test_event_type_badge_is_first(ctx, sample_event):
     assert texts(by_data(texts_column.controls[0], "event-type")) == ["Locals"]
     # the type moved out of the date line
     assert texts(texts_column.controls[3]) == [f"{sample_event.date.isoformat()} · 4 rounds"]
+
+
+def test_event_without_games_shows_a_dash(ctx, events):
+    events.create("Fresh", "online", dt.date(2026, 1, 1))
+    body, _fab = events_view.build(ctx)
+    assert texts(by_data(body[0], "record-badge")) == ["—"]
+    assert "rate-badge" not in [c.data for c in walk(body[0])]
+
+
+def test_tile_type_badge_shows_every_type(ctx, events):
+    from db.models import EVENT_TYPES
+    from ui.widgets import EVENT_TYPE_ICONS
+
+    for i, key in enumerate(EVENT_TYPES):
+        events.create(f"E{i}", key, dt.date(2026, 1, 1 + i))
+    body, _fab = events_view.build(ctx)
+    shown = {texts(by_data(tile, "event-type"))[0]: tile for tile in body}
+    assert set(shown) == {"Testing", "Locals", "Regional", "National", "Online", "Other"}
+    for tile in body:
+        badge_icons = [c.icon for c in walk(by_data(tile, "event-type")) if isinstance(c, ft.Icon)]
+        assert len(badge_icons) == 1 and badge_icons[0] in EVENT_TYPE_ICONS.values()
+
+
+def test_unknown_event_type_reads_other(ctx, sample_event):
+    import dataclasses
+
+    tile = events_view.event_tile(ctx, dataclasses.replace(sample_event, event_type="worlds"))
+    badge = by_data(tile, "event-type")
+    assert texts(badge) == ["Other"]
+    assert [c.icon for c in walk(badge) if isinstance(c, ft.Icon)] == [ft.Icons.EVENT_OUTLINED]
+
+
+def test_color_bar_spans_the_tile(ctx, sample_event):
+    body, _fab = events_view.build(ctx)
+    bar = body[0].content.controls[0]
+    assert bar.height == events_view.TILE_BAR_HEIGHT
+
+
+def test_tile_portrait_frame_uses_leader_colours(ctx, sample_event):
+    from ui.theme import CARD_COLORS
+
+    leader = ctx.leaders_by_id[sample_event.leader_id]
+    frame = by_data(events_view.build(ctx)[0][0], "portrait-frame")
+    expected = [CARD_COLORS[c] for c in leader.colors]
+    if len(expected) == 1:
+        assert frame.bgcolor == expected[0]
+    else:
+        assert frame.gradient.colors[::2] == expected

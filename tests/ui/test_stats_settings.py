@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.861081
-Revised: 2026/10/12 01:37:36.237269
+Revised: 2026/10/12 02:17:26.811743
 """
 
 import datetime as dt
@@ -298,3 +298,25 @@ def test_leader_portrait_bundled_unknown_and_none(ctx):
     assert isinstance(leader_portrait(stranger).content.content, ft.Icon)
     placeholder = leader_portrait(None)
     assert isinstance(placeholder.content, ft.Icon) and placeholder.data != "portrait-frame"
+
+
+def test_stats_without_games_show_dashes(ctx):
+    s = StatsScreen(ctx)
+    s.build()
+    tagged = [c.data for c in walk(s.body)]
+    assert "rate-badge" not in tagged  # no 0% badges when nothing was played
+    assert tagged.count("record-badge") >= 4  # the four split tiles each show a dash
+    assert all(texts(c) == ["—"] for c in walk(s.body) if getattr(c, "data", None) == "record-badge")
+
+
+def test_stats_split_tiles_use_large_badges(ctx, sample_event):
+    s = StatsScreen(ctx)
+    s.build()
+    sizes = {
+        t.size
+        for c in walk(s.body)
+        if getattr(c, "data", None) in ("record-badge", "rate-badge")
+        for t in walk(c)
+        if isinstance(t, ft.Text)
+    }
+    assert sizes == {13, 15}  # 15 in the split tiles, 13 in matchup rows and tiles

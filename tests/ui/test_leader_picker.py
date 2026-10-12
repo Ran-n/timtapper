@@ -2,12 +2,13 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 23:25:31.706887
-Revised: 2026/10/12 01:37:36.320134
+Revised: 2026/10/12 02:17:26.494904
 
 Leader picker: text search, color dots (every selected color) and the set dropdown combine.
 """
 
 import flet as ft
+import pytest
 
 from ui.leader_picker import ALL_SETS, build_picker, open_picker
 from uitools import by_data, fire, texts
@@ -163,3 +164,32 @@ async def test_pick_still_calls_on_pick(ctx, page):
     await fire(option.on_click, option)
     assert picked and picked[0].id == option.data and "Green" in picked[0].colors
     assert page.dialogs == []
+
+
+@pytest.mark.parametrize("color", ["Red", "Green", "Blue", "Purple", "Black", "Yellow"])
+async def test_every_dot_has_its_colour_and_a_readable_check(ctx, color):
+    from ui.theme import CARD_COLORS
+
+    sheet = make(ctx)
+    dot = by_data(sheet, f"color-{color}")
+    assert dot.content.bgcolor == CARD_COLORS[color] and dot.ink and dot.on_click is not None
+    await toggle(sheet, color)
+    assert check_of(sheet, color).color == (ft.Colors.BLACK if color == "Yellow" else ft.Colors.WHITE)
+
+
+async def test_toggling_one_dot_leaves_the_others_alone(ctx):
+    sheet = make(ctx)
+    await toggle(sheet, "Blue")
+    selected = [c for c in ("Red", "Green", "Blue", "Purple", "Black", "Yellow") if check_of(sheet, c) is not None]
+    assert selected == ["Blue"]
+    assert by_data(sheet, "color-Red").content.border.top.width == 1
+
+
+async def test_dots_and_search_reset_independently(ctx):
+    sheet = make(ctx)
+    await toggle(sheet, "Red")
+    await type_query(sheet, "zzzz-no-such-leader")
+    assert shown_ids(sheet) == []
+    await type_query(sheet, "")
+    found = shown(ctx, sheet)
+    assert found and all("Red" in ld.colors for ld in found)  # clearing the search keeps the colour filter

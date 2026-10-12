@@ -2,13 +2,15 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:22:24.719836
-Revised: 2026/10/12 01:37:36.007371
+Revised: 2026/10/12 02:17:27.123312
 
 The app's logo widget and the assets scripts/make_icon.py draws for it.
 """
 
 import flet as ft
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from PIL import Image
 
 from catalog.repository import Leader
@@ -18,6 +20,7 @@ from i18n import translator
 from stats.compute import Record
 from ui.theme import CARD_COLORS, THEMES, UNKNOWN_COLOR
 from ui.widgets import (
+    DIE_PIPS,
     EVENT_TYPE_ICONS,
     LOGO_MARK,
     color_bar,
@@ -238,3 +241,129 @@ def test_color_bar_unchanged():
     bar = color_bar(("Red", "Green", "Pink"))
     assert [s.bgcolor for s in bar.content.controls] == [CARD_COLORS["Red"], CARD_COLORS["Green"], UNKNOWN_COLOR]
     assert [s.bgcolor for s in color_bar(()).content.controls] == [UNKNOWN_COLOR]
+
+
+# ---- die faces, more cases -----------------------------------------------------
+@pytest.mark.parametrize("n", range(1, 7))
+def test_die_pip_layouts_are_standard(n):
+    centres = DIE_PIPS[n]
+    assert len(centres) == n and len(set(centres)) == n  # n distinct pips
+    assert all(0 < x < 1 and 0 < y < 1 for x, y in centres)
+    xs, ys = [x for x, _ in centres], [y for _, y in centres]
+    assert abs(sum(xs) / n - 0.5) < 1e-9 and abs(sum(ys) / n - 0.5) < 1e-9  # every face is centred
+
+
+@pytest.mark.parametrize("n", range(1, 7))
+def test_die_pips_never_touch(n):
+    face = die_face(n, "#000000", "#ffffff", 21.6)  # the size die_badge uses: 36 * 0.6
+    dots = pips(face)
+    for i, a in enumerate(dots):
+        for b in dots[i + 1 :]:
+            gap = ((a.left - b.left) ** 2 + (a.top - b.top) ** 2) ** 0.5
+            assert gap > a.width, (n, a.left, a.top, b.left, b.top)
+
+
+def test_die_face_shape():
+    face = die_face(6, "#112233", "#ffffff", 20)
+    assert (face.width, face.height, face.bgcolor, face.data) == (20, 20, "#112233", "die-face-6")
+    assert face.border_radius == pytest.approx(20 * 0.22)
+    assert all(p.width == p.height == pytest.approx(4) and p.border_radius == pytest.approx(2) for p in pips(face))
+
+
+@pytest.mark.parametrize("size", [24, 36, 48])
+def test_die_badge_scales_with_size(scheme, size):
+    for won in (True, False, None):
+        badge = die_badge(won, scheme, size)
+        assert (badge.width, badge.height) == (size + 8, size)
+    (face,) = faces(die_badge(True, scheme, size))
+    assert face.width == pytest.approx(size * 0.6)
+
+
+# ---- record badges, more cases ------------------------------------------------
+def test_record_badges_even_rate_is_green(scheme):
+    assert by_data(record_badges(Record(1, 1), scheme), "rate-badge").content.color == scheme.success
+
+
+def test_record_badges_only_draws(scheme):
+    badges = record_badges(Record(0, 0, 2), scheme)
+    assert texts(badges) == ["0-0-2", "0%"]
+    assert by_data(badges, "rate-badge").content.color == scheme.error
+
+
+def test_record_badges_pills_are_tinted(scheme):
+    badges = record_badges(Record(3, 1), scheme)
+    assert by_data(badges, "record-badge").bgcolor == scheme.tint(scheme.fg_muted, 0.22)
+    assert by_data(badges, "rate-badge").bgcolor == scheme.tint(scheme.success, 0.22)
+
+
+@pytest.mark.parametrize(("theme", "dark"), ALL_SCHEMES)
+def test_record_badges_every_theme(theme, dark):
+    s = THEMES[theme].scheme(dark=dark)
+    assert by_data(record_badges(Record(2, 1), s), "rate-badge").content.color == s.success
+    assert by_data(record_badges(Record(1, 2), s), "rate-badge").content.color == s.error
+
+
+# ---- event type pill, more cases ----------------------------------------------
+@pytest.mark.parametrize("lang", ["en", "es", "gl"])
+@pytest.mark.parametrize("key", EVENT_TYPES)
+def test_event_type_pill_every_type_and_language(scheme, lang, key):
+    from i18n import event_type_label
+
+    _ = translator(lang)
+    p = event_type_pill(_, key, scheme)
+    assert texts(p) == [event_type_label(_, key)] and texts(p)[0]
+    assert icons(p) == [(EVENT_TYPE_ICONS[key], scheme.primary)]
+
+
+def test_event_type_icons_are_distinct():
+    assert len(set(EVENT_TYPE_ICONS.values())) == len(EVENT_TYPE_ICONS)
+
+
+def test_pill_with_icon_puts_icon_first(scheme):
+    p = pill("Label", scheme.primary, scheme, icon=ft.Icons.FLAG_OUTLINED, data="x")
+    icon, label = p.content.controls
+    assert isinstance(icon, ft.Icon) and icon.icon == ft.Icons.FLAG_OUTLINED and label.value == "Label"
+    assert p.data == "x"
+
+
+# ---- portrait frame, more cases -----------------------------------------------
+def test_portrait_frame_three_colors():
+    frame = leader_portrait(leader(("Red", "Green", "Blue")), 56)
+    assert frame.gradient.colors == [CARD_COLORS[c] for c in ("Red", "Red", "Green", "Green", "Blue", "Blue")]
+    assert frame.gradient.stops == pytest.approx([0, 1 / 3, 1 / 3, 2 / 3, 2 / 3, 1])
+
+
+@pytest.mark.parametrize("size", [12, 16, 24, 30, 32, 40, 48, 56, 64, 80])
+def test_portrait_frame_keeps_outer_size(size):
+    frame = leader_portrait(leader(("Red",)), size)
+    border = portrait_border(size)
+    assert (frame.width, frame.height, frame.padding) == (size, size, border)
+    assert frame.content.width == frame.content.height == size - 2 * border
+    assert frame.content.border_radius >= 0  # never a negative inner radius
+
+
+def test_portrait_frame_without_a_picture_is_a_framed_silhouette():
+    frame = leader_portrait(Leader(0, "OP99-999", "Nobody", None, ("Blue",)), 40)
+    assert frame.data == "portrait-frame" and frame.bgcolor == CARD_COLORS["Blue"]
+    assert isinstance(frame.content.content, ft.Icon)
+
+
+def test_leader_row_frames_its_portrait():
+    from ui.widgets import leader_row
+
+    row = leader_row(leader(("Purple",)), "", size=16)
+    frame = by_data(row, "portrait-frame")
+    assert frame.width == 32 and frame.bgcolor == CARD_COLORS["Purple"]
+    assert [c.data for c in walk(leader_row(None, "Pick", size=16))].count("portrait-frame") == 0
+
+
+@pytest.mark.property
+@given(st.lists(st.sampled_from(sorted(CARD_COLORS)), min_size=2, max_size=6))
+def test_color_frame_bands_are_equal_and_ordered(colors):
+    frame = leader_portrait(leader(tuple(colors)), 56)
+    g = frame.gradient
+    assert g.colors == [CARD_COLORS[c] for c in colors for _ in range(2)]
+    assert g.stops[0] == 0 and g.stops[-1] == pytest.approx(1)
+    assert g.stops == sorted(g.stops)  # hard edges only, never backwards
+    widths = [g.stops[i + 1] - g.stops[i] for i in range(0, len(g.stops), 2)]
+    assert widths == pytest.approx([1 / len(colors)] * len(colors))

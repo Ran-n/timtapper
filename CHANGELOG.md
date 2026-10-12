@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/12 02:05:58.738253 )
+[//]: # (+ Revised: 	2026/10/12 13:18:39.586037 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- Added rendered UI tests (`uv run pytest -m desktop`, Windows) that drive the real app with real mouse clicks and check the captured pixels: split record badges, type pills, portrait frame bands, die pips, picker dots at 360 dp, tap-to-cycle and colour filtering
+- Added whole-screen snapshot tests against approved baselines in `tests/rendered/baselines/`, refreshed with `TIMTAPPER_UPDATE_BASELINES=1`
+- Added `scripts/app_driver.py` and `scripts/app_window.py`, which run, capture and click the real app on demo data; `make_screenshots.py` now uses them
+- Added widget, portrait-crop and watermark-lift tests, including property-based ones, for the 0.4.0 changes
 
 ## [0.4.0] — 2026-10-12
 

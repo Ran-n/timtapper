@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/12 01:50:30.311656 )
+[//]: # (+ Revised: 	2026/10/12 13:16:03.993868 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -116,7 +116,8 @@ the whole `build/` folder first.
 uv run python scripts/make_screenshots.py
 ```
 
-It opens the app on a throwaway database seeded with demo events, walks the screens and saves them to
+It opens the app on a throwaway database seeded with demo events (`scripts/app_driver.py`, shared with the rendered
+tests), walks the screens and saves them to
 `docs/screenshots/`, plus an event share card. Your own data is never touched. Windows only (Flet's own page capture
 returns nothing on desktop, so the script grabs the window with Pillow); keep the window uncovered while it runs.
 
@@ -150,8 +151,15 @@ downloads on its own always get the default crop until the next release ships th
 ```sh
 uv run pytest                 # unit, DB, UI widget-tree, property tests
 uv run pytest -m live         # also hits the real optcgapi.com
+uv run pytest -m desktop      # the real app, rendered (Windows; takes over the mouse and screen for ~1 min)
 uv run ruff format src scripts tests && uv run ruff check src scripts tests
 ```
+
+The `desktop` tests (`tests/rendered/`) start the real app on the demo data from `scripts/app_driver.py`, click it
+with the real mouse and check the captured pixels: badges side by side, die pips, the picker's dots on one line at
+360 dp, portrait frame bands, taps cycling the die and filtering the picker. They also compare whole screens with
+`tests/rendered/baselines/*.png`. After an intended visual change, rerun them with `TIMTAPPER_UPDATE_BASELINES=1`, look
+at every rewritten baseline and commit it. Keep the window uncovered while they run.
 
 ## Project layout
 
@@ -168,9 +176,10 @@ src/timtapper/          Flet app root (flet build packages this folder)
   ui/                   screens (events, event, stats, settings), picker, widgets
   assets/               fonts, icon (png/ico), logo_mark, bundled leaders.json + leaders/*.webp portraits
 scripts/                build_leaders.py, fetch_davyback_portraits.py, make_icon.py (icons, logo_mark +
-                        docs/logo.png), make_screenshots.py (docs/screenshots/)
+                        docs/logo.png), make_screenshots.py (docs/screenshots/), app_driver.py + app_window.py
+                        (run, capture and click the real app)
 docs/                   logo.png wordmark and screenshots/ for the README
-tests/                  mirrors src/timtapper
+tests/                  mirrors src/timtapper; rendered/ drives the real app (marker `desktop`)
 ```
 
 ## Disclaimer

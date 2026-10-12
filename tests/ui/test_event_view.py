@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.780273
-Revised: 2026/10/12 01:37:36.155545
+Revised: 2026/10/12 02:17:25.842246
 """
 
 import datetime as dt
@@ -233,3 +233,17 @@ def test_indicators_have_tooltips_and_touch_size(screen):
         target = by_data(tile, f"{tag}-cycle")
         assert target.tooltip.startswith(tip)
         assert target.content.width >= 36 and target.content.height >= 36
+
+
+async def test_die_face_follows_each_tap(screen):
+    def face_of(round_no):
+        cycle = by_data(by_data(screen.body, f"round-{round_no}"), "die-cycle")
+        found = [c.data for c in walk(cycle) if str(c.data).startswith("die-face")]
+        return found[0] if found else None
+
+    assert face_of(3) is None  # unknown roll: the grey die icon
+    seen = []
+    for _ in range(3):
+        await tap(screen, 3, "die")
+        seen.append(face_of(3))
+    assert seen == ["die-face-6", "die-face-1", None]
