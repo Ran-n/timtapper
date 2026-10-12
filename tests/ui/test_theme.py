@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:57:38.978707
-Revised: 2026/10/11 16:58:18.733799
+Revised: 2026/10/12 16:55:02.048064
 
 Themes: every palette is complete and readable, preferences round-trip, and
 appearance changes rebuild the screen.
@@ -69,7 +69,7 @@ def test_scheme_builds_a_flet_theme(key, dark):
     assert theme.color_scheme.primary == s.primary
     assert theme.color_scheme.surface_container == s.surface
     assert theme.scaffold_bgcolor == s.bg
-    assert set(s.results) == {"W", "L", "D"}
+    assert set(s.results) == {"W", "L"}
 
 
 def test_mix():

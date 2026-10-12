@@ -2,10 +2,12 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.019766
-Revised: 2026/10/11 23:25:32.473903
+Revised: 2026/10/12 16:54:59.869355
 """
 
 import datetime as dt
+
+import pytest
 
 from catalog.optcgapi import LeaderRecord
 from catalog.repository import (
@@ -148,3 +150,21 @@ def test_set_codes_of_bundled_catalogue_starts_with_newest_main_set(leaders):
     codes = set_codes(leaders.all())
     op = [c for c in codes if c.startswith("OP")]
     assert codes[0] == op[0] and op == sorted(op, key=lambda c: -int(c[2:]))
+
+
+@pytest.mark.parametrize(
+    ("name", "short"),
+    [
+        ("Donquixote Doflamingo", "Doflamingo"),
+        ('Eustass"Captain"Kid', "Kid"),
+        ("Donquixote Rosinante", "Donquixote Rosinante"),  # only the names players shorten
+        ("Shanks", "Shanks"),
+    ],
+)
+def test_short_name_is_what_players_call_the_leader(name, short):
+    assert Leader(1, "OP01-060", name, "OP01", ("Blue",)).short_name == short
+
+
+def test_catalogue_keeps_the_full_names(leaders):
+    names = {ld.name for ld in leaders.all()}
+    assert {"Donquixote Doflamingo", 'Eustass"Captain"Kid'} <= names

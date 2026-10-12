@@ -49,6 +49,7 @@ pythonpath = ["src/timtapper"]
 markers = [
     "property: hypothesis-driven property-based test",
     "snapshot: compares rendered output against a checked-in baseline",
+    "regression: pins a fixed bug; the docstring or a comment says what used to go wrong",
     "live: hits the real optcgapi.com endpoint (network) — kept out of the default run",
     "desktop: drives the real app window (Windows; takes over the mouse and screen) — kept out of the default run",
 ]
@@ -57,6 +58,9 @@ addopts = "-m \"not live and not desktop\""
 [tool.coverage.run]
 source = ["src/timtapper"]
 branch = true
+
+[tool.coverage.report]
+fail_under = 99  # `uv run pytest --cov` fails below this; raise it as coverage grows, never lower it
 
 [tool.ruff]
 src = ["src", "src/timtapper"]

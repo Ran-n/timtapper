@@ -1,0 +1,47 @@
+{
+ "format": "timtapper-backup",
+ "version": 1,
+ "events": [
+  {
+   "name": "Sunday locals",
+   "event_type": "locals",
+   "date": "2026-10-05",
+   "leader": "OP01-001",
+   "notes": "Swiss, 3 rounds + top 4 ✓",
+   "rounds": [
+    {
+     "opponent": "OP01-060",
+     "result": "W",
+     "went_first": true,
+     "won_die_roll": true,
+     "top_cut": false,
+     "notes": "tempo"
+    },
+    {
+     "opponent": "ST01-001",
+     "result": "L",
+     "went_first": false,
+     "won_die_roll": null,
+     "top_cut": false,
+     "notes": ""
+    },
+    {
+     "opponent": "OP01-060",
+     "result": null,
+     "went_first": null,
+     "won_die_roll": null,
+     "top_cut": true,
+     "notes": ""
+    }
+   ]
+  },
+  {
+   "name": "Online practice",
+   "event_type": "online",
+   "date": "2026-10-06",
+   "leader": null,
+   "notes": "",
+   "rounds": []
+  }
+ ]
+}

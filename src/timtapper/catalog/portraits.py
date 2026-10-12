@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:19.051520
-Revised: 2026/10/12 01:50:30.627812
+Revised: 2026/10/12 16:54:57.552992
 
 Leader portraits: a small square crop of each leader card's art (the face sits
 in the upper middle of every card; a two-character card gets one strip per face,
@@ -157,13 +157,20 @@ def download_missing(codes: list[str], client: httpx.Client | None = None) -> tu
     return saved, failed
 
 
+def local_file(code: str) -> Path | None:
+    """`code`'s portrait on disk: the bundled one, else one downloaded later, else None."""
+    for folder in (BUNDLED_DIR, cache_dir()):
+        path = folder / filename(code)
+        if path.is_file():
+            return path
+    return None
+
+
 @lru_cache(maxsize=512)
 def source(code: str) -> str | bytes | None:
     """What ft.Image(src=...) needs for `code`'s portrait: an asset path when bundled,
     the cached file's bytes when downloaded later (works on Android too), else None."""
-    if (BUNDLED_DIR / filename(code)).is_file():
-        return f"leaders/{filename(code)}"
-    cached = cache_dir() / filename(code)
-    if cached.is_file():
-        return cached.read_bytes()
-    return None
+    path = local_file(code)
+    if path is None:
+        return None
+    return f"leaders/{path.name}" if path.parent == BUNDLED_DIR else path.read_bytes()

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.873250
-Revised: 2026/10/11 16:27:22.376052
+Revised: 2026/10/12 16:54:57.834476
 
 ORM schema. BCNF: every non-key attribute depends on a whole candidate key
 and nothing else —
@@ -23,7 +23,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 # Official OPTCG color order — also the seeded ids, so ORDER BY id is display order.
 COLORS = ("Red", "Green", "Blue", "Purple", "Black", "Yellow")
 EVENT_TYPES = ("testing", "locals", "regional", "national", "online", "other")
-RESULTS = ("W", "L", "D")
+RESULTS = ("W", "L")  # no draws in the OPTCG: a drawn game is a loss for both players
 
 
 class Base(DeclarativeBase):
@@ -68,12 +68,19 @@ class EventType(Base):
 
 class Event(Base):
     __tablename__ = "event"
+    __table_args__ = (
+        CheckConstraint("placement IS NULL OR placement >= 1", name="ck_event_placement"),
+        CheckConstraint("players IS NULL OR players >= 1", name="ck_event_players"),
+        CheckConstraint("placement IS NULL OR players IS NULL OR placement <= players", name="ck_event_place_in_field"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
     event_type_id: Mapped[int] = mapped_column(ForeignKey("event_type.id"))
     date: Mapped[dt.date] = mapped_column(Date, index=True)
     leader_id: Mapped[int | None] = mapped_column(ForeignKey("leader.id"))
     notes: Mapped[str] = mapped_column(Text, default="")
+    placement: Mapped[int | None]  # final standing (1 = won the event); unknown or not applicable: NULL
+    players: Mapped[int | None]  # how many players entered
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.current_timestamp())
 
     event_type: Mapped[EventType] = relationship()
@@ -87,7 +94,7 @@ class Match(Base):
     __tablename__ = "match"
     __table_args__ = (
         UniqueConstraint("event_id", "round_no", name="uq_match_event_round"),
-        CheckConstraint("result IN ('W', 'L', 'D')", name="ck_match_result"),
+        CheckConstraint("result IN ('W', 'L')", name="ck_match_result"),
         CheckConstraint("round_no >= 1", name="ck_match_round_no"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)

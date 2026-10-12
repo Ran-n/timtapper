@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/11 23:25:32.625478
+Revised: 2026/10/12 16:55:01.298188
 """
 
 import flet as ft
@@ -238,3 +238,50 @@ async def test_main_reports_database_failure(page, monkeypatch):
     monkeypatch.setattr(main, "open_database", broken)
     await main.main(page)
     assert "disk full" in added[0].content.value
+
+
+@pytest.mark.parametrize("handler", ["on_close", "on_disconnect"])
+async def test_every_quit_path_closes_the_database(page, monkeypatch, handler):
+    """Closing the window and losing the client both release the SQLite file."""
+    opened = []
+    real_open = main.open_database
+
+    def tracking_open():
+        db = real_open()
+        opened.append(db)
+        return db
+
+    class Prefs:
+        async def get(self, key):
+            return None
+
+    monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
+    monkeypatch.setattr(main, "open_database", tracking_open)
+    await main.main(page)
+    disposed = []
+    real_dispose = opened[0].dispose
+    monkeypatch.setattr(opened[0], "dispose", lambda: (disposed.append(True), real_dispose()))
+    getattr(page, handler)(None)
+    assert disposed == [True]
+
+
+def test_run_sets_up_logging_then_starts_flet(monkeypatch):
+    calls = []
+    monkeypatch.setattr(main, "setup_logging", lambda: calls.append("logging"))
+    monkeypatch.setattr(main.ft, "run", lambda target, **kw: calls.append(("run", target, kw)))
+    main.run()
+    assert calls == ["logging", ("run", main.main, {"assets_dir": "assets"})]
+
+
+def test_launcher_puts_the_app_root_on_the_path_and_runs_main(monkeypatch):
+    import sys
+    from pathlib import Path
+
+    import launcher
+
+    started = []
+    monkeypatch.setattr(main, "run", lambda: started.append(True))
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    launcher.run()
+    assert started == [True]
+    assert sys.path[0] == str(Path(launcher.__file__).resolve().parent)

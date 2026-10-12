@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 23:25:31.706887
-Revised: 2026/10/12 02:17:26.494904
+Revised: 2026/10/12 16:55:01.758719
 
 Leader picker: text search, color dots (every selected color) and the set dropdown combine.
 """
@@ -193,3 +193,15 @@ async def test_dots_and_search_reset_independently(ctx):
     await type_query(sheet, "")
     found = shown(ctx, sheet)
     assert found and all("Red" in ld.colors for ld in found)  # clearing the search keeps the colour filter
+
+
+async def test_async_on_pick_is_awaited(ctx, page):
+    picked = []
+
+    async def on_pick(leader):
+        picked.append(leader.id)
+
+    open_picker(ctx, "Pick", on_pick)
+    option = by_data(page.dialogs[-1], "leader-results").controls[0]
+    await fire(option.on_click, option)
+    assert picked == [option.data] and page.dialogs == []

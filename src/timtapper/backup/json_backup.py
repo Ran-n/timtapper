@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:40.999702
-Revised: 2026/10/11 16:27:21.377210
+Revised: 2026/10/12 16:54:57.261208
 
 Backup: all events and rounds as one JSON file. Leaders are referenced by
 card code (not local DB id), so a backup restores on any install. Restoring
@@ -26,7 +26,9 @@ from events.repository import Event
 _log = get_logger("backup")
 
 FORMAT = "timtapper-backup"
-VERSION = 1
+VERSION = 2  # 2: events carry placement and players
+READABLE_VERSIONS = (1, VERSION)  # a v1 file restores with placement and players unknown
+LEGACY_DRAW = "D"  # v1 files written before draws were dropped may still hold it
 
 
 class BackupError(ValueError):
@@ -48,6 +50,8 @@ def export_backup(events: list[Event], leaders: dict[int, Leader]) -> bytes:
                 "date": ev.date.isoformat(),
                 "leader": code(ev.leader_id),
                 "notes": ev.notes,
+                "placement": ev.placement,
+                "players": ev.players,
                 "rounds": [
                     {
                         "opponent": code(r.opponent_leader_id),
@@ -73,6 +77,12 @@ def _opt_bool(value, where: str) -> bool | None:
     raise BackupError(f"{where}: expected true/false/null, got {value!r}")
 
 
+def _opt_count(value, where: str) -> int | None:
+    if value is None or (isinstance(value, int) and not isinstance(value, bool) and value >= 1):
+        return value
+    raise BackupError(f"{where}: expected a whole number of 1 or more, got {value!r}")
+
+
 def _str(value, where: str, *, required: bool = False) -> str:
     if value is None and not required:
         return ""
@@ -89,7 +99,7 @@ def parse_backup(data: bytes) -> list[dict]:
         raise BackupError(f"not a JSON file: {exc}") from exc
     if not isinstance(payload, dict) or payload.get("format") != FORMAT:
         raise BackupError("not a timtapper backup")
-    if payload.get("version") != VERSION:
+    if payload.get("version") not in READABLE_VERSIONS:
         raise BackupError(f"unsupported backup version {payload.get('version')!r}")
     raw_events = payload.get("events")
     if not isinstance(raw_events, list):
@@ -113,23 +123,32 @@ def parse_backup(data: bytes) -> list[dict]:
             rwhere = f"{where} round {j}"
             if not isinstance(r, dict):
                 raise BackupError(f"{rwhere}: expected an object")
-            if r.get("result") not in (*RESULTS, None):
+            result = r.get("result")
+            if result == LEGACY_DRAW:  # backups from before draws were dropped: a draw is a loss for both
+                result = "L"
+            if result not in (*RESULTS, None):
                 raise BackupError(f"{rwhere}: invalid result {r.get('result')!r}")
             parsed_rounds.append({
                 "opponent": _str(r.get("opponent"), f"{rwhere} opponent", required=True),
-                "result": r.get("result"),
+                "result": result,
                 "went_first": _opt_bool(r.get("went_first"), rwhere),
                 "won_die_roll": _opt_bool(r.get("won_die_roll"), rwhere),
                 "top_cut": bool(_opt_bool(r.get("top_cut"), rwhere)),
                 "notes": _str(r.get("notes"), f"{rwhere} notes"),
             })
         leader = ev.get("leader")
+        placement = _opt_count(ev.get("placement"), f"{where} placement")
+        players = _opt_count(ev.get("players"), f"{where} players")
+        if placement is not None and players is not None and placement > players:
+            raise BackupError(f"{where}: placement {placement} is past the {players} players")
         events.append({
             "name": _str(ev.get("name"), f"{where} name", required=True).strip(),
             "event_type": ev["event_type"],
             "date": date,
             "leader": _str(leader, f"{where} leader") or None,
             "notes": _str(ev.get("notes"), f"{where} notes"),
+            "placement": placement,
+            "players": players,
             "rounds": parsed_rounds,
         })
     return events
@@ -150,6 +169,8 @@ def import_backup(db: Database, data: bytes) -> int:
                 date=ev["date"],
                 leader_id=leaders.ensure(s, ev["leader"]).id if ev["leader"] else None,
                 notes=ev["notes"],
+                placement=ev["placement"],
+                players=ev["players"],
             )
             s.add(row)
             s.flush()

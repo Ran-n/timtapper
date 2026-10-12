@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.952473
-Revised: 2026/10/11 23:25:32.248026
+Revised: 2026/10/12 16:54:58.843511
 
 Event screen: everything edited in place — name, type, date, own leader and
 notes in the header; each round as an expandable tile with its result, turn
@@ -19,7 +19,7 @@ from catalog.repository import Leader
 from core.logging import get_logger
 from db.models import EVENT_TYPES, RESULTS
 from events.repository import Event, EventError, Round
-from i18n import event_type_label
+from i18n import UNRANKED_EVENT_TYPES, event_type_label
 from share import render
 from stats.compute import percent, record_of
 from ui.context import AppContext
@@ -45,6 +45,9 @@ _log = get_logger("ui.event")
 # what one tap on a round row's indicator steps through, ending back at "unknown"
 RESULT_CYCLE = (None, *RESULTS)
 TRISTATE_CYCLE = (None, True, False)
+# a round row on one line: "R1"/"TC" column, the opponent, then the three indicators
+ROUND_LABEL_WIDTH = 26  # "R10" and "TC" in the heavy font, without wrapping
+ROUND_GAP = 4
 
 
 def _next[T](value: T, cycle: Sequence[T]) -> T:
@@ -120,6 +123,7 @@ class EventScreen:
             open_picker(self.ctx, _("Your leader"), lambda leader: self._save_event(leader_id=leader.id))
 
         rec = record_of(ev)
+        standing = [] if ev.event_type in UNRANKED_EVENT_TYPES else [self._standing_fields()]
         return [
             ft.TextField(
                 value=ev.name,
@@ -136,16 +140,23 @@ class EventScreen:
                         label=_("Type"),
                         expand=True,
                         dense=True,
+                        # default paddings here and on the date button clipped "Regional" to "Regiona" at 360 dp
+                        content_padding=ft.Padding.only(left=10, right=0),
                         options=[ft.DropdownOption(key=k, text=event_type_label(_, k)) for k in EVENT_TYPES],
                         on_select=lambda e: self._save_event(event_type=e.control.value),
                         data="type",
                     ),
                     ft.OutlinedButton(
-                        content=ev.date.isoformat(), icon=ft.Icons.CALENDAR_MONTH, on_click=pick_date, data="date"
+                        content=ev.date.isoformat(),
+                        icon=ft.Icons.CALENDAR_MONTH,
+                        on_click=pick_date,
+                        style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=12)),
+                        data="date",
                     ),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
+            *standing,
             card(
                 ft.Row(
                     [
@@ -212,6 +223,40 @@ class EventScreen:
             show_selected_icon=False,
             on_change=on_change,
             data=tag,
+        )
+
+    def _standing_fields(self) -> ft.Row:
+        """Where you finished and how many entered, typed in place; empty means unknown."""
+        _ = self.ctx._
+        ev = self.event
+
+        def field(key: str, label: str, value: int | None, prefix: str | None) -> ft.TextField:
+            def save(e: ft.Event[ft.TextField]) -> None:
+                text = (e.control.value or "").strip()
+                number = int(text) if text else None
+                if number != getattr(self.event, key):
+                    self._save_event(**{key: number})
+
+            return ft.TextField(
+                value="" if value is None else str(value),
+                label=label,
+                prefix=ft.Text(prefix) if prefix else None,
+                keyboard_type=ft.KeyboardType.NUMBER,
+                input_filter=ft.NumbersOnlyInputFilter(),
+                dense=True,
+                expand=True,
+                on_blur=save,
+                on_submit=save,
+                data=key,
+            )
+
+        return ft.Row(
+            [
+                field("placement", _("Placement"), ev.placement, "#"),
+                field("players", _("Players"), ev.players, None),
+            ],
+            spacing=10,
+            data="standing",
         )
 
     @staticmethod
@@ -298,7 +343,7 @@ class EventScreen:
                     _("Result — tap to change"),
                 ),
             ],
-            spacing=4,
+            spacing=2,
             tight=True,
         )
 
@@ -306,7 +351,7 @@ class EventScreen:
         edge = ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
         editors = ft.Column(
             [
-                self._segmented([("W", _("Win")), ("L", _("Loss")), ("D", _("Draw"))], r.result, set_result, "result"),
+                self._segmented([("W", _("Win")), ("L", _("Loss"))], r.result, set_result, "result"),
                 self._segmented(
                     [("1", _("Went 1st")), ("2", _("Went 2nd"))],
                     self._tristate(r.went_first, "1", "2"),
@@ -352,18 +397,35 @@ class EventScreen:
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         )
         return ft.ExpansionTile(
-            title=ft.Row([
-                ft.Text(
-                    label,
-                    width=28,
-                    font_family=FONT_HEAVY,
-                    color=ft.Colors.TERTIARY if r.top_cut else ft.Colors.ON_SURFACE_VARIANT,
-                ),
-                leader_row(opponent, _("Unknown leader"), size=15, show_code=False),
-            ]),
-            trailing=indicators,
-            # trimmed side padding: at 360 px the three indicators would otherwise squeeze out the opponent's name
-            tile_padding=ft.Padding(12, 0, 8, 0),
+            # one line: R-label, opponent, indicators. Gaps are trimmed so the name gets ~78 dp at 360 dp; at
+            # 11 px, with break points after "." '"' "&", the longest unbreakable piece of any leader name
+            # ("Doflamingo", 72 dp) fits, so names wrap between words beside the indicators, never mid-word
+            title=ft.Row(
+                [
+                    ft.Text(
+                        label,
+                        width=ROUND_LABEL_WIDTH,
+                        font_family=FONT_HEAVY,
+                        color=ft.Colors.TERTIARY if r.top_cut else ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                    leader_row(
+                        opponent,
+                        _("Unknown leader"),
+                        size=11,
+                        show_code=False,
+                        spacing=ROUND_GAP,
+                        portrait_size=30,
+                        break_words=True,
+                        short=True,  # "Doflamingo", "Kid": the full names crowd this row
+                    ),
+                    indicators,
+                ],
+                spacing=ROUND_GAP,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                data="round-title",
+            ),
+            show_trailing_icon=False,
+            tile_padding=ft.Padding(6, 6, 2, 6),
             expanded=r.id in self.expanded,
             maintain_state=True,
             on_change=on_expand,

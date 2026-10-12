@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.139229
-Revised: 2026/10/11 17:20:12.763296
+Revised: 2026/10/12 16:54:59.150303
 
 Settings tab: language, theme, leader catalogue refresh, backup export/import, about.
 """
@@ -24,6 +24,15 @@ from ui.theme import FONT_SEMIBOLD, THEMES, AppTheme, is_dark
 from ui.widgets import caption, card, confirm, flag, logo, section, update_if_mounted
 
 _log = get_logger("ui.settings")
+
+
+def mode_segment(value: str, label: str, icon: ft.IconData) -> ft.Segment:
+    """One brightness option. The label stays on one line and may run into the segment's side
+    padding: Flet drops a custom segment padding, and Material's 24 dp leaves "Sistema" only
+    ~45 dp beside its icon at the 360 dp minimum width, which wrapped it mid-word."""
+    return ft.Segment(
+        value=value, label=ft.Text(label, size=13, no_wrap=True, overflow=ft.TextOverflow.VISIBLE), icon=icon
+    )
 
 
 class SettingsScreen:
@@ -184,9 +193,9 @@ class SettingsScreen:
             ft.ResponsiveRow([self._swatch(t) for t in THEMES.values()], spacing=10, run_spacing=10),
             ft.SegmentedButton(
                 segments=[
-                    ft.Segment(value="system", label=_("System"), icon=ft.Icons.BRIGHTNESS_AUTO),
-                    ft.Segment(value="light", label=_("Light"), icon=ft.Icons.LIGHT_MODE),
-                    ft.Segment(value="dark", label=_("Dark"), icon=ft.Icons.DARK_MODE),
+                    mode_segment("system", _("System"), ft.Icons.BRIGHTNESS_AUTO),
+                    mode_segment("light", _("Light"), ft.Icons.LIGHT_MODE),
+                    mode_segment("dark", _("Dark"), ft.Icons.DARK_MODE),
                 ],
                 selected=[self.ctx.theme_mode],
                 on_change=set_mode,

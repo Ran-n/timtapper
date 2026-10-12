@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/12 13:16:03.993868 )
+[//]: # (+ Revised: 	2026/10/12 16:54:56.826011 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -27,8 +27,11 @@ device, and a JSON backup moves them to another install.
 
 ### Log as you play
 
-- **Events**: testing, locals, regional, national, online or other, each with a name, date, your leader and notes.
-- **Rounds**: opponent's leader, result (W/L/D), turn order, die roll, top cut and notes, all edited in place, with no
+- **Events**: testing, locals, regional, national, online or other, each with a name, date, your leader and notes,
+  plus where you finished and how many played (shown as "#3 of 32"; testing sessions have no standings).
+  Search the list by name, or open its filters to narrow it by your leader and event type; the filters stay set while
+  you open an event and come back.
+- **Rounds**: opponent's leader, result (W/L; the OPTCG has no draws, a drawn game is a loss for both), turn order, die roll, top cut and notes, all edited in place, with no
   forms or dialogs. Log a round when you sit down and give it a result when the game ends; rounds still being played
   stay open.
 - **One-tap round rows**: turn order, die roll and result show on every round row. Tap one to cycle its value. The die
@@ -40,8 +43,9 @@ device, and a JSON backup moves them to another install.
 
 - **Stats**: overall record and win rate, going 1st vs 2nd, won vs lost die roll, best and worst matchup (3+ games),
   recent form and a full matchup table. Filter by your leader and by event type.
-- **Share images**: 1080×1350 PNG cards rendered on-device for an event, a matchup or your overall summary. On Android
-  they open the system share sheet; on desktop you get a save dialog.
+- **Share images**: 1080×1350 PNG cards rendered on-device for an event, a matchup or your overall summary, with the
+  app's logo and each leader's portrait framed in its colors. The event card puts your placement in a band of its own
+  and shows each round's turn order, die roll and result. On Android they open the system share sheet; on desktop you get a save dialog.
 
 <p align="center">
   <img src="docs/screenshots/share-card.png" alt="Event share card" width="320">
@@ -149,17 +153,25 @@ downloads on its own always get the default crop until the next release ships th
 ## Tests
 
 ```sh
-uv run pytest                 # unit, DB, UI widget-tree, property tests
+uv run pytest                 # unit, DB, migrations, UI widget-tree, property, regression tests
+uv run pytest --cov           # the same, failing below 99% branch coverage (fail_under in pyproject.toml)
 uv run pytest -m live         # also hits the real optcgapi.com
 uv run pytest -m desktop      # the real app, rendered (Windows; takes over the mouse and screen for ~1 min)
 uv run ruff format src scripts tests && uv run ruff check src scripts tests
 ```
 
+Every bug fix comes with a test marked `regression` that says what used to go wrong. The backup format is pinned by
+`tests/backup/golden/v1.json`: a change to the file shape fails until `VERSION` is bumped and the old format still
+imports.
+
 The `desktop` tests (`tests/rendered/`) start the real app on the demo data from `scripts/app_driver.py`, click it
 with the real mouse and check the captured pixels: badges side by side, die pips, the picker's dots on one line at
-360 dp, portrait frame bands, taps cycling the die and filtering the picker. They also compare whole screens with
-`tests/rendered/baselines/*.png`. After an intended visual change, rerun them with `TIMTAPPER_UPDATE_BASELINES=1`, look
-at every rewritten baseline and commit it. Keep the window uncovered while they run.
+360 dp, portrait frame bands, the theme swatches previewing their own colours, taps cycling the die, filtering the
+picker and switching the theme. Captures are shrunk to dp and clicks scaled back up, so the checks pass at any
+Windows display scaling. They also compare whole screens with saved baselines, including settings in Spanish at 360
+dp, where the labels are longest: one set per scaling, since text renders differently at each
+(`tests/rendered/baselines/` at 100%, `baselines/scale-125/` at 125%). After an intended visual change, rerun them with
+`TIMTAPPER_UPDATE_BASELINES=1`, look at every rewritten baseline and commit it. Keep the window uncovered while they run.
 
 ## Project layout
 
@@ -184,8 +196,8 @@ tests/                  mirrors src/timtapper; rendered/ drives the real app (ma
 
 ## Disclaimer
 
-timtapper is a fan-made tool. It is not affiliated with or endorsed by Bandai, Eiichiro Oda or Shueisha. Share cards
-draw no card art.
+timtapper is a fan-made tool. It is not affiliated with or endorsed by Bandai, Eiichiro Oda or Shueisha. The leader
+portraits in the app and on share cards are small crops of the official card art, which belongs to its owners.
 
 ## License
 

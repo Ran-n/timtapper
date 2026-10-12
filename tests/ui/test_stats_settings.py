@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.861081
-Revised: 2026/10/12 02:17:26.811743
+Revised: 2026/10/12 16:55:01.905065
 """
 
 import datetime as dt
@@ -41,6 +41,18 @@ def test_stats_show_summary_and_matchups(ctx, sample_event):
     tagged = [c.data for c in walk(s.body)]
     # the four split tiles, best/worst matchup and every matchup row each show a record and a rate badge
     assert tagged.count("rate-badge") >= 6 and tagged.count("record-badge") >= tagged.count("rate-badge")
+
+
+@pytest.mark.regression
+def test_best_and_worst_matchup_each_get_a_full_row(ctx, sample_event):
+    """Side by side, the matchup tiles broke long leader names mid-word at 360 dp."""
+    s = StatsScreen(ctx)
+    s.build()
+    rows_with_both = [
+        c for c in walk(s.body) if isinstance(c, ft.Row) and {"Best matchup", "Worst matchup"} <= set(texts(c))
+    ]
+    assert rows_with_both == []
+    assert {"Best matchup", "Worst matchup"} <= set(texts(s.body))
 
 
 async def test_stats_filters(ctx, sample_event, events, leader_ids):
@@ -320,3 +332,20 @@ def test_stats_split_tiles_use_large_badges(ctx, sample_event):
         if isinstance(t, ft.Text)
     }
     assert sizes == {13, 15}  # 15 in the split tiles, 13 in matchup rows and tiles
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("lang", ["en", "es", "gl"])
+def test_mode_labels_never_wrap(ctx, lang):
+    """Regression: "System"/"Sistema" used to wrap mid-word in the 360 dp window."""
+    from i18n import set_lang
+
+    set_lang(ctx.page, lang)
+    s = SettingsScreen(ctx)
+    s.build()
+    segments = by_data(s.body, "mode").segments
+    assert [seg.value for seg in segments] == ["system", "light", "dark"]
+    for seg in segments:
+        assert isinstance(seg.label, ft.Text) and seg.label.no_wrap
+        assert seg.label.overflow == ft.TextOverflow.VISIBLE and seg.icon is not None
+    assert [seg.label.value for seg in segments] == [ctx._("System"), ctx._("Light"), ctx._("Dark")]

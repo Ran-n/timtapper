@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:22:24.719836
-Revised: 2026/10/12 02:17:27.123312
+Revised: 2026/10/12 16:55:02.191214
 
 The app's logo widget and the assets scripts/make_icon.py draws for it.
 """
@@ -29,6 +29,7 @@ from ui.widgets import (
     empty_state,
     event_type_pill,
     leader_portrait,
+    leader_row,
     logo,
     pill,
     portrait_border,
@@ -159,8 +160,10 @@ def test_record_badges_losing_rate_is_red(scheme):
     assert by_data(record_badges(Record(1, 2), scheme), "rate-badge").content.color == scheme.error
 
 
-def test_record_badges_draws(scheme):
-    assert texts(record_badges(Record(2, 1, 1), scheme))[0] == "2-1-1"
+@pytest.mark.regression
+def test_record_badges_never_show_draws(scheme):
+    """The OPTCG has no draws: records read wins-losses only."""
+    assert texts(record_badges(Record(2, 1), scheme))[0] == "2-1"
 
 
 def test_record_badges_no_games(scheme):
@@ -284,9 +287,9 @@ def test_record_badges_even_rate_is_green(scheme):
     assert by_data(record_badges(Record(1, 1), scheme), "rate-badge").content.color == scheme.success
 
 
-def test_record_badges_only_draws(scheme):
-    badges = record_badges(Record(0, 0, 2), scheme)
-    assert texts(badges) == ["0-0-2", "0%"]
+def test_record_badges_only_losses(scheme):
+    badges = record_badges(Record(0, 2), scheme)
+    assert texts(badges) == ["0-2", "0%"]
     assert by_data(badges, "rate-badge").content.color == scheme.error
 
 
@@ -349,8 +352,6 @@ def test_portrait_frame_without_a_picture_is_a_framed_silhouette():
 
 
 def test_leader_row_frames_its_portrait():
-    from ui.widgets import leader_row
-
     row = leader_row(leader(("Purple",)), "", size=16)
     frame = by_data(row, "portrait-frame")
     assert frame.width == 32 and frame.bgcolor == CARD_COLORS["Purple"]
@@ -367,3 +368,95 @@ def test_color_frame_bands_are_equal_and_ordered(colors):
     assert g.stops == sorted(g.stops)  # hard edges only, never backwards
     widths = [g.stops[i + 1] - g.stops[i] for i in range(0, len(g.stops), 2)]
     assert widths == pytest.approx([1 / len(colors)] * len(colors))
+
+
+# ---- dialogs and live updates --------------------------------------------------------
+@pytest.mark.parametrize("is_async", [False, True])
+async def test_confirm_runs_sync_and_async_actions_once(page, is_async):
+    from ui.widgets import confirm
+    from uitools import fire
+
+    ran = []
+
+    async def async_yes():
+        ran.append("async")
+
+    confirm(
+        page, "Delete?", "Gone for good.", "Delete", "Cancel", async_yes if is_async else lambda: ran.append("sync")
+    )
+    dialog = page.dialogs[-1]
+    await fire(dialog.actions[1].on_click, dialog.actions[1])
+    assert ran == ["async" if is_async else "sync"] and page.dialogs == []
+
+
+def test_update_if_mounted_pushes_only_attached_controls():
+    from types import SimpleNamespace
+
+    from ui.widgets import update_if_mounted
+
+    detached = ft.Text("x")
+    update_if_mounted(detached)  # no page yet: must not raise
+
+    pushed = []
+    attached = SimpleNamespace(page=object(), update=lambda: pushed.append(True))
+    update_if_mounted(attached)
+    assert pushed == [True]
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("size", [14, 15, 16])
+def test_leader_names_wrap_instead_of_being_cut(size):
+    """Names used to end in "…" ("Sh…", "Donquixote Doflami…") wherever the row was tight."""
+    long = Leader(1, "OP01-060", "Donquixote Doflamingo", "OP01", ("Blue",))
+    name = next(c for c in walk(leader_row(long, "", size=size)) if isinstance(c, ft.Text) and c.value == long.name)
+    assert name.max_lines is None and name.overflow != ft.TextOverflow.ELLIPSIS
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Monkey.D.Dragon", "Monkey.​D.​Dragon"),
+        ('Eustass"Captain"Kid', 'Eustass"​Captain"​Kid'),
+        ("Tony Tony.Chopper", "Tony Tony.​Chopper"),
+        ("Roronoa Zoro & Sanji", "Roronoa Zoro & Sanji"),  # already breaks at its spaces
+        ("Shanks", "Shanks"),
+        ("Dr.", "Dr."),  # nothing to break before at the end
+    ],
+)
+def test_breakable_adds_invisible_break_points_between_name_parts(name, expected):
+    from ui.widgets import breakable
+
+    assert breakable(name) == expected
+    assert breakable(name).replace("​", "") == name  # only invisible additions
+
+
+@pytest.mark.regression
+def test_long_names_in_tight_rows_break_between_parts_not_mid_word():
+    """At 360 dp a round row's name got ~78 dp, and "Donquixot/e" or "Monkey.D.Drag/on" split mid-word."""
+    long = Leader(1, "OP07-001", "Monkey.D.Dragon", "OP07", ("Black",))
+    row = leader_row(long, "", size=12, show_code=False, portrait_size=30, break_words=True)
+    name = next(c for c in walk(row) if isinstance(c, ft.Text))
+    assert name.value == "Monkey.​D.​Dragon" and name.size == 12
+    assert by_data(row, "portrait-frame").width == 30
+    plain = next(c for c in walk(leader_row(long, "")) if isinstance(c, ft.Text))
+    assert plain.value == "Monkey.D.Dragon"  # other rows keep the name untouched
+
+
+@pytest.mark.property
+@given(st.text(max_size=30))
+def test_property_breakable_only_adds_zero_width_spaces(name):
+    from ui.widgets import breakable
+
+    out = breakable(name)
+    assert out.replace("​", "") == name.replace("​", "") or "​" in name
+    assert not out.endswith("​") or name.endswith("​")
+
+
+def test_leader_row_short_name_only_when_asked():
+    dofla = Leader(1, "OP01-060", "Donquixote Doflamingo", "OP01", ("Blue",))
+
+    def name_of(row):
+        return next(c for c in walk(row) if isinstance(c, ft.Text)).value
+
+    assert name_of(leader_row(dofla, "", short=True)) == "Doflamingo"
+    assert name_of(leader_row(dofla, "")) == "Donquixote Doflamingo"  # the list, stats and picker have room

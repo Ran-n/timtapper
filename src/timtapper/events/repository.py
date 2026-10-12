@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.014644
-Revised: 2026/10/11 16:27:22.566460
+Revised: 2026/10/12 16:54:57.977271
 
 Events and their rounds: CRUD over the local DB, exposed as plain values.
 """
@@ -22,7 +22,7 @@ from db.models import Match as MatchRow
 
 _log = get_logger("events")
 
-_EVENT_FIELDS = {"name", "event_type", "date", "leader_id", "notes"}
+_EVENT_FIELDS = {"name", "event_type", "date", "leader_id", "notes", "placement", "players"}
 _MATCH_FIELDS = {"opponent_leader_id", "result", "went_first", "won_die_roll", "top_cut", "notes"}
 
 
@@ -51,6 +51,8 @@ class Event:
     leader_id: int | None
     notes: str = ""
     rounds: tuple[Round, ...] = field(default_factory=tuple)
+    placement: int | None = None  # where you finished (1 = won); None: unknown
+    players: int | None = None  # how many entered; None: unknown
 
 
 def _to_round(row: MatchRow) -> Round:
@@ -75,6 +77,8 @@ def _to_event(row: EventRow) -> Event:
         row.leader_id,
         row.notes,
         tuple(_to_round(m) for m in row.matches),
+        row.placement,
+        row.players,
     )
 
 
@@ -96,7 +100,16 @@ def _validate_event_fields(s: Session, fields: dict) -> dict:
         raise EventError("date must be a date")
     if out.get("leader_id") is not None and s.get(LeaderRow, out["leader_id"]) is None:
         raise EventError(f"unknown leader id {out['leader_id']}")
+    for key in ("placement", "players"):
+        value = out.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 1):
+            raise EventError(f"{key} must be a whole number of 1 or more")
     return out
+
+
+def _check_place_in_field(placement: int | None, players: int | None) -> None:
+    if placement is not None and players is not None and placement > players:
+        raise EventError(f"placement {placement} is past the {players} players")
 
 
 def _validate_match_fields(s: Session, fields: dict) -> dict:
@@ -150,7 +163,9 @@ class EventRepository:
     def update(self, event_id: int, **fields) -> Event:
         with self.db.session() as s:
             row = self._load(s, event_id)
-            for key, value in _validate_event_fields(s, fields).items():
+            valid = _validate_event_fields(s, fields)
+            _check_place_in_field(valid.get("placement", row.placement), valid.get("players", row.players))
+            for key, value in valid.items():
                 setattr(row, key, value)
         _log.info("event %d updated: %s", event_id, sorted(fields))
         return self.get(event_id)

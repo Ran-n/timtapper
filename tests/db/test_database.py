@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.253199
-Revised: 2026/10/11 16:27:24.713048
+Revised: 2026/10/12 16:55:00.159457
 """
 
 import datetime as dt
@@ -48,6 +48,44 @@ def test_migrations_downgrade_and_upgrade_cleanly(tmp_path):
     database.dispose()
 
 
+def test_migrating_a_database_with_history_keeps_it(sample_event, events, seeded_db):
+    """Every start runs the migrations: an app update must never touch existing events."""
+    before = events.list()
+    seeded_db.migrate()
+    assert events.list() == before
+    with seeded_db.session() as s:
+        assert s.scalar(text("SELECT version_num FROM alembic_version")) == _head_revision()
+
+
+def test_each_migration_step_upgrades_a_database_with_data(tmp_path):
+    """Step through every revision one at a time, adding history once the tables exist."""
+    from alembic.script import ScriptDirectory
+
+    database = Database(tmp_path / "steps.db")
+    cfg = Config()
+    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
+    cfg.attributes["connection_engine"] = database.engine
+    revisions = [r.revision for r in reversed(list(ScriptDirectory.from_config(cfg).walk_revisions()))]
+    seeded = False
+    for revision in revisions:
+        command.upgrade(cfg, revision)
+        if not seeded and "event" in inspect(database.engine).get_table_names():
+            with database.engine.begin() as conn:  # plain SQL: the ORM model has columns later revisions add
+                conn.execute(text("INSERT INTO event (name, event_type_id, date) VALUES ('kept', 1, '2026-01-01')"))
+            seeded = True
+        with database.engine.connect() as conn:
+            assert conn.execute(text("SELECT name FROM event")).scalar() == "kept"
+    database.dispose()
+
+
+def _head_revision() -> str:
+    from alembic.script import ScriptDirectory
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
+    return ScriptDirectory.from_config(cfg).get_current_head()
+
+
 def test_orm_metadata_matches_migrations(db):
     """Columns declared on the models exist in the migrated schema (no drift)."""
     from db.models import Base
@@ -80,3 +118,61 @@ def test_result_check_constraint(sample_event, seeded_db):
 def test_unique_round_per_event(sample_event, seeded_db):
     with pytest.raises(IntegrityError), seeded_db.session() as s:
         s.get(Match, sample_event.rounds[1].id).round_no = 1
+
+
+@pytest.mark.regression
+def test_draws_are_rejected(sample_event, seeded_db):
+    """The OPTCG has no draws: the schema refuses one."""
+    with pytest.raises(IntegrityError), seeded_db.session() as s:
+        s.get(Match, sample_event.rounds[0].id).result = "D"
+
+
+def test_migration_0002_turns_stored_draws_into_losses(tmp_path):
+    """A draw is a loss for both players, so history logged with draws keeps its games as losses."""
+    database = Database(tmp_path / "draws.db")
+    cfg = Config()
+    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
+    cfg.attributes["connection_engine"] = database.engine
+    command.upgrade(cfg, "0001")
+    with database.engine.begin() as conn:
+        conn.execute(text("INSERT INTO leader (id, code, name) VALUES (1, 'OP01-001', 'Zoro')"))
+        conn.execute(text("INSERT INTO event (id, name, event_type_id, date) VALUES (1, 'old', 1, '2026-01-01')"))
+        for no, result in enumerate(("W", "D", "L", None), start=1):
+            conn.execute(
+                text("INSERT INTO match (event_id, round_no, opponent_leader_id, result) VALUES (1, :no, 1, :r)"),
+                {"no": no, "r": result},
+            )
+    command.upgrade(cfg, "0002")
+    with database.engine.connect() as conn:
+        rows = conn.execute(text("SELECT result FROM match ORDER BY round_no")).scalars().all()
+    assert rows == ["W", "L", "L", None]
+    command.downgrade(cfg, "0001")  # and back, cleanly (draws stay losses)
+    with database.engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM match WHERE result = 'L'")).scalar() == 2
+    database.dispose()
+
+
+@pytest.mark.parametrize(
+    ("placement", "players"), [(0, None), (None, 0), (5, 4)], ids=["placement-0", "players-0", "past-field"]
+)
+def test_schema_refuses_impossible_placements(sample_event, seeded_db, placement, players):
+    """The repository checks these too; the schema is the last line."""
+    with pytest.raises(IntegrityError), seeded_db.session() as s:
+        row = s.get(Event, sample_event.id)
+        row.placement, row.players = placement, players
+
+
+def test_migration_0003_adds_empty_placement_to_existing_events(tmp_path):
+    database = Database(tmp_path / "placement.db")
+    cfg = Config()
+    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
+    cfg.attributes["connection_engine"] = database.engine
+    command.upgrade(cfg, "0002")
+    with database.engine.begin() as conn:
+        conn.execute(text("INSERT INTO event (id, name, event_type_id, date) VALUES (1, 'old', 1, '2026-01-01')"))
+    command.upgrade(cfg, "0003")
+    with database.engine.connect() as conn:
+        assert conn.execute(text("SELECT name, placement, players FROM event")).one() == ("old", None, None)
+    command.downgrade(cfg, "0002")
+    assert "placement" not in {c["name"] for c in inspect(database.engine).get_columns("event")}
+    database.dispose()

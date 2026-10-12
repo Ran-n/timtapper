@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.147840
-Revised: 2026/10/11 17:20:12.440882
+Revised: 2026/10/12 16:54:57.403331
 
 Leader data from optcgapi.com — a public, read-only card API. Used both by
 scripts/build_leaders.py (to refresh the leaders.json bundled with the app)
@@ -30,7 +30,7 @@ IMAGE_URL = "https://optcgapi.com/media/static/Card_Images/{code}.jpg"
 _COLORS = {"Red", "Green", "Blue", "Purple", "Black", "Yellow"}
 # "Monkey.D.Luffy (003)", "Sanji (PRB01-001)", "Trafalgar Law - OP14-001",
 # "... (Parallel)", "... (Alternate Art)" -> the bare character name
-_NAME_SUFFIX = re.compile(r"(\s*\([^)]*\)|\s+-\s+[A-Z]+\d+-\d+)+$")
+_NAME_SUFFIX = re.compile(r"(\s*\([^)]*\)|\s+-\s+[A-Z]+\d*-\d+)+$")
 _CODE = re.compile(r"^([A-Z]+\d*)-\d+$")
 
 
@@ -61,7 +61,7 @@ class LeaderRecord:
 
 
 def clean_name(raw: str) -> str:
-    return _NAME_SUFFIX.sub("", raw).strip()
+    return _NAME_SUFFIX.sub("", raw.strip()).strip()
 
 
 def set_code_of(card_code: str) -> str:

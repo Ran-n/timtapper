@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.229018
-Revised: 2026/10/11 23:25:32.020858
+Revised: 2026/10/12 16:54:58.117297
 
 UI languages. Translation tables (translations.py) are keyed by the English
 source string, so `_("Events")` works the same in every language and a
@@ -61,6 +61,21 @@ def tr(page: ft.Page) -> Translate:
 
 def event_type_label(_: Translate, key: str) -> str:
     return _(_EVENT_TYPE_LABELS.get(key, "Other"))
+
+
+# testing sessions have no standings: their placement and player count aren't asked for or shown
+UNRANKED_EVENT_TYPES = frozenset({"testing"})
+
+
+def standing_label(_: Translate, placement: int | None, players: int | None) -> str | None:
+    """`#3 of 32`, `#3` or `32 players`; None when neither is known."""
+    if placement is not None and players is not None:
+        return _("#{place} of {players}").format(place=placement, players=players)
+    if placement is not None:
+        return _("#{place}").format(place=placement)
+    if players is not None:
+        return _("{players} players").format(players=players)
+    return None
 
 
 # card colors are stored by their English name, which is also the translation key

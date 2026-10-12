@@ -2,9 +2,10 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.562044
-Revised: 2026/10/11 16:27:25.006973
+Revised: 2026/10/12 16:55:01.009302
 """
 
+import dataclasses
 import datetime as dt
 
 import pytest
@@ -17,6 +18,7 @@ from stats.compute import (
     Filters,
     Record,
     best_and_worst,
+    filter_events,
     games,
     matchups,
     own_leaders,
@@ -35,10 +37,10 @@ def ev(eid, rounds, leader=1, etype="locals", date=dt.date(2026, 1, 1)):
 
 
 def test_record_basics():
-    rec = Record().add("W").add("W").add("L").add("D")
-    assert (rec.wins, rec.losses, rec.draws, rec.games) == (2, 1, 1, 4)
-    assert rec.win_rate == 0.5
-    assert rec.label() == "2-1-1"
+    rec = Record().add("W").add("W").add("L")
+    assert (rec.wins, rec.losses, rec.games) == (2, 1, 3)
+    assert rec.win_rate == pytest.approx(2 / 3)
+    assert rec.label() == "2-1"
     assert Record(3, 1).label() == "3-1"
     assert Record().win_rate is None
 
@@ -67,15 +69,15 @@ def test_games_filters_and_orders_chronologically():
 def test_summarize_splits():
     events = [
         ev(1, [rnd(1, 5, "W", True, True), rnd(2, 6, "L", False, False), rnd(3, 5, "W", False, True), rnd(4, 7, None)]),
-        ev(2, [rnd(1, 5, "D", True, None)], date=dt.date(2026, 2, 1)),
+        ev(2, [rnd(1, 5, "L", True, None)], date=dt.date(2026, 2, 1)),
     ]
     s = summarize(events)
-    assert s.record == Record(2, 1, 1)
-    assert s.first == Record(1, 0, 1)
+    assert s.record == Record(2, 2)
+    assert s.first == Record(1, 1)
     assert s.second == Record(1, 1)
     assert s.die_won == Record(2)
     assert s.die_lost == Record(0, 1)
-    assert s.recent == ("W", "L", "W", "D")
+    assert s.recent == ("W", "L", "W", "L")
     assert s.events == 2
 
 
@@ -118,7 +120,7 @@ def test_own_leaders_most_used_first():
     assert own_leaders(events) == [4, 3]
 
 
-results_st = st.lists(st.sampled_from(["W", "L", "D", None]), max_size=40)
+results_st = st.lists(st.sampled_from(["W", "L", None]), max_size=40)
 
 
 @pytest.mark.property
@@ -136,11 +138,40 @@ def test_property_splits_partition_the_record(results, firsts):
 
 
 @pytest.mark.property
-@given(st.lists(st.sampled_from(["W", "L", "D"]), max_size=30))
+@given(st.lists(st.sampled_from(["W", "L"]), max_size=30))
 def test_property_record_label_roundtrip(results):
     rec = Record()
     for r in results:
         rec = rec.add(r)
-    parts = [int(p) for p in rec.label().split("-")]
-    assert parts[:2] == [rec.wins, rec.losses]
-    assert (parts[2] if len(parts) == 3 else 0) == rec.draws
+    assert [int(p) for p in rec.label().split("-")] == [rec.wins, rec.losses]
+    assert rec.games == len(results)
+
+
+# ---- event filters ------------------------------------------------------------------
+def test_filters_match_leader_type_and_name():
+    a = ev(1, [], date=dt.date(2026, 1, 1))
+    named = dataclasses.replace(a, name="Sunday Locals", event_type="locals")
+    assert Filters().matches(named) and not Filters().active
+    assert Filters(query="  sunday ").matches(named)  # trimmed, case-insensitive
+    assert not Filters(query="regional").matches(named)
+    assert Filters(event_type="locals").matches(named) and not Filters(event_type="online").matches(named)
+    assert Filters(own_leader_id=named.leader_id).matches(named) and not Filters(own_leader_id=999).matches(named)
+    assert Filters(query="x").active and Filters(event_type="online").active and Filters(own_leader_id=1).active
+    assert not Filters(query="   ").active
+
+
+def test_filter_events_keeps_order():
+    evs = [dataclasses.replace(ev(i, []), name=n) for i, n in enumerate(["Locals A", "Online", "Locals B"], start=1)]
+    assert [e.name for e in filter_events(evs, Filters(query="locals"))] == ["Locals A", "Locals B"]
+
+
+@pytest.mark.property
+@given(st.lists(st.text(max_size=12), max_size=12), st.text(max_size=4))
+def test_property_filter_events_is_a_subsequence_that_all_match(names, query):
+    evs = [dataclasses.replace(ev(i, []), name=n) for i, n in enumerate(names, start=1)]
+    f = Filters(query=query)
+    out = filter_events(evs, f)
+    assert all(f.matches(e) for e in out)
+    assert [e for e in evs if e in out] == out  # original order, nothing invented
+    assert len(out) == sum(f.matches(e) for e in evs)
+    assert filter_events(evs, Filters()) == evs

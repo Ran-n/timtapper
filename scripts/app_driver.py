@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:02.103164
-Revised: 2026/10/12 13:16:02.103164
+Revised: 2026/10/12 16:54:56.976286
 
 Run the real timtapper desktop app on a throwaway demo database (Windows only).
 
@@ -15,11 +15,14 @@ file the app writes at a scratch dir, so your own data is never touched.
 opens the app in a phone-shaped window and answers one JSON command per stdin
 line with one `@@{...}` line on stdout (logs go to stderr). Commands:
 
-    {"cmd": "show", "route": "/events", "mode": "dark", "theme": "gruvbox", "lang": "en", "width": 412}
+    {"cmd": "show", "route": "/events", "mode": "dark", "theme": "gruvbox", "lang": "en", "width": 412,
+     "filters_open": false}           every show starts with the events list unfiltered
     {"cmd": "picker"}                 open the opponent leader picker
     {"cmd": "picker_shown"}           codes and colors of the leaders the open picker lists
     {"cmd": "close"}                  close the open dialog or sheet
     {"cmd": "round", "round_no": 1}   a round of the newest demo event
+    {"cmd": "state"}                  the theme and brightness mode the app has now
+    {"cmd": "event_filters"}          the events list's search, filters and whether its dropdowns are open
     {"cmd": "quit"}
 
 Every reply has "ok"; a failed command replies {"ok": false, "error": "..."}.
@@ -52,6 +55,7 @@ import main as app_main  # noqa: E402
 from app_window import WINDOW_TITLE  # noqa: E402
 from core.logging import get_logger, setup_logging  # noqa: E402
 from i18n import set_lang  # noqa: E402
+from stats.compute import Filters  # noqa: E402
 from ui.app import install_routing  # noqa: E402
 from ui.context import AppContext  # noqa: E402
 from ui.leader_picker import build_picker  # noqa: E402
@@ -63,7 +67,15 @@ REPLY = "@@"
 DEFAULT_WIDTH = app_main.PHONE_WINDOW["width"]
 
 OWN_LEADER = "OP09-061"  # Monkey.D.Luffy
-OPPONENTS = ["OP09-001", "OP01-060", "OP05-002", "OP07-038", "ST22-001", "OP11-062", "OP03-022", "OP12-061"]
+# index 8 has no spaces in its name (Eustass"Captain"Kid): it wraps only at the break points after its quotes
+OPPONENTS = ["OP09-001", "OP01-060", "OP05-002", "OP07-038", "ST22-001", "OP11-062", "OP03-022", "OP12-061", "OP10-099"]
+# (placement, players) per event; testing sessions have none, one event knows only its field size
+STANDINGS = {
+    "Store championship": (3, 32),
+    "Thursday locals": (1, 12),
+    "Online league week 3": (5, 40),
+    "Sunday locals": (None, 10),
+}
 # (name, type, days ago, rounds); a round is (opponent index, result, went first, won die roll)
 EVENTS = [
     (
@@ -75,7 +87,7 @@ EVENTS = [
             (1, "W", False, False),
             (2, "L", True, False),
             (3, "W", True, True),
-            (0, None, None, None),
+            (8, None, None, None),
         ],
     ),
     (
@@ -90,7 +102,7 @@ EVENTS = [
         9,
         [(0, "L", False, False), (0, "W", True, True), (0, "W", True, False), (2, "L", False, True)],
     ),
-    ("Online league week 3", "online", 13, [(7, "W", True, True), (3, "W", False, False), (5, "D", True, True)]),
+    ("Online league week 3", "online", 13, [(7, "W", True, True), (3, "W", False, False), (5, "L", True, True)]),
     (
         "Sunday locals",
         "locals",
@@ -109,6 +121,9 @@ def seed(ctx: AppContext, today: dt.date) -> int:
     newest = 0
     for name, event_type, days_ago, rounds in reversed(EVENTS):
         ev = ctx.events.create(name, event_type, today - dt.timedelta(days=days_ago), by_code[OWN_LEADER])
+        if name in STANDINGS:
+            placement, players = STANDINGS[name]
+            ctx.events.update(ev.id, placement=placement, players=players)
         for opponent, result, went_first, won_die in rounds:
             r = ctx.events.add_round(ev.id, by_code[OPPONENTS[opponent]])
             ctx.events.update_round(r.id, result=result, went_first=went_first, won_die_roll=won_die)
@@ -132,8 +147,18 @@ class Demo:
         self.newest = seed(self.ctx, today)
         self.sheet: ft.BottomSheet | None = None
 
-    def show(self, route: str, mode: str = "dark", theme: str = "gruvbox", lang: str = "en", width: int = 0) -> None:
+    def show(
+        self,
+        route: str,
+        mode: str = "dark",
+        theme: str = "gruvbox",
+        lang: str = "en",
+        width: int = 0,
+        filters_open: bool = False,
+    ) -> None:
         self.close()
+        self.ctx.event_filters = Filters()
+        self.ctx.event_filters_open = filters_open
         set_lang(self.page, lang)
         self.ctx.theme = get_theme(theme)
         self.ctx.theme_mode = mode
@@ -166,6 +191,18 @@ class Demo:
         r = next(r for r in self.ctx.events.get(self.newest).rounds if r.round_no == round_no)
         return {"result": r.result, "went_first": r.went_first, "won_die_roll": r.won_die_roll}
 
+    def state(self) -> dict:
+        return {"theme": self.ctx.theme.key, "mode": self.ctx.theme_mode}
+
+    def event_filters(self) -> dict:
+        f = self.ctx.event_filters
+        return {
+            "open": self.ctx.event_filters_open,
+            "query": f.query,
+            "event_type": f.event_type,
+            "own_leader_id": f.own_leader_id,
+        }
+
     async def close_app(self) -> None:
         self.db.dispose()
         await self.page.window.destroy()
@@ -196,6 +233,8 @@ async def serve(page: ft.Page) -> None:
         "picker_shown": demo.picker_shown,
         "close": demo.close,
         "round": demo.round,
+        "state": demo.state,
+        "event_filters": demo.event_filters,
     }
     demo.show("/events")
     _reply(ok=True, ready=True, newest=demo.newest)

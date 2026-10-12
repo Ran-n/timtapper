@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.341252
-Revised: 2026/10/11 16:57:39.052877
+Revised: 2026/10/12 16:54:59.437757
 
 App themes and the color vocabulary shared by every screen.
 
@@ -87,7 +87,7 @@ class Scheme:
 
     @property
     def results(self) -> dict[str, str]:
-        return {"W": self.success, "L": self.error, "D": self.fg_muted}
+        return {"W": self.success, "L": self.error}
 
     def color_scheme(self) -> ft.ColorScheme:
         return ft.ColorScheme(

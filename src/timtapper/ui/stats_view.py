@@ -2,18 +2,18 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.228774
-Revised: 2026/10/12 01:37:35.857183
+Revised: 2026/10/12 16:54:59.298574
 
 Stats tab: overall record, splits, recent form and the matchup table, filterable by own leader and event type.
 """
 
 import flet as ft
 
-from db.models import EVENT_TYPES
 from i18n import event_type_label
 from share import render
-from stats.compute import Filters, Summary, games, matchups, own_leaders, percent, summarize
+from stats.compute import Filters, Summary, games, matchups, percent, summarize
 from ui.context import AppContext
+from ui.filters import filter_dropdowns
 from ui.theme import FONT_HEAVY
 from ui.widgets import (
     big_number,
@@ -26,8 +26,6 @@ from ui.widgets import (
     stat_tile,
     update_if_mounted,
 )
-
-ALL = "all"
 
 
 class StatsScreen:
@@ -45,48 +43,11 @@ class StatsScreen:
         return scope
 
     def _filters_row(self, events) -> ft.Control:
-        _ = self.ctx._
-        by_id = self.ctx.leaders_by_id
-
-        def set_leader(e) -> None:
-            value = e.control.value
-            self.filters = Filters(None if value == ALL else int(value), self.filters.event_type)
+        def apply(filters: Filters) -> None:
+            self.filters = filters
             self.refresh()
 
-        def set_type(e) -> None:
-            value = e.control.value
-            self.filters = Filters(self.filters.own_leader_id, None if value == ALL else value)
-            self.refresh()
-
-        leader_opts = [ft.DropdownOption(key=ALL, text=_("All leaders"))] + [
-            ft.DropdownOption(key=str(lid), text=by_id[lid].label) for lid in own_leaders(events) if lid in by_id
-        ]
-        type_opts = [ft.DropdownOption(key=ALL, text=_("All event types"))] + [
-            ft.DropdownOption(key=k, text=event_type_label(_, k)) for k in EVENT_TYPES
-        ]
-        return ft.Column(
-            [
-                ft.Dropdown(
-                    label=_("Your leader"),
-                    value=str(self.filters.own_leader_id) if self.filters.own_leader_id else ALL,
-                    options=leader_opts,
-                    on_select=set_leader,
-                    dense=True,
-                    width=float("inf"),
-                    data="filter-leader",
-                ),
-                ft.Dropdown(
-                    label=_("Event type"),
-                    value=self.filters.event_type or ALL,
-                    options=type_opts,
-                    on_select=set_type,
-                    dense=True,
-                    width=float("inf"),
-                    data="filter-type",
-                ),
-            ],
-            spacing=10,
-        )
+        return filter_dropdowns(self.ctx, events, self.filters, apply)
 
     def _summary(self, s: Summary) -> list[ft.Control]:
         _ = self.ctx._
@@ -97,13 +58,15 @@ class StatsScreen:
             if m is None:
                 value = ft.Text(_("Not enough games"), color=ft.Colors.ON_SURFACE_VARIANT)
             else:
-                value = ft.Column(
+                # the record on the name's line; a long name wraps beside it rather than being cut
+                value = ft.Row(
                     [
                         leader_row(by_id.get(m.opponent_leader_id), _("Unknown leader"), size=14, show_code=False),
                         record_badges(m.record, scheme),
                     ],
-                    spacing=4,
-                    tight=True,
+                    spacing=10,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    data="matchup-line",
                 )
             return stat_tile(label, value)
 
@@ -171,7 +134,9 @@ class StatsScreen:
                 stat_tile(_("Won the die roll"), record_badges(s.die_won, scheme, size=15)),
                 stat_tile(_("Lost the die roll"), record_badges(s.die_lost, scheme, size=15)),
             ]),
-            ft.Row([matchup_tile(_("Best matchup"), s.best), matchup_tile(_("Worst matchup"), s.worst)]),
+            # a row each: side by side, a ~70 dp name column broke "Donquixote Doflamingo" mid-word at 360 dp
+            matchup_tile(_("Best matchup"), s.best),
+            matchup_tile(_("Worst matchup"), s.worst),
             stat_tile(_("Recent form"), form),
         ]
 

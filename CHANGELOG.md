@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/12 13:18:39.586037 )
+[//]: # (+ Revised: 	2026/10/12 17:23:14.415810 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -18,6 +18,27 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Added whole-screen snapshot tests against approved baselines in `tests/rendered/baselines/`, refreshed with `TIMTAPPER_UPDATE_BASELINES=1`
 - Added `scripts/app_driver.py` and `scripts/app_window.py`, which run, capture and click the real app on demo data; `make_screenshots.py` now uses them
 - Added widget, portrait-crop and watermark-lift tests, including property-based ones, for the 0.4.0 changes
+- Added where you finished and how many played to every ranked event, typed in place on the event screen and shown as "#3 of 32" on its tile; testing sessions have no standings
+- Added a search field and a Filters panel (your leader, event type) to the events list, kept while you open an event and come back
+- Added the app's logo, framed leader portraits, a placement band and each round's turn order, die roll and result to the share cards
+- Added backup format version 2, which carries placement and players; version 1 files still restore
+- Added a 99% branch-coverage gate (`uv run pytest --cov`), a `regression` test marker, a golden backup file and rendered baselines for 125% display scaling and Spanish settings at 360 dp
+
+### Changed
+
+- Changed round rows to fit on one line at 360 dp, with a smaller opponent portrait and short names for Donquixote Doflamingo and Eustass "Captain" Kid
+- Changed leader names to wrap between words instead of being cut with an ellipsis
+- Changed the stats screen's best and worst matchups to a row each, with the record beside the name
+
+### Removed
+
+- Removed draws: the OPTCG has none, so rounds are Win or Loss only; stored draws and draws in old backups become losses
+
+### Fixed
+
+- Fixed the event type dropdown clipping "Regional" to "Regiona" at 360 dp
+- Fixed "Sistema" wrapping mid-word in the Spanish brightness selector at 360 dp
+- Fixed leader names from optcgapi.com keeping a card-code suffix with no set number (e.g. "- P-001") or leading spaces
 
 ## [0.4.0] — 2026-10-12
 

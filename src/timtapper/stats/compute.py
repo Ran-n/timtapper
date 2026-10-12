@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.516994
-Revised: 2026/10/11 16:27:23.182412
+Revised: 2026/10/12 16:54:58.547389
 
 Derived statistics. Pure functions over Event values — nothing here touches
 the DB or Flet, so the stats screen and the share cards compute the exact
@@ -23,22 +23,21 @@ MIN_MATCHUP_GAMES = 3
 class Record:
     wins: int = 0
     losses: int = 0
-    draws: int = 0
 
     @property
     def games(self) -> int:
-        return self.wins + self.losses + self.draws
+        return self.wins + self.losses
 
     @property
     def win_rate(self) -> float | None:
         return self.wins / self.games if self.games else None
 
     def add(self, result: str) -> Record:
-        return Record(self.wins + (result == "W"), self.losses + (result == "L"), self.draws + (result == "D"))
+        return Record(self.wins + (result == "W"), self.losses + (result == "L"))
 
     def label(self) -> str:
-        """`5-2` or `5-2-1` when there were draws."""
-        return f"{self.wins}-{self.losses}" + (f"-{self.draws}" if self.draws else "")
+        """`5-2`: wins-losses (the OPTCG has no draws)."""
+        return f"{self.wins}-{self.losses}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +57,18 @@ class Game:
 class Filters:
     own_leader_id: int | None = None
     event_type: str | None = None
+    query: str = ""  # case-insensitive text in the event's name (the events list's search field)
+
+    @property
+    def active(self) -> bool:
+        return self.own_leader_id is not None or self.event_type is not None or bool(self.query.strip())
+
+    def matches(self, event: Event) -> bool:
+        return (
+            (self.own_leader_id is None or event.leader_id == self.own_leader_id)
+            and (self.event_type is None or event.event_type == self.event_type)
+            and self.query.strip().casefold() in event.name.casefold()
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +100,11 @@ def record_of(event: Event) -> Record:
     return rec
 
 
+def filter_events(events: list[Event], filters: Filters) -> list[Event]:
+    """The events `filters` lets through, in their original order."""
+    return [ev for ev in events if filters.matches(ev)]
+
+
 def games(events: list[Event], filters: Filters | None = None) -> list[Game]:
     """Every decided round matching `filters`, in chronological order."""
     filters = filters or Filters()
@@ -104,9 +120,7 @@ def games(events: list[Event], filters: Filters | None = None) -> list[Game]:
             ev.date,
             (ev.date, ev.id, r.round_no),
         )
-        for ev in events
-        if (filters.own_leader_id is None or ev.leader_id == filters.own_leader_id)
-        and (filters.event_type is None or ev.event_type == filters.event_type)
+        for ev in filter_events(events, filters)
         for r in ev.rounds
         if r.result
     ]

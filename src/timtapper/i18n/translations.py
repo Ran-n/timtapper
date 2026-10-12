@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.159067
-Revised: 2026/10/11 23:25:32.094086
+Revised: 2026/10/12 16:54:58.266285
 
 Translation tables, keyed by the English source string exactly as written
 in the code. English (EN) is built from the ES key set so it stays a
@@ -34,6 +34,19 @@ ES = {
     "No leader chosen": "Sin líder elegido",
     "1 round": "1 ronda",
     "{n} rounds": "{n} rondas",
+    "#{place} of {players}": "#{place} de {players}",
+    "#{place}": "#{place}",
+    "{players} players": "{players} jugadores",
+    "of {players} players": "de {players} jugadores",
+    "place": "puesto",
+    "Placement": "Puesto",
+    "Players": "Jugadores",
+    "Search events": "Buscar eventos",
+    "Filters": "Filtros",
+    "{shown} of {total} events": "{shown} de {total} eventos",
+    "No events match": "Ningún evento coincide",
+    "Try another search or filter.": "Prueba otra búsqueda u otro filtro.",
+    "Clear filters": "Quitar filtros",
     # event screen
     "Event name": "Nombre del evento",
     "Type": "Tipo",
@@ -51,7 +64,6 @@ ES = {
     "TC": "TC",
     "Win": "Victoria",
     "Loss": "Derrota",
-    "Draw": "Empate",
     "Went 1st": "Fui 1º",
     "Went 2nd": "Fui 2º",
     "Won die roll": "Gané el dado",
@@ -193,6 +205,19 @@ GL = {
     "No leader chosen": "Sen líder escollido",
     "1 round": "1 rolda",
     "{n} rounds": "{n} roldas",
+    "#{place} of {players}": "#{place} de {players}",
+    "#{place}": "#{place}",
+    "{players} players": "{players} xogadores",
+    "of {players} players": "de {players} xogadores",
+    "place": "posto",
+    "Placement": "Posto",
+    "Players": "Xogadores",
+    "Search events": "Buscar eventos",
+    "Filters": "Filtros",
+    "{shown} of {total} events": "{shown} de {total} eventos",
+    "No events match": "Ningún evento coincide",
+    "Try another search or filter.": "Proba outra busca ou outro filtro.",
+    "Clear filters": "Quitar filtros",
     # event screen
     "Event name": "Nome do evento",
     "Type": "Tipo",
@@ -210,7 +235,6 @@ GL = {
     "TC": "TC",
     "Win": "Vitoria",
     "Loss": "Derrota",
-    "Draw": "Empate",
     "Went 1st": "Fun 1º",
     "Went 2nd": "Fun 2º",
     "Won die roll": "Gañei o dado",

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.326929
-Revised: 2026/10/11 16:27:24.785688
+Revised: 2026/10/12 16:55:00.313313
 """
 
 import datetime as dt
@@ -88,9 +88,9 @@ def test_rounds_are_numbered_and_editable(events, sample_event, leader_ids):
     assert [r.round_no for r in sample_event.rounds] == [1, 2, 3, 4]
     pending = sample_event.rounds[3]
     assert pending.result is None
-    updated = events.update_round(pending.id, result="D", top_cut=True, notes="time", opponent_leader_id=leader_ids[4])
+    updated = events.update_round(pending.id, result="L", top_cut=True, notes="time", opponent_leader_id=leader_ids[4])
     assert (updated.result, updated.top_cut, updated.notes, updated.opponent_leader_id) == (
-        "D",
+        "L",
         True,
         "time",
         leader_ids[4],
@@ -141,3 +141,29 @@ def test_last_used_leader(events, leader_ids):
     events.create("b", "locals", dt.date(2026, 3, 1), leader_ids[2])
     events.create("c", "locals", dt.date(2026, 4, 1))
     assert events.last_used_leader_id() == leader_ids[2]
+
+
+# ---- placement and players -------------------------------------------------------------
+def test_placement_and_players_are_optional_and_editable(events, sample_event):
+    assert (sample_event.placement, sample_event.players) == (None, None)
+    ev = events.update(sample_event.id, placement=3, players=32)
+    assert (ev.placement, ev.players) == (3, 32)
+    assert events.update(sample_event.id, placement=None).placement is None  # cleared again
+    assert events.get(sample_event.id).players == 32
+
+
+@pytest.mark.parametrize("bad", [0, -1, 2.5, "3", True])
+@pytest.mark.parametrize("field", ["placement", "players"])
+def test_placement_and_players_must_be_whole_numbers_of_one_or_more(events, sample_event, field, bad):
+    with pytest.raises(EventError, match="whole number"):
+        events.update(sample_event.id, **{field: bad})
+
+
+def test_placement_cannot_be_past_the_player_count(events, sample_event):
+    events.update(sample_event.id, players=8)
+    with pytest.raises(EventError, match="past the 8 players"):
+        events.update(sample_event.id, placement=9)
+    events.update(sample_event.id, placement=8)
+    with pytest.raises(EventError, match="past the 7 players"):
+        events.update(sample_event.id, players=7)  # shrinking the field under a known placement
+    assert (events.get(sample_event.id).placement, events.get(sample_event.id).players) == (8, 8)

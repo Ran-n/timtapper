@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:02.424894
-Revised: 2026/10/12 13:16:02.424894
+Revised: 2026/10/12 16:54:57.117944
 
 Find, capture and click the running timtapper desktop window (Windows only).
 
@@ -48,6 +48,11 @@ class AppWindow:
         if not hwnd:
             raise WindowError(f"window {self.title!r} not found")
         return hwnd
+
+    @property
+    def scale(self) -> float:
+        """Physical pixels per dp: Windows' display scaling for the monitor the window is on (1.25 at 125%)."""
+        return self.user32.GetDpiForWindow(self.hwnd) / 96
 
     def wait_open(self, timeout: float = 60) -> None:
         deadline = time.monotonic() + timeout

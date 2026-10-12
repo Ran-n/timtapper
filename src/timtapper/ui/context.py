@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.770833
-Revised: 2026/10/11 17:20:12.664993
+Revised: 2026/10/12 16:54:58.690793
 
 Per-session app context handed to every screen: repositories, the cached
 leader catalogue, translation, notifications, preferences and navigation.
@@ -20,6 +20,7 @@ from db import Database
 from events.repository import EventRepository
 from i18n import Translate, get_lang, set_lang, tr
 from share.deliver import Delivery, deliver
+from stats.compute import Filters
 from ui.leader_updates import LeaderUpdater
 from ui.theme import DEFAULT_MODE, AppTheme, Scheme, apply_theme, get_theme, is_dark
 from ui.widgets import make_notifier
@@ -43,6 +44,9 @@ class AppContext:
         self.notify = make_notifier(page, lambda: self.scheme)
         self._leaders: list[Leader] | None = None
         self.on_appearance_change: Callable[[], None] | None = None
+        # the events list's search and filters, kept while you open an event and come back
+        self.event_filters = Filters()
+        self.event_filters_open = False
 
     # ---- translation / preferences ------------------------------------
     @property

@@ -2,17 +2,19 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.420418
-Revised: 2026/10/12 01:37:35.706649
+Revised: 2026/10/12 16:54:59.579318
 
 Small building blocks reused across screens.
 """
 
+import re
 from collections.abc import Callable
 
 import flet as ft
 
 from catalog import portraits
 from catalog.repository import Leader
+from core.die import CORNER_RADIUS, DIE_PIPS, LOST_PIPS, PIP_DIAMETER, WON_PIPS
 from i18n import Translate, event_type_label
 from stats.compute import Record, percent
 from ui.theme import CARD_COLORS, FONT_HEAVY, FONT_SEMIBOLD, UNKNOWN_COLOR, Scheme
@@ -100,8 +102,8 @@ def portrait_border(size: int) -> int:
     return max(2, size // 16)
 
 
-def color_bar(colors: tuple[str, ...], height: int = 28, width: int = 8) -> ft.Control:
-    """Vertical stripes, one per leader color — the app's leader 'icon'."""
+def color_bar(colors: tuple[str, ...], height: int | None = 28, width: int = 8) -> ft.Control:
+    """Vertical stripes, one per leader color — the app's leader 'icon'. `height=None`: sized by its parent."""
     stripes = _leader_colors(colors)
     return ft.Container(
         width=width,
@@ -144,26 +146,47 @@ def _portrait_face(src: str | bytes | None, size: int, radius: int) -> ft.Contai
     )
 
 
-def leader_row(leader: Leader | None, placeholder: str, *, size: int = 16, show_code: bool = True) -> ft.Control:
+# a zero-width space after these lets a name without spaces ("Monkey.D.Dragon", 'Eustass"Captain"Kid') wrap
+# between its parts instead of mid-word
+ZWSP = chr(0x200B)  # zero-width space: a break opportunity that draws nothing
+_NAME_BREAKS = re.compile(r'([."&])(?=\S)')
+
+
+def breakable(name: str) -> str:
+    """`name` with line-break opportunities after ".", '"' and "&" (invisible when it fits on one line)."""
+    return _NAME_BREAKS.sub(lambda m: m.group(1) + ZWSP, name)
+
+
+def leader_row(
+    leader: Leader | None,
+    placeholder: str,
+    *,
+    size: int = 16,
+    show_code: bool = True,
+    spacing: int = 10,
+    portrait_size: int | None = None,
+    break_words: bool = False,
+    short: bool = False,
+) -> ft.Control:
     colors = leader.colors if leader else ()
+    shown = (leader.short_name if short else leader.name) if leader else placeholder
     name = ft.Text(
-        leader.name if leader else placeholder,
+        breakable(shown) if break_words else shown,
         size=size,
         font_family=FONT_SEMIBOLD if leader else None,
         color=None if leader else ft.Colors.ON_SURFACE_VARIANT,
-        overflow=ft.TextOverflow.ELLIPSIS,
-        max_lines=1,
+        # never cut a name: in a tight row the longest ("Donquixote Doflamingo") wraps to a second line
     )
     texts: list[ft.Control] = [name]
     if leader and show_code:
         texts.append(ft.Text(leader.code, size=size - 4, color=ft.Colors.ON_SURFACE_VARIANT))
     return ft.Row(
         [
-            color_bar(colors, height=size + 16),
-            leader_portrait(leader, size + 16),
+            color_bar(colors, height=portrait_size or size + 16),
+            leader_portrait(leader, portrait_size or size + 16),
             ft.Column(texts, spacing=0, tight=True, expand=True),
         ],
-        spacing=10,
+        spacing=spacing,
         vertical_alignment=ft.CrossAxisAlignment.CENTER,
         expand=True,
     )
@@ -290,26 +313,15 @@ def turn_badge(went_first: bool | None, scheme: Scheme, first: str, second: str,
     )
 
 
-# Pip centres for each die face, as fractions of the face's side (standard layouts).
-DIE_PIPS: dict[int, tuple[tuple[float, float], ...]] = {
-    1: ((0.5, 0.5),),
-    2: ((0.28, 0.28), (0.72, 0.72)),
-    3: ((0.28, 0.28), (0.5, 0.5), (0.72, 0.72)),
-    4: ((0.28, 0.28), (0.72, 0.28), (0.28, 0.72), (0.72, 0.72)),
-    5: ((0.28, 0.28), (0.72, 0.28), (0.5, 0.5), (0.28, 0.72), (0.72, 0.72)),
-    6: ((0.28, 0.25), (0.28, 0.5), (0.28, 0.75), (0.72, 0.25), (0.72, 0.5), (0.72, 0.75)),
-}
-
-
 def die_face(pips: int, color: str, pip_color: str, size: float) -> ft.Container:
     """A rounded-square die showing `pips` (1-6), drawn from containers: Flet's die icons all show five."""
     if pips not in DIE_PIPS:
         raise ValueError(f"a die has 1-6 pips, not {pips}")
-    diameter = size * 0.2
+    diameter = size * PIP_DIAMETER
     return ft.Container(
         width=size,
         height=size,
-        border_radius=size * 0.22,
+        border_radius=size * CORNER_RADIUS,
         bgcolor=color,
         data=f"die-face-{pips}",
         content=ft.Stack(
@@ -342,7 +354,7 @@ def die_badge(won_die_roll: bool | None, scheme: Scheme, size: int = 36) -> ft.C
         )
     color = scheme.success if won_die_roll else scheme.error
     return _badge(
-        die_face(6 if won_die_roll else 1, color, scheme.on_accent, size * 0.6),
+        die_face(WON_PIPS if won_die_roll else LOST_PIPS, color, scheme.on_accent, size * 0.6),
         scheme.tint(color, 0.22),
         width=size + 8,
         height=size,

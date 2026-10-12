@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.221073
-Revised: 2026/10/11 23:25:31.944909
+Revised: 2026/10/12 16:54:57.692382
 
 Leader catalogue persistence: upsert from LeaderRecords, read as plain Leader values.
 """
@@ -27,6 +27,10 @@ _log = get_logger("catalog")
 BUNDLED_LEADERS = ASSETS_DIR / "data" / "leaders.json"
 
 
+# the names players actually call these leaders (the full ones crowd a round row)
+SHORT_NAMES = {"Donquixote Doflamingo": "Doflamingo", 'Eustass"Captain"Kid': "Kid"}
+
+
 @dataclass(frozen=True, slots=True)
 class Leader:
     id: int
@@ -38,6 +42,11 @@ class Leader:
     @property
     def label(self) -> str:
         return f"{self.name} · {self.code}"
+
+    @property
+    def short_name(self) -> str:
+        """What players call the leader, for tight rows; the full name everywhere there's room."""
+        return SHORT_NAMES.get(self.name, self.name)
 
     @property
     def image_url(self) -> str:
@@ -117,9 +126,6 @@ class LeaderRepository:
                 .order_by(func.coalesce(plays.c.n, 0).desc(), LeaderRow.name, LeaderRow.code)
             )
             return [to_leader(r) for r in rows]
-
-    def by_id(self) -> dict[int, Leader]:
-        return {leader.id: leader for leader in self.all()}
 
     def count(self) -> int:
         with self.db.session() as s:

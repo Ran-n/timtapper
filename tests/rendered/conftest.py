@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:03.055435
-Revised: 2026/10/12 13:16:03.055435
+Revised: 2026/10/12 16:55:00.458146
 
 One real app for the whole rendered-test session: scripts/app_driver.py runs it,
 scripts/app_window.py captures and clicks it. Windows only; marked `desktop`.
@@ -74,17 +74,27 @@ class DrivenApp:
         self.proc.stdin.flush()
         return self._next().get("result")
 
-    def show(self, route: str, mode: str = "dark", width: int = 0) -> Image.Image:
-        self.send("show", route=route, mode=mode, width=width)
-        return self.window.capture()
+    @property
+    def scale(self) -> float:
+        return self.window.scale
+
+    def show(self, route: str, mode: str = "dark", width: int = 0, lang: str = "en") -> Image.Image:
+        self.send("show", route=route, mode=mode, width=width, lang=lang)
+        return self.capture()
 
     def capture(self) -> Image.Image:
-        return self.window.capture()
+        """The settled window in dp, whatever the display scaling: every size and position the tests assert
+        is in dp. Nearest-neighbour keeps each pixel an exact theme colour (no blended edges to mis-match)."""
+        img = self.window.capture()
+        if self.scale == 1:
+            return img
+        size = (round(img.width / self.scale), round(img.height / self.scale))
+        return img.resize(size, Image.Resampling.NEAREST)
 
     def click(self, x: float, y: float) -> Image.Image:
-        """A real click, then the settled screen it produced."""
-        self.window.click(x, y)
-        return self.window.capture()
+        """A real click at dp (x, y) of a capture, then the settled screen it produced."""
+        self.window.click(x * self.scale, y * self.scale)
+        return self.capture()
 
     def quit(self) -> None:
         try:

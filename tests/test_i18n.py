@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:45.093250
-Revised: 2026/10/11 23:25:32.551584
+Revised: 2026/10/12 16:55:01.150139
 
 Every string the code translates exists in every language, and no table carries stale keys.
 """
@@ -77,3 +77,20 @@ def test_color_labels():
     assert color_label(translator("gl"), "Red") == "Vermello"
     assert color_label(translator("es"), "Yellow") == "Amarillo"
     assert [color_label(translator("en"), c) for c in COLOR_LABELS] == list(COLOR_LABELS)
+
+
+@pytest.mark.parametrize(
+    ("lang", "placement", "players", "expected"),
+    [
+        ("en", 3, 32, "#3 of 32"),
+        ("en", 3, None, "#3"),
+        ("en", None, 32, "32 players"),
+        ("en", None, None, None),
+        ("es", 1, 8, "#1 de 8"),
+        ("gl", None, 16, "16 xogadores"),
+    ],
+)
+def test_standing_label(lang, placement, players, expected):
+    from i18n import standing_label, translator
+
+    assert standing_label(translator(lang), placement, players) == expected

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:03.377682
-Revised: 2026/10/12 13:16:03.377682
+Revised: 2026/10/12 16:55:00.598214
 
 The real app, rendered: what the pixels on screen show, and what real clicks do.
 
@@ -14,12 +14,17 @@ their exact theme colours (pixels.py). Taps are real mouse clicks.
 import pytest
 
 from pixels import Blob, count, find, holes
-from ui.theme import CARD_COLORS
+from ui.theme import CARD_COLORS, THEMES
 
 pytestmark = pytest.mark.desktop
 
 NARROW = 360  # PHONE_WINDOW min_width in main.py: everything must still fit
 COLOR_ORDER = ("Red", "Green", "Blue", "Purple", "Black", "Yellow")
+
+
+def above_fab(img) -> int:
+    """The y above which nothing is covered by the "New event" button (it floats over the list's bottom)."""
+    return img.height - 170
 
 
 def pills(img, color: str) -> list[Blob]:
@@ -50,17 +55,21 @@ def test_record_and_rate_are_two_pills_side_by_side(app, scheme, mode, width):
 
 
 @pytest.mark.parametrize(("mode", "width"), [("dark", 0), ("light", 0), ("dark", NARROW)])
-def test_event_type_pill_heads_every_tile(app, scheme, mode, width):
+def test_type_and_record_share_a_full_width_top_line(app, scheme, mode, width):
+    """The type pill starts over the portrait and the record ends at the card's edge, on one line even at 360 dp."""
     img = app.show("/events", mode, width)
     s = scheme(mode)
-    types = pills(img, s.tint(s.primary, 0.22))
+    types = [t for t in pills(img, s.tint(s.primary, 0.22)) if t.y1 < above_fab(img)]
     rates = pills(img, s.tint(s.success, 0.22)) + pills(img, s.tint(s.error, 0.22))
-    assert len(types) == 5  # one per demo event
-    assert len({t.x0 for t in types}) == 1  # left-aligned in the text column, not stretched
+    assert len(types) >= 4  # every tile above the "New event" button
+    assert len({t.x0 for t in types}) == 1  # one left edge, not stretched
     assert all(t.w < img.width / 2 for t in types)
-    for rate in rates:
-        above = [t for t in types if t.y1 < rate.y0]
-        assert above and rate.y0 - max(t.y1 for t in above) >= 20  # the name line sits between
+    portraits = [b for b in find(img, CARD_COLORS["Purple"], tol=6, min_area=100) if b.w >= 50]
+    assert portraits and all(abs(t.x0 - portraits[0].x0) <= 2 for t in types)  # over the portrait
+    for t in types:
+        beside = [r for r in rates if abs(r.cy - t.cy) <= 2]
+        assert beside, f"no record on the type pill's line at {t.box}"  # never wrapped under it
+        assert all(r.x1 >= img.width - 40 for r in beside)  # pushed to the card's right edge
     # the pill's text and icon are drawn in the primary colour
     assert all(count(img, s.primary, t.box) > 20 for t in types)
 
@@ -69,11 +78,13 @@ def test_event_type_pill_heads_every_tile(app, scheme, mode, width):
 def test_portraits_are_framed_in_the_leader_colours(app, mode):
     img = app.show("/events", mode)
     # every demo event is played with Luffy (OP09-061), a Purple/Black leader: purple top band, black bottom
-    tops = [b for b in find(img, CARD_COLORS["Purple"], tol=6, min_area=100) if b.w >= 50]
+    tops = [b for b in find(img, CARD_COLORS["Purple"], tol=6, min_area=100) if b.w >= 50 and b.y1 < above_fab(img)]
     bottoms = [b for b in find(img, CARD_COLORS["Black"], tol=6, min_area=100) if b.w >= 50]
-    assert len(tops) == 5 and len(bottoms) == 5
+    bottoms = bottoms[: len(tops)]  # the ones under the visible tops, in the same top-down order
+    assert len(tops) == len(bottoms) >= 4  # every tile above the "New event" button
     for top, bottom in zip(tops, bottoms, strict=True):
-        assert top.x0 == bottom.x0 and top.w == bottom.w == 56  # the frame keeps the 56 px portrait size
+        # the frame keeps the 56 dp portrait size (±1: shrinking a scaled capture to dp rounds edges)
+        assert abs(top.x0 - bottom.x0) <= 1 and abs(top.w - 56) <= 1 and abs(bottom.w - 56) <= 1
         assert abs(bottom.y0 - top.y1) <= 2  # the bands meet: a hard split at the middle
         assert abs(top.h - bottom.h) <= 2
 
@@ -175,3 +186,82 @@ def test_tapping_dots_selects_and_filters(picker, scheme):
     shot = picker.click(start["Yellow"].cx, start["Yellow"].cy)
     assert not selected(shot, "Red", "#ffffff") and not selected(shot, "Yellow", "#000000")
     assert picker.send("picker_shown") == everyone  # unfiltered again
+
+
+# ---- settings: theme swatches -----------------------------------------------------
+DOT_STEP = 18  # 14 dp dot + 4 dp spacing
+
+
+def swatch_dots(img, theme_key: str, mode: str) -> list[Blob]:
+    """The five preview dots a theme's swatch draws in its own colours, left to right."""
+    s = THEMES[theme_key].scheme(dark=mode == "dark")
+    colors = (s.primary, s.secondary, s.tertiary, s.success, s.error)
+    round_dots = {
+        c: [b for b in find(img, c, tol=4, min_area=80) if 12 <= b.w <= 16 and abs(b.w - b.h) <= 2] for c in colors
+    }
+    chains = []
+    for first in round_dots[colors[0]]:
+        chain = [first]
+        for c in colors[1:]:
+            nxt = [b for b in round_dots[c] if abs(b.cy - first.cy) <= 1 and abs(b.cx - chain[-1].cx - DOT_STEP) <= 2]
+            if not nxt:
+                break
+            chain.append(nxt[0])
+        if len(chain) == len(colors):
+            chains.append(chain)
+    assert len(chains) == 1, (theme_key, mode, [[b.box for b in ch] for ch in chains])
+    return chains[0]
+
+
+@pytest.mark.parametrize(("mode", "width"), [("dark", 0), ("light", 0), ("dark", NARROW), ("light", NARROW)])
+def test_every_theme_swatch_previews_its_own_colours_in_a_two_column_grid(app, mode, width):
+    img = app.show("/settings", mode, width)
+    firsts = {key: swatch_dots(img, key, mode)[0] for key in THEMES}
+    # the selected swatch's thicker border nudges its content in by a pixel or two
+    columns, rows = lines([b.x0 for b in firsts.values()]), lines([b.y0 for b in firsts.values()])
+    assert len(columns) == 2 and len(rows) == len(THEMES) // 2  # two per row, nothing wraps or overflows
+    keys = list(THEMES)
+    for i, key in enumerate(keys):  # laid out in THEMES order, row by row
+        assert abs(firsts[key].x0 - columns[i % 2]) <= 3 and abs(firsts[key].y0 - rows[i // 2]) <= 3, key
+    assert all(swatch_dots(img, k, mode)[-1].x1 <= img.width - 16 for k in keys)  # inside the page padding
+
+
+def lines(values: list[float], tol: int = 3) -> list[float]:
+    """Positions within `tol` of each other merged into one grid line (the smallest), in order."""
+    out: list[float] = []
+    for v in sorted(values):
+        if not out or v - out[-1] > tol:
+            out.append(v)
+    return out
+
+
+def test_tapping_a_swatch_switches_the_whole_app_to_that_theme(app):
+    target = next(k for k in THEMES if k != "gruvbox")
+    img = app.show("/settings", "dark")
+    new, old = THEMES[target].scheme(dark=True), THEMES["gruvbox"].scheme(dark=True)
+    assert new.bg != old.bg
+    dot = swatch_dots(img, target, "dark")[2]
+    try:
+        shot = app.click(dot.cx, dot.cy)
+        assert app.send("state") == {"theme": target, "mode": "dark"}
+        whole = (0, 0, shot.width, shot.height)
+        assert count(shot, new.bg, whole, tol=2) > count(shot, old.bg, whole, tol=2)  # the page itself repainted
+    finally:
+        app.send("show", route="/settings", mode="dark", theme="gruvbox")
+
+
+# ---- events list: filters ------------------------------------------------------------
+def test_tapping_the_filter_button_opens_the_dropdowns_in_place(app, scheme):
+    s = scheme()
+    img = app.show("/events", "dark", NARROW)
+    icon = [b for b in find(img, s.fg_muted, tol=24, min_area=8) if b.x0 > img.width - 70 and b.y1 < 140]
+    assert icon, "no filter button at the right end of the search row"
+    first_pill = min(pills(img, s.tint(s.primary, 0.22)), key=lambda b: b.y0)
+    try:
+        shot = app.click(min(b.x0 for b in icon) + 10, sum(b.cy for b in icon) / len(icon))
+        assert app.send("event_filters")["open"] is True
+        moved = min(pills(shot, s.tint(s.primary, 0.22)), key=lambda b: b.y0)
+        assert moved.y0 - first_pill.y0 >= 90  # the two dropdowns opened above the list, inline
+        assert moved.x0 == first_pill.x0
+    finally:
+        app.send("show", route="/events")

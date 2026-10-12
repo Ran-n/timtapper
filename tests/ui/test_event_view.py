@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.780273
-Revised: 2026/10/12 02:17:25.842246
+Revised: 2026/10/12 16:55:01.467670
 """
 
 import datetime as dt
@@ -174,10 +174,10 @@ def round_of(events, sample_event, round_no: int):
 
 async def test_result_cycles_through_all_values(screen, events, sample_event):
     seen = []
-    for _ in range(4):
+    for _ in range(3):
         await tap(screen, 4, "result")
         seen.append(round_of(events, sample_event, 4).result)
-    assert seen == ["W", "L", "D", None]
+    assert seen == ["W", "L", None]  # no draw step: the OPTCG has no draws
 
 
 async def test_turn_cycles(screen, events, sample_event):
@@ -219,7 +219,7 @@ def test_collapsed_row_shows_turn_and_die(screen):
     first = by_data(screen.body, "round-1")  # went first, won the roll
     second = by_data(screen.body, "round-2")  # went second, lost the roll
     unknown = by_data(screen.body, "round-3")
-    assert "1st" in texts(first.trailing) and "2nd" in texts(second.trailing) and "—" in texts(unknown.trailing)
+    assert "1st" in texts(first.title) and "2nd" in texts(second.title) and "—" in texts(unknown.title)
     icons = lambda tile: [c.icon for c in walk(by_data(tile, "die-cycle")) if isinstance(c, ft.Icon)]  # noqa: E731
     face = lambda tile: [c.data for c in walk(by_data(tile, "die-cycle")) if str(c.data).startswith("die-face")]  # noqa: E731
     assert face(first) == ["die-face-6"] and icons(first) == []  # a won roll is a six
@@ -247,3 +247,198 @@ async def test_die_face_follows_each_tap(screen):
         await tap(screen, 3, "die")
         seen.append(face_of(3))
     assert seen == ["die-face-6", "die-face-1", None]
+
+
+# ---- edits that change nothing, and edits the repository refuses -----------------
+def refuse(*_a, **_k):
+    from events.repository import EventError
+
+    raise EventError("nope")
+
+
+def spy(monkeypatch, obj, name) -> list:
+    calls = []
+    real = getattr(obj, name)
+
+    def wrapper(*a, **k):
+        calls.append((a, k))
+        return real(*a, **k)
+
+    monkeypatch.setattr(obj, name, wrapper)
+    return calls
+
+
+@pytest.mark.parametrize(("tag", "value"), [("name", " Sunday locals "), ("notes", "")])
+async def test_unchanged_header_field_saves_nothing(screen, ctx, monkeypatch, tag, value):
+    calls = spy(monkeypatch, ctx.events, "update")
+    field = by_data(screen.body, tag)
+    field.value = value
+    await fire(field.on_blur, field)
+    assert calls == []
+
+
+async def test_unchanged_round_notes_save_nothing(screen, ctx, monkeypatch):
+    calls = spy(monkeypatch, ctx.events, "update_round")
+    field = by_data(by_data(screen.body, "round-2"), "round-notes")
+    field.value = None  # the client sends None for an untouched empty field
+    await fire(field.on_blur, field)
+    assert calls == []
+
+
+async def test_dismissed_date_picker_keeps_the_date(screen, page, events, sample_event):
+    btn = by_data(screen.body, "date")
+    await fire(btn.on_click, btn)
+    picker = page.dialogs[-1]
+    picker.value = None
+    await fire(picker.on_change, picker)
+    assert events.get(sample_event.id).date == dt.date(2026, 10, 5)
+
+
+async def test_date_picker_accepts_a_plain_date(screen, page, events, sample_event):
+    btn = by_data(screen.body, "date")
+    await fire(btn.on_click, btn)
+    picker = page.dialogs[-1]
+    picker.value = dt.date(2026, 3, 1)
+    await fire(picker.on_change, picker)
+    assert events.get(sample_event.id).date == dt.date(2026, 3, 1)
+
+
+async def test_expanding_and_collapsing_is_remembered(screen, sample_event):
+    tile = by_data(screen.body, "round-1")
+    tile.expanded = True
+    await fire(tile.on_change, tile)
+    assert sample_event.rounds[0].id in screen.expanded
+    tile.expanded = False
+    await fire(tile.on_change, tile)
+    assert sample_event.rounds[0].id not in screen.expanded
+    screen.refresh()
+    assert by_data(screen.body, "round-1").expanded is False
+
+
+async def test_change_opponent_through_picker(screen, page, events, sample_event, leader_ids, ctx):
+    tile = by_data(screen.body, "round-1")
+    btn = next(c for c in walk(tile) if isinstance(c, ft.TextButton) and c.content == "Change opponent")
+    await fire(btn.on_click, btn)
+    await pick_leader(page.dialogs[-1], leader_ids[5], ctx.leaders_by_id[leader_ids[5]].code)
+    assert round_of(events, sample_event, 1).opponent_leader_id == leader_ids[5]
+
+
+async def test_clearing_the_result_segment_keeps_the_row_open(screen, events, sample_event):
+    seg = by_data(by_data(screen.body, "round-4"), "result")
+    seg.selected = []
+    await fire(seg.on_change, seg)
+    assert round_of(events, sample_event, 4).result is None
+    assert by_data(screen.body, "round-4").expanded is True
+
+
+async def test_refused_round_delete_keeps_the_round_and_says_why(screen, ctx, page, monkeypatch, events, sample_event):
+    monkeypatch.setattr(ctx.events, "delete_round", refuse)
+    btn = by_data(by_data(screen.body, "round-2"), "delete-round")
+    await fire(btn.on_click, btn)
+    dialog = page.dialogs[-1]
+    await fire(dialog.actions[1].on_click, dialog.actions[1])
+    assert len(events.get(sample_event.id).rounds) == 4
+    assert isinstance(page.dialogs[-1], ft.SnackBar) and page.dialogs[-1].data == "error"
+
+
+async def test_refused_add_round_adds_nothing_and_says_why(screen, ctx, page, monkeypatch, events, sample_event):
+    monkeypatch.setattr(ctx.events, "add_round", refuse)
+    btn = by_data(screen.body, "add-round")
+    await fire(btn.on_click, btn)
+    await pick_leader(page.dialogs[-1], ctx.leaders_by_id[sample_event.leader_id].id, "")
+    assert len(events.get(sample_event.id).rounds) == 4
+    assert page.dialogs[-1].data == "error"
+
+
+async def test_refused_event_delete_stays_on_the_event(screen, ctx, page, monkeypatch, events, sample_event):
+    monkeypatch.setattr(ctx.events, "delete", refuse)
+    screen.delete_event()
+    dialog = page.dialogs[-1]
+    await fire(dialog.actions[1].on_click, dialog.actions[1])
+    assert [e.id for e in events.list()] == [sample_event.id]
+    assert page.routes == [] and page.dialogs[-1].data == "error"
+
+
+@pytest.mark.parametrize(
+    ("value", "cycle", "expected"),
+    [(None, (None, "W", "L"), "W"), ("L", (None, "W", "L"), None), ("?", (None, True, False), None)],
+)
+def test_next_steps_and_wraps_and_restarts_on_unknown(value, cycle, expected):
+    from ui.event_view import _next
+
+    assert _next(value, cycle) == expected
+
+
+@pytest.mark.regression
+def test_round_row_is_one_line_and_the_name_wraps_beside_the_indicators(screen, ctx, sample_event):
+    """Beside the indicators, names used to be cut ("Sh…"); then they moved to a second line. Now one line."""
+    from ui.event_view import ROUND_GAP
+
+    tile = by_data(screen.body, "round-1")
+    assert tile.trailing is None and tile.subtitle is None and tile.show_trailing_icon is False
+    label, opponent, indicators = tile.title.controls
+    assert {c.data for c in walk(indicators)} >= {"turn-cycle", "die-cycle", "result-cycle"}
+    assert opponent.expand and opponent.spacing == ROUND_GAP  # takes the rest of the line
+    name = next(c for c in walk(opponent) if isinstance(c, ft.Text))
+    assert name.value == ctx.leaders_by_id[sample_event.rounds[0].opponent_leader_id].name
+    assert name.max_lines is None and name.overflow != ft.TextOverflow.ELLIPSIS  # wraps, never cut
+
+
+def test_round_rows_show_names_small_with_break_points(screen):
+    tile = by_data(screen.body, "round-1")
+    _label, opponent, _indicators = tile.title.controls
+    name = next(c for c in walk(opponent) if isinstance(c, ft.Text))
+    assert name.size == 11
+
+
+# ---- placement and players ------------------------------------------------------------
+async def type_into(screen, key, text):
+    field = by_data(screen.body, key)
+    field.value = text
+    await fire(field.on_blur, field)
+
+
+async def test_placement_and_players_are_typed_in_place(screen, events, sample_event, page):
+    assert by_data(screen.body, "placement").value == "" and by_data(screen.body, "players").value == ""
+    await type_into(screen, "players", "32")
+    await type_into(screen, "placement", " 3 ")
+    ev = events.get(sample_event.id)
+    assert (ev.placement, ev.players) == (3, 32)
+    assert by_data(screen.body, "placement").value == "3"
+    await type_into(screen, "placement", "")
+    assert events.get(sample_event.id).placement is None  # emptied: unknown again
+    assert not [d for d in page.dialogs if getattr(d, "data", None) == "error"]
+
+
+async def test_number_fields_only_take_digits(screen):
+    for key in ("placement", "players"):
+        field = by_data(screen.body, key)
+        assert isinstance(field.input_filter, ft.NumbersOnlyInputFilter)
+        assert field.keyboard_type == ft.KeyboardType.NUMBER
+
+
+async def test_placement_past_the_field_is_refused_with_a_message(screen, events, sample_event, page):
+    await type_into(screen, "players", "8")
+    await type_into(screen, "placement", "9")
+    assert events.get(sample_event.id).placement is None
+    assert page.dialogs[-1].data == "error"
+
+
+async def test_unchanged_standing_saves_nothing(screen, ctx, monkeypatch):
+    calls = spy(monkeypatch, ctx.events, "update")
+    await type_into(screen, "placement", "")
+    assert calls == []
+
+
+def test_testing_sessions_have_no_standing_fields(ctx, events):
+    ev = events.create("Practice", "testing", dt.date(2026, 1, 1))
+    s = EventScreen(ctx, ev.id)
+    s.build()
+    assert "standing" not in [c.data for c in walk(s.body)]
+
+
+async def test_switching_to_testing_hides_the_standing(screen, events, sample_event):
+    dd = by_data(screen.body, "type")
+    dd.value = "testing"
+    await fire(dd.on_select, dd)
+    assert "standing" not in [c.data for c in walk(screen.body)]
