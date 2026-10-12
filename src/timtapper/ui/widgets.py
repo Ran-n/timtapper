@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.420418
-Revised: 2026/10/11 23:25:32.398740
+Revised: 2026/10/12 01:37:35.706649
 
 Small building blocks reused across screens.
 """
@@ -13,6 +13,7 @@ import flet as ft
 
 from catalog import portraits
 from catalog.repository import Leader
+from i18n import Translate, event_type_label
 from stats.compute import Record, percent
 from ui.theme import CARD_COLORS, FONT_HEAVY, FONT_SEMIBOLD, UNKNOWN_COLOR, Scheme
 
@@ -74,9 +75,34 @@ def logo(size: int = 32) -> ft.Image:
     return ft.Image(src=LOGO_MARK, width=size, height=size, fit=ft.BoxFit.CONTAIN, data="logo")
 
 
+def _leader_colors(colors: tuple[str, ...]) -> list[str]:
+    """Display hues for a leader's card colors; unknown or missing colors fall back to UNKNOWN_COLOR."""
+    return [CARD_COLORS.get(c, UNKNOWN_COLOR) for c in colors] or [UNKNOWN_COLOR]
+
+
+def _color_frame(colors: list[str]) -> dict:
+    """Container fill for a frame: solid for one color, equal hard-edged top-to-bottom bands (as color_bar) for more."""
+    if len(colors) == 1:
+        return {"bgcolor": colors[0]}
+    band = 1 / len(colors)
+    return {
+        "gradient": ft.LinearGradient(
+            begin=ft.Alignment.TOP_CENTER,
+            end=ft.Alignment.BOTTOM_CENTER,
+            colors=[c for c in colors for _edge in range(2)],
+            stops=[edge for i in range(len(colors)) for edge in (i * band, (i + 1) * band)],
+        )
+    }
+
+
+def portrait_border(size: int) -> int:
+    """Frame width: readable at every size without eating the face (56 px -> 3, 32 px -> 2)."""
+    return max(2, size // 16)
+
+
 def color_bar(colors: tuple[str, ...], height: int = 28, width: int = 8) -> ft.Control:
     """Vertical stripes, one per leader color — the app's leader 'icon'."""
-    stripes = [CARD_COLORS.get(c, UNKNOWN_COLOR) for c in colors] or [UNKNOWN_COLOR]
+    stripes = _leader_colors(colors)
     return ft.Container(
         width=width,
         height=height,
@@ -87,13 +113,28 @@ def color_bar(colors: tuple[str, ...], height: int = 28, width: int = 8) -> ft.C
 
 
 def leader_portrait(leader: Leader | None, size: int = 32) -> ft.Control:
-    """The leader's face cropped from its card; a neutral silhouette when unknown or not downloaded yet."""
-    src = portraits.source(leader.code) if leader else None
-    fallback = ft.Icon(ft.Icons.PERSON_ROUNDED, size=size * 0.6, color=ft.Colors.ON_SURFACE_VARIANT)
+    """The leader's face cropped from its card, framed in the leader's colors (outer size stays `size`).
+    No leader: an unframed silhouette. Picture unknown or not downloaded yet: a framed silhouette."""
+    if leader is None:
+        return _portrait_face(None, size, size // 4)
+    border = portrait_border(size)
     return ft.Container(
         width=size,
         height=size,
         border_radius=size // 4,
+        padding=border,
+        data="portrait-frame",
+        content=_portrait_face(portraits.source(leader.code), size - 2 * border, size // 4 - border),
+        **_color_frame(_leader_colors(leader.colors)),
+    )
+
+
+def _portrait_face(src: str | bytes | None, size: int, radius: int) -> ft.Container:
+    fallback = ft.Icon(ft.Icons.PERSON_ROUNDED, size=size * 0.6, color=ft.Colors.ON_SURFACE_VARIANT)
+    return ft.Container(
+        width=size,
+        height=size,
+        border_radius=radius,
         bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
         alignment=ft.Alignment.CENTER,
         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
@@ -128,13 +169,59 @@ def leader_row(leader: Leader | None, placeholder: str, *, size: int = 16, show_
     )
 
 
-def pill(text: str, color: str, scheme: Scheme, *, size: int = 13) -> ft.Control:
-    """A soft-tinted rounded label in `color`."""
+def pill(
+    text: str,
+    color: str,
+    scheme: Scheme,
+    *,
+    size: int = 13,
+    icon: str | None = None,
+    font_family: str = FONT_SEMIBOLD,
+    **kwargs,
+) -> ft.Control:
+    """A soft-tinted rounded label in `color`, optionally led by an icon. Extra kwargs (data…) pass through."""
+    label = ft.Text(text, size=size, font_family=font_family, color=color)
+    content: ft.Control = (
+        ft.Row(
+            [ft.Icon(icon, size=size + 2, color=color), label],
+            spacing=4,
+            tight=True,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+        if icon
+        else label
+    )
     return ft.Container(
         padding=ft.Padding(10, 3, 10, 3),
         border_radius=99,
         bgcolor=scheme.tint(color, 0.22),
-        content=ft.Text(text, size=size, font_family=FONT_SEMIBOLD, color=color),
+        content=content,
+        **kwargs,
+    )
+
+
+# One per db.models.EVENT_TYPES value. All share the primary accent (the others already
+# mean win/loss/top cut), so the icon is what tells types apart.
+EVENT_TYPE_ICONS: dict[str, str] = {
+    "testing": ft.Icons.SCIENCE_OUTLINED,
+    "locals": ft.Icons.STOREFRONT_OUTLINED,
+    "regional": ft.Icons.MAP_OUTLINED,
+    "national": ft.Icons.FLAG_OUTLINED,
+    "online": ft.Icons.LANGUAGE,
+    "other": ft.Icons.EVENT_OUTLINED,
+}
+
+
+def event_type_pill(_: Translate, key: str, scheme: Scheme) -> ft.Control:
+    """The event type as icon + translated label; an unknown key reads 'Other', like event_type_label."""
+    return pill(
+        event_type_label(_, key),
+        scheme.primary,
+        scheme,
+        size=12,
+        icon=EVENT_TYPE_ICONS.get(key, EVENT_TYPE_ICONS["other"]),
+        font_family=FONT_HEAVY,
+        data="event-type",
     )
 
 
@@ -145,8 +232,20 @@ def rate_color(rec: Record, scheme: Scheme) -> str:
     return scheme.success if rec.win_rate >= 0.5 else scheme.error
 
 
-def record_pill(rec: Record, scheme: Scheme) -> ft.Control:
-    return pill(f"{rec.label()} · {percent(rec.win_rate)}" if rec.games else "—", rate_color(rec, scheme), scheme)
+def record_badges(rec: Record, scheme: Scheme, *, size: int = 13) -> ft.Control:
+    """A neutral win-loss pill beside a win-rate pill in rate_color; a single muted dash with no games."""
+    if not rec.games:
+        return pill("—", scheme.fg_muted, scheme, size=size, data="record-badge")
+    return ft.Row(
+        [
+            pill(rec.label(), scheme.fg_muted, scheme, size=size, data="record-badge"),
+            pill(percent(rec.win_rate), rate_color(rec, scheme), scheme, size=size, data="rate-badge"),
+        ],
+        spacing=4,
+        tight=True,
+        wrap=False,
+        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    )
 
 
 def _badge(content: ft.Control, bgcolor: str, *, width: int, height: int) -> ft.Container:
@@ -191,33 +290,62 @@ def turn_badge(went_first: bool | None, scheme: Scheme, first: str, second: str,
     )
 
 
-def die_badge(won_die_roll: bool | None, scheme: Scheme, size: int = 36) -> ft.Control:
-    """A die, plus a check (won) or a cross (lost): shape and colour, so it reads without colour."""
-    icon_size = size * 0.5
-    if won_die_roll is None:
-        content: ft.Control = ft.Icon(ft.Icons.CASINO, size=icon_size, color=ft.Colors.ON_SURFACE_VARIANT)
-    else:
-        mark, color = (ft.Icons.CHECK, scheme.success) if won_die_roll else (ft.Icons.CLOSE, scheme.error)
-        content = ft.Row(
-            [
-                ft.Icon(ft.Icons.CASINO, size=icon_size, color=scheme.fg),
-                ft.Icon(mark, size=icon_size * 0.8, color=color),
-            ],
-            spacing=0,
-            tight=True,
-            alignment=ft.MainAxisAlignment.CENTER,
-        )
-    return _badge(
-        content,
-        scheme.surface_high if won_die_roll is not None else ft.Colors.SURFACE_CONTAINER_HIGHEST,
-        width=size + 8,
+# Pip centres for each die face, as fractions of the face's side (standard layouts).
+DIE_PIPS: dict[int, tuple[tuple[float, float], ...]] = {
+    1: ((0.5, 0.5),),
+    2: ((0.28, 0.28), (0.72, 0.72)),
+    3: ((0.28, 0.28), (0.5, 0.5), (0.72, 0.72)),
+    4: ((0.28, 0.28), (0.72, 0.28), (0.28, 0.72), (0.72, 0.72)),
+    5: ((0.28, 0.28), (0.72, 0.28), (0.5, 0.5), (0.28, 0.72), (0.72, 0.72)),
+    6: ((0.28, 0.25), (0.28, 0.5), (0.28, 0.75), (0.72, 0.25), (0.72, 0.5), (0.72, 0.75)),
+}
+
+
+def die_face(pips: int, color: str, pip_color: str, size: float) -> ft.Container:
+    """A rounded-square die showing `pips` (1-6), drawn from containers: Flet's die icons all show five."""
+    if pips not in DIE_PIPS:
+        raise ValueError(f"a die has 1-6 pips, not {pips}")
+    diameter = size * 0.2
+    return ft.Container(
+        width=size,
         height=size,
+        border_radius=size * 0.22,
+        bgcolor=color,
+        data=f"die-face-{pips}",
+        content=ft.Stack(
+            [
+                ft.Container(
+                    width=diameter,
+                    height=diameter,
+                    border_radius=diameter / 2,
+                    bgcolor=pip_color,
+                    left=x * size - diameter / 2,
+                    top=y * size - diameter / 2,
+                    data="pip",
+                )
+                for x, y in DIE_PIPS[pips]
+            ],
+            width=size,
+            height=size,
+        ),
     )
 
 
-def record_text(rec: Record, size: int = 16) -> ft.Control:
-    return ft.Text(
-        f"{rec.label()} · {percent(rec.win_rate)}" if rec.games else "—", size=size, font_family=FONT_SEMIBOLD
+def die_badge(won_die_roll: bool | None, scheme: Scheme, size: int = 36) -> ft.Control:
+    """Won: a green six. Lost: a red one. The pip counts differ too, so it reads without colour."""
+    if won_die_roll is None:
+        return _badge(
+            ft.Icon(ft.Icons.CASINO, size=size * 0.5, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Colors.SURFACE_CONTAINER_HIGHEST,
+            width=size + 8,
+            height=size,
+        )
+    color = scheme.success if won_die_roll else scheme.error
+    return _badge(
+        die_face(6 if won_die_roll else 1, color, scheme.on_accent, size * 0.6),
+        scheme.tint(color, 0.22),
+        width=size + 8,
+        height=size,
     )
 
 

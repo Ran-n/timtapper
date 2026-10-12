@@ -2,10 +2,12 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 23:25:31.706887
-Revised: 2026/10/11 23:26:25.766575
+Revised: 2026/10/12 01:37:36.320134
 
-Leader picker: text search, color chips (every selected color) and the set dropdown combine.
+Leader picker: text search, color dots (every selected color) and the set dropdown combine.
 """
+
+import flet as ft
 
 from ui.leader_picker import ALL_SETS, build_picker, open_picker
 from uitools import by_data, fire, texts
@@ -20,9 +22,13 @@ def shown(ctx, sheet) -> list:
 
 
 async def toggle(sheet, color: str) -> None:
-    chip = by_data(sheet, f"color-{color}")
-    chip.selected = not chip.selected  # the client flips it before on_select fires
-    await fire(chip.on_select, chip)
+    dot = by_data(sheet, f"color-{color}")
+    await fire(dot.on_click, dot)
+
+
+def check_of(sheet, color: str):
+    """The check icon inside a colour dot, or None when it isn't selected."""
+    return by_data(sheet, f"color-{color}").content.content
 
 
 async def choose_set(sheet, code: str) -> None:
@@ -41,18 +47,23 @@ def make(ctx, picked=None):
     return build_picker(ctx, "Pick", (picked if picked is not None else []).append)
 
 
-def test_shows_six_color_chips_and_set_dropdown(ctx):
+def test_shows_six_color_dots_on_one_line(ctx):
     sheet = make(ctx)
-    chips = by_data(sheet, "color-filters").controls
-    assert [c.data for c in chips] == [f"color-{c}" for c in ("Red", "Green", "Blue", "Purple", "Black", "Yellow")]
-    assert not any(c.selected for c in chips)
-    assert by_data(sheet, "color-filters").wrap
+    row = by_data(sheet, "color-filters")
+    names = ("Red", "Green", "Blue", "Purple", "Black", "Yellow")
+    assert [c.data for c in row.controls] == [f"color-{c}" for c in names]
+    assert row.wrap is False
+    assert not texts(row)  # dots only, no labels
+    assert [c.tooltip for c in row.controls] == list(names)
+    assert all(c.width == c.height == 44 and c.content.width == 28 for c in row.controls)
+    assert all(check_of(sheet, c) is None for c in names)
+    assert 6 * 44 + 5 * row.spacing <= 360 - 32  # fits the minimum window inside the sheet's padding
     options = by_data(sheet, "set-filter").options
     assert options[0].key == ALL_SETS and options[0].text == "All sets"
     assert options[1].key.startswith("OP")
 
 
-async def test_color_chip_narrows_list(ctx):
+async def test_color_dot_narrows_list(ctx):
     sheet = make(ctx)
     await toggle(sheet, "Purple")
     found = shown(ctx, sheet)
@@ -67,7 +78,28 @@ async def test_two_colors_need_both(ctx):
     assert found and all({"Red", "Green"} <= set(ld.colors) for ld in found)
 
 
-async def test_unselecting_chip_restores_list(ctx):
+async def test_selected_dot_shows_ring_and_check(ctx):
+    sheet = make(ctx)
+    red = by_data(sheet, "color-Red").content
+    assert red.border.top.width == 1 and check_of(sheet, "Red") is None
+    await toggle(sheet, "Red")
+    assert red.border.top.width == 3 and red.border.top.color == ft.Colors.ON_SURFACE
+    assert (check_of(sheet, "Red").icon, check_of(sheet, "Red").color) == (ft.Icons.CHECK, ft.Colors.WHITE)
+    await toggle(sheet, "Yellow")
+    assert check_of(sheet, "Yellow").color == ft.Colors.BLACK  # white on yellow is unreadable
+    await toggle(sheet, "Red")
+    assert red.border.top.width == 1 and check_of(sheet, "Red") is None
+
+
+def test_dot_tooltips_translated(ctx):
+    from i18n import color_label, set_lang, translator
+
+    set_lang(ctx.page, "gl")
+    sheet = make(ctx)
+    assert by_data(sheet, "color-Red").tooltip == color_label(translator("gl"), "Red") != "Red"
+
+
+async def test_unselecting_dot_restores_list(ctx):
     sheet = make(ctx)
     before = shown_ids(sheet)
     await toggle(sheet, "Black")
@@ -117,7 +149,7 @@ async def test_filters_reset_on_reopen(ctx, page):
     page.pop_dialog()
     open_picker(ctx, "Pick", lambda _l: None)
     again = page.dialogs[-1]
-    assert not by_data(again, "color-Yellow").selected
+    assert check_of(again, "Yellow") is None
     assert by_data(again, "set-filter").value == ALL_SETS
     assert shown_ids(again) == unfiltered
 

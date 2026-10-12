@@ -2,10 +2,10 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.041772
-Revised: 2026/10/11 23:25:32.325182
+Revised: 2026/10/12 01:37:35.931722
 
 Searchable leader picker in a bottom sheet (most-played opponents first),
-narrowed by color chips (a leader must have every selected color) and a set
+narrowed by color dots (a leader must have every selected color) and a set
 dropdown. Filters live in the sheet's closure, so every opening starts clean.
 """
 
@@ -25,6 +25,8 @@ _log = get_logger("ui.picker")
 
 MAX_RESULTS = 60
 ALL_SETS = ""
+DOT_SIZE = 28
+TAP_SIZE = 44
 
 
 def build_picker(ctx: AppContext, title: str, on_pick: Callable[[Leader], Awaitable[None] | None]) -> ft.BottomSheet:
@@ -68,22 +70,46 @@ def build_picker(ctx: AppContext, title: str, on_pick: Callable[[Leader], Awaita
         state["query"] = e.control.value or ""
         refresh()
 
-    def on_color(e: ft.Event[ft.Chip]) -> None:
-        chip = e.control  # the client has already flipped chip.selected
-        color = chip.data.removeprefix("color-")
-        if chip.selected:
-            colors.add(color)
-        else:
-            colors.discard(color)
+    def on_color(e: ft.Event[ft.Container]) -> None:
+        # containers carry no selected state: the `colors` set is the single source of truth
+        target = e.control
+        color = target.data.removeprefix("color-")
+        colors.symmetric_difference_update({color})
+        paint_dot(target.content, color)
+        update_if_mounted(target)
         refresh()
 
     def on_set(e: ft.Event[ft.Dropdown]) -> None:
         state["set_code"] = e.control.value or ALL_SETS
         refresh()
 
-    def color_chip(color: str) -> ft.Chip:
-        dot = ft.Container(width=12, height=12, border_radius=6, bgcolor=CARD_COLORS[color])
-        return ft.Chip(label=ft.Text(color_label(_, color)), leading=dot, on_select=on_color, data=f"color-{color}")
+    def paint_dot(dot: ft.Container, color: str) -> None:
+        """Ring + check when selected (the check keeps it readable without the ring); hairline edge otherwise."""
+        selected = color in colors
+        dot.border = ft.Border.all(3, ft.Colors.ON_SURFACE) if selected else ft.Border.all(1, ft.Colors.OUTLINE_VARIANT)
+        check_color = ft.Colors.BLACK if color == "Yellow" else ft.Colors.WHITE  # white on yellow is unreadable
+        dot.content = ft.Icon(ft.Icons.CHECK, size=16, color=check_color) if selected else None
+
+    def color_dot(color: str) -> ft.Container:
+        dot = ft.Container(
+            width=DOT_SIZE,
+            height=DOT_SIZE,
+            border_radius=DOT_SIZE / 2,
+            bgcolor=CARD_COLORS[color],
+            alignment=ft.Alignment.CENTER,
+        )
+        paint_dot(dot, color)
+        return ft.Container(  # the tap target, at Material's minimum touch size
+            width=TAP_SIZE,
+            height=TAP_SIZE,
+            border_radius=TAP_SIZE / 2,
+            alignment=ft.Alignment.CENTER,
+            ink=True,
+            tooltip=color_label(_, color),
+            on_click=on_color,
+            data=f"color-{color}",
+            content=dot,
+        )
 
     render()
     field = ft.TextField(
@@ -95,8 +121,14 @@ def build_picker(ctx: AppContext, title: str, on_pick: Callable[[Leader], Awaita
         on_change=on_change,
         data="leader-search",
     )
-    # wraps instead of scrolling sideways, so the six chips fit a 360 px screen
-    color_filters = ft.Row([color_chip(c) for c in COLORS], wrap=True, spacing=6, run_spacing=6, data="color-filters")
+    # one row of dots fits a 360 px screen: 6 x 44 + 5 x 4 = 284 px of the 328 px inside the sheet's padding
+    color_filters = ft.Row(
+        [color_dot(c) for c in COLORS],
+        wrap=False,
+        spacing=4,
+        alignment=ft.MainAxisAlignment.START,
+        data="color-filters",
+    )
     set_filter = ft.Dropdown(
         label=_("Set"),
         value=ALL_SETS,

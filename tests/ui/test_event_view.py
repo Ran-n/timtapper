@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.780273
-Revised: 2026/10/11 23:25:32.699873
+Revised: 2026/10/12 01:37:36.155545
 """
 
 import datetime as dt
@@ -221,9 +221,10 @@ def test_collapsed_row_shows_turn_and_die(screen):
     unknown = by_data(screen.body, "round-3")
     assert "1st" in texts(first.trailing) and "2nd" in texts(second.trailing) and "—" in texts(unknown.trailing)
     icons = lambda tile: [c.icon for c in walk(by_data(tile, "die-cycle")) if isinstance(c, ft.Icon)]  # noqa: E731
-    assert icons(first) == [ft.Icons.CASINO, ft.Icons.CHECK]
-    assert icons(second) == [ft.Icons.CASINO, ft.Icons.CLOSE]
-    assert icons(unknown) == [ft.Icons.CASINO]
+    face = lambda tile: [c.data for c in walk(by_data(tile, "die-cycle")) if str(c.data).startswith("die-face")]  # noqa: E731
+    assert face(first) == ["die-face-6"] and icons(first) == []  # a won roll is a six
+    assert face(second) == ["die-face-1"] and icons(second) == []  # a lost one is a one
+    assert face(unknown) == [] and icons(unknown) == [ft.Icons.CASINO]
 
 
 def test_indicators_have_tooltips_and_touch_size(screen):

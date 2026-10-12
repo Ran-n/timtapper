@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.709234
-Revised: 2026/10/12 01:06:46.782830
+Revised: 2026/10/12 01:37:36.081622
 """
 
 import datetime as dt
@@ -26,7 +26,8 @@ def test_lists_events_with_record(ctx, sample_event, events):
     assert [c.data for c in body] == [sample_event.id, sample_event.id + 1]
     shown = texts(body[0])
     assert "Sunday locals" in shown
-    assert "2-1 · 67%" in shown
+    assert "2-1" in shown and "67%" in shown
+    assert not any("· 67%" in t for t in shown)  # record and rate are separate badges
     assert any("4 rounds" in t for t in shown)
     assert any("0 rounds" in t for t in texts(body[1]))
 
@@ -56,18 +57,37 @@ def test_translated(ctx):
     assert fab.content.value == "Novo evento"
 
 
+def test_event_type_badge_translated(ctx, sample_event):
+    from i18n import set_lang
+
+    set_lang(ctx.page, "gl")
+    body, _fab = events_view.build(ctx)
+    assert texts(by_data(body[0], "event-type")) == ["Locais"]
+
+
 def test_tile_shows_leader_portrait_or_placeholder(ctx, sample_event, events):
     events.create("No deck yet", "testing", dt.date(2020, 1, 1))
     body, _fab = events_view.build(ctx)
     with_leader, without = (row.content.controls[1] for row in body)
     code = ctx.leaders_by_id[sample_event.leader_id].code
-    assert isinstance(with_leader.content, ft.Image) and with_leader.content.src == f"leaders/{code}.webp"
-    assert isinstance(without.content, ft.Icon)
+    assert with_leader.data == "portrait-frame"
+    image = with_leader.content.content
+    assert isinstance(image, ft.Image) and image.src == f"leaders/{code}.webp"
+    assert isinstance(without.content, ft.Icon) and without.data != "portrait-frame"
 
 
 def test_event_name_has_its_own_row(ctx, sample_event):
     body, _fab = events_view.build(ctx)
     texts_column = body[0].content.controls[2]
-    name, leader_row = texts_column.controls[0], texts_column.controls[1]
+    name, leader_row = texts_column.controls[1], texts_column.controls[2]
     assert name.data == "event-name" and name.value == "Sunday locals"
-    assert "2-1 · 67%" in texts(leader_row)  # the record pill moved beside the leader name
+    assert texts(by_data(leader_row, "record-badge")) == ["2-1"]  # the record badges sit beside the leader name
+    assert texts(by_data(leader_row, "rate-badge")) == ["67%"]
+
+
+def test_event_type_badge_is_first(ctx, sample_event):
+    body, _fab = events_view.build(ctx)
+    texts_column = body[0].content.controls[2]
+    assert texts(by_data(texts_column.controls[0], "event-type")) == ["Locals"]
+    # the type moved out of the date line
+    assert texts(texts_column.controls[3]) == [f"{sample_event.date.isoformat()} · 4 rounds"]

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.863138
-Revised: 2026/10/12 01:06:46.602159
+Revised: 2026/10/12 01:37:35.782116
 
 Events tab: every event newest first, with its record; FAB starts a new one.
 """
@@ -13,13 +13,15 @@ import flet as ft
 
 from core.logging import get_logger
 from events.repository import Event
-from i18n import event_type_label
 from stats.compute import record_of
 from ui.context import AppContext
 from ui.theme import FONT_HEAVY, FONT_SEMIBOLD
-from ui.widgets import card, color_bar, empty_state, leader_portrait, logo, record_pill
+from ui.widgets import card, color_bar, empty_state, event_type_pill, leader_portrait, logo, record_badges
 
 _log = get_logger("ui.events")
+
+# the leader colour bar spans the tile's text column: type pill, name, leader + record, date line
+TILE_BAR_HEIGHT = 98
 
 
 def event_tile(ctx: AppContext, event: Event) -> ft.Control:
@@ -30,11 +32,13 @@ def event_tile(ctx: AppContext, event: Event) -> ft.Control:
     return card(
         ft.Row(
             [
-                color_bar(leader.colors if leader else (), height=74, width=6),
+                color_bar(leader.colors if leader else (), height=TILE_BAR_HEIGHT, width=6),
                 leader_portrait(leader, 56),
                 ft.Column(
                     [
-                        # the name gets the full width; the record pill sits beside the (shorter) leader name
+                        # the type pill leads, so the list scans by type first; it doesn't stretch
+                        ft.Row([event_type_pill(_, event.event_type, ctx.scheme)], tight=True),
+                        # the name gets the full width; the record badges sit beside the (shorter) leader name
                         ft.Text(
                             event.name,
                             size=17,
@@ -54,7 +58,7 @@ def event_tile(ctx: AppContext, event: Event) -> ft.Control:
                                     max_lines=1,
                                     overflow=ft.TextOverflow.ELLIPSIS,
                                 ),
-                                record_pill(record_of(event), ctx.scheme),
+                                record_badges(record_of(event), ctx.scheme),
                             ],
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
@@ -62,7 +66,7 @@ def event_tile(ctx: AppContext, event: Event) -> ft.Control:
                             [
                                 ft.Icon(ft.Icons.CALENDAR_TODAY_OUTLINED, size=13, color=muted),
                                 ft.Text(
-                                    f"{event.date.isoformat()} · {event_type_label(_, event.event_type)} · {rounds}",
+                                    f"{event.date.isoformat()} · {rounds}",
                                     size=12,
                                     color=muted,
                                     expand=True,

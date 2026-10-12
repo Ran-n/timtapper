@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.228774
-Revised: 2026/10/11 16:57:39.492034
+Revised: 2026/10/12 01:37:35.857183
 
 Stats tab: overall record, splits, recent form and the matchup table, filterable by own leader and event type.
 """
@@ -21,8 +21,7 @@ from ui.widgets import (
     card,
     leader_row,
     rate_color,
-    record_pill,
-    record_text,
+    record_badges,
     section,
     stat_tile,
     update_if_mounted,
@@ -101,7 +100,7 @@ class StatsScreen:
                 value = ft.Column(
                     [
                         leader_row(by_id.get(m.opponent_leader_id), _("Unknown leader"), size=14, show_code=False),
-                        record_text(m.record, 14),
+                        record_badges(m.record, scheme),
                     ],
                     spacing=4,
                     tight=True,
@@ -164,10 +163,13 @@ class StatsScreen:
         )
         return [
             hero,
-            ft.Row([stat_tile(_("Going 1st"), record_text(s.first)), stat_tile(_("Going 2nd"), record_text(s.second))]),
             ft.Row([
-                stat_tile(_("Won the die roll"), record_text(s.die_won)),
-                stat_tile(_("Lost the die roll"), record_text(s.die_lost)),
+                stat_tile(_("Going 1st"), record_badges(s.first, scheme, size=15)),
+                stat_tile(_("Going 2nd"), record_badges(s.second, scheme, size=15)),
+            ]),
+            ft.Row([
+                stat_tile(_("Won the die roll"), record_badges(s.die_won, scheme, size=15)),
+                stat_tile(_("Lost the die roll"), record_badges(s.die_lost, scheme, size=15)),
             ]),
             ft.Row([matchup_tile(_("Best matchup"), s.best), matchup_tile(_("Worst matchup"), s.worst)]),
             stat_tile(_("Recent form"), form),
@@ -186,7 +188,7 @@ class StatsScreen:
                     leader_row(by_id.get(m.opponent_leader_id), _("Unknown leader"), size=14),
                     ft.Column(
                         [
-                            record_pill(m.record, self.ctx.scheme),
+                            record_badges(m.record, self.ctx.scheme),
                             ft.Text(
                                 _("1st {first} · 2nd {second}").format(
                                     first=m.first.label() if m.first.games else "—",

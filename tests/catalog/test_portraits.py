@@ -2,12 +2,13 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:30.268389
-Revised: 2026/10/11 17:25:07.119266
+Revised: 2026/10/12 01:50:31.256526
 
 Leader portrait cropping, lookup (bundled asset / downloaded cache / none) and download.
 """
 
 import io
+from pathlib import Path
 
 import httpx
 import pytest
@@ -16,6 +17,8 @@ from PIL import Image
 
 from catalog import portraits
 from catalog.optcgapi import IMAGE_URL
+
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 
 
 def card_jpeg(w=600, h=838) -> bytes:
@@ -58,17 +61,101 @@ def test_crop_keeps_the_box_inside_the_card(face):
     assert Image.open(io.BytesIO(portraits.crop(card_jpeg(), face))).size == (portraits.SIZE, portraits.SIZE)
 
 
-def test_every_bundled_leader_has_a_placed_face():
-    import json
-    from pathlib import Path
+def build_leaders():
+    import importlib.util
 
+    spec = importlib.util.spec_from_file_location("build_leaders", SCRIPTS / "build_leaders.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_every_bundled_leader_has_a_placed_face():
     from catalog.repository import load_bundled
 
-    path = Path(__file__).resolve().parents[2] / "scripts" / "portrait_crops.json"
-    faces = json.loads(path.read_text(encoding="utf-8"))
+    faces = build_leaders().load_faces()
     assert sorted(r.code for r in load_bundled() if r.code not in faces) == []
-    for code, (cx, cy, side) in faces.items():
-        assert 0 <= cx <= 1 and 0 <= cy <= 1.4 and 0 < side <= 1, code
+    for code, placed in faces.items():
+        for face in placed if isinstance(placed, tuple) else (placed,):
+            assert 0 <= face.cx <= 1 and 0 <= face.cy <= 1.4 and 0 < face.side <= 1, code
+
+
+@pytest.mark.parametrize(
+    ("code", "face"),
+    [
+        ("OP09-001", portraits.Face(0.45, 0.44, 0.3)),  # red Shanks: the old box showed only his hair
+        ("OP05-002", portraits.Face(0.57, 0.41, 0.3)),  # Belo Betty: the old box showed one eye and her forehead
+        # Ace & Newgate: one strip per face (the old box showed half of Ace's face and no Newgate)
+        ("ST22-001", (portraits.Face(0.41, 0.23, 0.3), portraits.Face(0.81, 0.5, 0.34))),
+    ],
+)
+def test_recropped_faces_are_placed(code, face):
+    """Hand-fixed boxes that frame the whole face; a rebuild must not silently revert them."""
+    assert build_leaders().load_faces()[code] == face
+
+
+def test_load_faces_reads_single_and_split_boxes(tmp_path):
+    path = tmp_path / "faces.json"
+    path.write_text('{"A": [0.5, 0.4, 0.3], "B": [[0.3, 0.3, 0.2], [0.7, 0.5, 0.2]]}', encoding="utf-8")
+    assert build_leaders().load_faces(path) == {
+        "A": portraits.Face(0.5, 0.4, 0.3),
+        "B": (portraits.Face(0.3, 0.3, 0.2), portraits.Face(0.7, 0.5, 0.2)),
+    }
+
+
+def test_two_faces_fill_one_half_each():
+    # left mark at (150, 200) px, right mark at (450, 500) px; each face box is centred on its mark
+    img = Image.new("RGB", (600, 838), (128, 128, 128))
+    img.paste((0, 200, 0), (130, 180, 170, 220))
+    img.paste((0, 0, 220), (430, 480, 470, 520))
+    out = io.BytesIO()
+    img.save(out, "PNG")
+    faces = (portraits.Face(0.25, 1 / 3, 0.2), portraits.Face(0.75, 500 / 600, 0.2))
+    portrait = Image.open(io.BytesIO(portraits.crop(out.getvalue(), faces)))
+    assert portrait.size == (portraits.SIZE, portraits.SIZE)
+    q, half = portraits.SIZE // 4, portraits.SIZE // 2
+    left, right = portrait.getpixel((q, half)), portrait.getpixel((half + q, half))
+    assert left[1] > 150 and left[2] < 80  # green mark centred in the left half
+    assert right[2] > 150 and right[1] < 80  # blue mark centred in the right half
+
+
+def test_crop_needs_a_face():
+    with pytest.raises(portraits.PortraitError, match="no face"):
+        portraits.crop(card_jpeg(), ())
+
+
+def test_lift_overlay_restores_the_art():
+    art = Image.new("RGB", (600, 838), (40, 120, 200))
+    art.paste((200, 60, 30), (300, 0, 600, 838))  # two colours, so the box crosses an edge in the art
+    a = portraits.WATERMARK_ALPHA
+    marked = art.copy()
+    box = (250, 350, 350, 450)
+    region = marked.crop(box).point(lambda v: round(255 * a + (1 - a) * v))
+    marked.paste(region, box)
+    lifted = portraits.lift_overlay(marked, portraits.Overlay(((250 / 600, 350 / 600, 350 / 600, 450 / 600),)))
+    for xy in [(270, 400), (330, 400), (300, 360), (100, 100)]:  # inside on both colours, near the edge, outside
+        assert max(abs(p - q) for p, q in zip(lifted.getpixel(xy), art.getpixel(xy), strict=True)) <= 3, xy
+
+
+def test_crop_applies_the_overlay():
+    art = Image.new("RGB", (600, 838), (40, 120, 200))
+    marked = art.point(lambda v: round(255 * portraits.WATERMARK_ALPHA + (1 - portraits.WATERMARK_ALPHA) * v))
+    out = io.BytesIO()
+    marked.save(out, "PNG")
+    whole = portraits.Overlay(((0, 0, 1, 838 / 600),))
+    plain = Image.open(io.BytesIO(portraits.crop(out.getvalue(), overlay=None))).convert("RGB")
+    lifted = Image.open(io.BytesIO(portraits.crop(out.getvalue(), overlay=whole))).convert("RGB")
+    assert plain.getpixel((80, 80))[0] > 150  # still washed out without it
+    assert max(abs(p - q) for p, q in zip(lifted.getpixel((80, 80)), (40, 120, 200), strict=True)) <= 6
+
+
+def test_overlays_file_is_valid():
+    overlays = build_leaders().load_overlays()
+    assert "ST22-001" in overlays  # Newgate's moustache sits under the watermark
+    for code, overlay in overlays.items():
+        assert overlay.boxes, code
+        for x0, y0, x1, y1 in overlay.boxes:
+            assert 0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1.4, code
 
 
 def test_crop_custom_size():

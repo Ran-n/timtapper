@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/12 01:04:16.696968 )
+[//]: # (+ Revised: 	2026/10/12 01:50:30.311656 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -31,8 +31,9 @@ device, and a JSON backup moves them to another install.
 - **Rounds**: opponent's leader, result (W/L/D), turn order, die roll, top cut and notes, all edited in place, with no
   forms or dialogs. Log a round when you sit down and give it a result when the game ends; rounds still being played
   stay open.
-- **One-tap round rows**: turn order, die roll and result show on every round row. Tap one to cycle its value.
-- **Leader picker**: search by name, code or color, then narrow by color chips (a leader must have every color you
+- **One-tap round rows**: turn order, die roll and result show on every round row. Tap one to cycle its value. The die
+  roll shows a green six when you won it and a red one when you lost it.
+- **Leader picker**: search by name, code or color, then narrow by color dots (a leader must have every color you
   select) and by set. The opponents you face most come first.
 
 ### Understand your results
@@ -136,7 +137,11 @@ reusing its content without written permission; this is a known, accepted risk.
 
 Every other portrait is cropped around the face position set for that card in `scripts/portrait_crops.json`
 (`{"OP01-001": [cx, cy, side]}`, as fractions of the card width). Automatic face detection was tried and found only 6
-of 138 faces in One Piece card art, so positions are set by eye. A new leader with no entry gets the default
+of 138 faces in One Piece card art, so positions are set by eye. A card with two characters (ST22-001 Ace &
+Newgate) takes a list of boxes instead, `[[cx, cy, side], [cx, cy, side]]`, and each face fills one vertical strip of
+the portrait. Where the card image's semi-transparent "SAMPLE" watermark crosses a face, its letter boxes are listed in
+`scripts/portrait_overlays.json` (`{"ST22-001": [[x0, y0, x1, y1], …]}`, same units) and lifted off before cropping;
+the watermark sits in a different place on each card, so the boxes are measured per card. A new leader with no entry gets the default
 upper-middle crop and the script warns about it. Add an entry and rerun with `--force`. Leaders an installed app
 downloads on its own always get the default crop until the next release ships their bundled portraits.
 

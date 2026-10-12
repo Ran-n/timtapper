@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.795206
-Revised: 2026/10/11 17:43:10.912808
+Revised: 2026/10/12 01:50:30.946780
 
 Refresh the leader list bundled with the app (src/timtapper/assets/data/leaders.json)
 and the leader portraits (src/timtapper/assets/leaders/*.webp) from optcgapi.com.
@@ -26,17 +26,38 @@ APP_DIR = Path(__file__).resolve().parent.parent / "src" / "timtapper"
 sys.path.insert(0, str(APP_DIR))
 
 from catalog.optcgapi import CatalogError, fetch_leaders, fetch_sources  # noqa: E402
-from catalog.portraits import BUNDLED_DIR, DEFAULT_FACE, Face, PortraitError, download, filename  # noqa: E402
+from catalog.portraits import (  # noqa: E402
+    BUNDLED_DIR,
+    DEFAULT_FACE,
+    Face,
+    Faces,
+    Overlay,
+    PortraitError,
+    download,
+    filename,
+)  # noqa: E402
 from core.logging import get_logger, setup_logging  # noqa: E402
 
 OUT = APP_DIR / "assets" / "data" / "leaders.json"
 FACES = Path(__file__).resolve().parent / "portrait_crops.json"
+# "SAMPLE" watermark pieces to lift off before cropping, for faces the watermark crosses
+OVERLAYS = Path(__file__).resolve().parent / "portrait_overlays.json"
 # portraits taken from davyback.gg by fetch_davyback_portraits.py — never re-cropped here
 EXTERNAL = Path(__file__).resolve().parent / "davyback_portraits.json"
 
 
-def load_faces(path: Path = FACES) -> dict[str, Face]:
-    return {code: Face(*box) for code, box in json.loads(path.read_text(encoding="utf-8")).items()}
+def load_faces(path: Path = FACES) -> dict[str, Faces]:
+    """Each code maps to one box [cx, cy, side], or a list of boxes for a card with several faces."""
+    return {
+        code: tuple(Face(*b) for b in box) if isinstance(box[0], list) else Face(*box)
+        for code, box in json.loads(path.read_text(encoding="utf-8")).items()
+    }
+
+
+def load_overlays(path: Path = OVERLAYS) -> dict[str, Overlay]:
+    """Each code maps to its watermark letter boxes [[x0, y0, x1, y1], ...], fractions of the card width."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {code: Overlay(tuple(tuple(b) for b in boxes)) for code, boxes in raw.items()}
 
 
 def main() -> int:
@@ -60,6 +81,7 @@ def main() -> int:
     log.info("wrote %d leaders to %s", len(leaders), OUT)
 
     faces = load_faces()
+    overlays = load_overlays()
     unplaced = [r.code for r in leaders if r.code not in faces]
     if unplaced:
         log.warning("no face placed for %s — default crop used; add them to %s", ", ".join(unplaced), FACES.name)
@@ -74,7 +96,9 @@ def main() -> int:
     with httpx.Client(timeout=30, follow_redirects=True) as client:
         for code in todo:
             try:
-                (BUNDLED_DIR / filename(code)).write_bytes(download(code, client, faces.get(code, DEFAULT_FACE)))
+                (BUNDLED_DIR / filename(code)).write_bytes(
+                    download(code, client, faces.get(code, DEFAULT_FACE), overlays.get(code))
+                )
             except PortraitError as exc:
                 log.error("portrait failed: %s", exc)
                 failed.append(code)

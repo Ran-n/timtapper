@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.861081
-Revised: 2026/10/11 23:25:32.785119
+Revised: 2026/10/12 01:37:36.237269
 """
 
 import datetime as dt
@@ -17,7 +17,7 @@ from ui.leader_picker import MAX_RESULTS, build_picker
 from ui.settings_view import SettingsScreen
 from ui.stats_view import StatsScreen
 from ui.theme import THEMES
-from uitools import by_data, fire, texts
+from uitools import by_data, fire, texts, walk
 
 
 # ---- stats -------------------------------------------------------------
@@ -37,6 +37,10 @@ def test_stats_show_summary_and_matchups(ctx, sample_event):
     assert by_data(s.body, "share-summary").disabled is False
     opponent = ctx.leaders_by_id[sample_event.rounds[0].opponent_leader_id].name
     assert opponent in shown
+    assert not any("·" in t and "%" in t for t in shown)  # record and rate are always separate badges
+    tagged = [c.data for c in walk(s.body)]
+    # the four split tiles, best/worst matchup and every matchup row each show a record and a rate badge
+    assert tagged.count("rate-badge") >= 6 and tagged.count("record-badge") >= tagged.count("rate-badge")
 
 
 async def test_stats_filters(ctx, sample_event, events, leader_ids):
@@ -285,9 +289,12 @@ def test_leader_portrait_bundled_unknown_and_none(ctx):
     from ui.widgets import leader_portrait
 
     known = next(ld for ld in ctx.leaders if ld.code == "OP01-001")
-    img = leader_portrait(known, 40).content
+    frame = leader_portrait(known, 40)
+    assert frame.data == "portrait-frame"
+    img = frame.content.content
     assert isinstance(img, ft.Image) and img.src == "leaders/OP01-001.webp"
     assert isinstance(img.error_content, ft.Icon)
     stranger = Leader(0, "OP99-999", "Nobody", None, ())
-    assert isinstance(leader_portrait(stranger).content, ft.Icon)
-    assert isinstance(leader_portrait(None).content, ft.Icon)
+    assert isinstance(leader_portrait(stranger).content.content, ft.Icon)
+    placeholder = leader_portrait(None)
+    assert isinstance(placeholder.content, ft.Icon) and placeholder.data != "portrait-frame"

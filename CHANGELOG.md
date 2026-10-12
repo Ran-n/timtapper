@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/12 01:24:53.468214 )
+[//]: # (+ Revised: 	2026/10/12 02:05:37.652914 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,25 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- Added two-face portraits for cards with two characters: a list of boxes in `scripts/portrait_crops.json` gives each face its own vertical strip, used for ST22-001 Ace & Newgate
+- Added `scripts/portrait_overlays.json`, which lists where the card image's "SAMPLE" watermark crosses a face so `build_leaders.py` lifts it off before cropping
+
+### Changed
+
+- Changed the die-roll badge on round rows to a green six-pip die when won and a red one-pip die when lost
+- Changed records to show the win-loss record and the win rate as two separate badges on the events list and the stats screen
+- Changed event tiles on the Events tab to show the event type as a badge with an icon at the top
+- Changed the leader picker's colour filter to a single row of colour dots
+- Changed leader portraits to have a border in the leader's colours
+
+### Fixed
+
+- Fixed the red Shanks (OP09-001) leader portrait showing only his hair
+- Fixed the Belo Betty (OP05-002) leader portrait showing only one eye and her forehead
+- Fixed the Ace & Newgate (ST22-001) leader portrait cutting off half of Ace's face and leaving out Newgate
 
 ## [0.3.1] — 2026-10-12
 
