@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/12 17:26:41.159376 )
+[//]: # (+ Revised: 	2026/10/12 18:04:08.929558 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Fixed
+
+- Fixed the Android app failing on first start with "no such table: color": the migrations ship compiled, and Alembic skipped them, so no tables were created
 
 ## [0.5.0] — 2026-10-12
 

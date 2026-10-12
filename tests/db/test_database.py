@@ -2,19 +2,22 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.253199
-Revised: 2026/10/12 16:55:00.159457
+Revised: 2026/10/12 18:01:07.758189
 """
 
+import compileall
 import datetime as dt
+import shutil
+from pathlib import Path
 
 import pytest
 from alembic import command
-from alembic.config import Config
 from sqlalchemy import inspect, select, text
 from sqlalchemy.exc import IntegrityError
 
 from db import Database
-from db.database import _MIGRATIONS_DIR
+from db import database as database_module
+from db.database import _MIGRATIONS_DIR, alembic_config
 from db.models import COLORS, EVENT_TYPES, Color, Event, EventType, Match
 
 
@@ -38,13 +41,45 @@ def test_migrate_is_idempotent(db):
 def test_migrations_downgrade_and_upgrade_cleanly(tmp_path):
     database = Database(tmp_path / "roundtrip.db")
     database.migrate()
-    cfg = Config()
-    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
-    cfg.attributes["connection_engine"] = database.engine
+    cfg = alembic_config(database.engine)
     command.downgrade(cfg, "base")
     assert "event" not in inspect(database.engine).get_table_names()
     database.migrate()
     assert "event" in inspect(database.engine).get_table_names()
+    database.dispose()
+
+
+def _sourceless_copy(dest: Path) -> Path:
+    """The migrations as `flet build` ships them: legacy .pyc beside each module, no .py sources."""
+    shutil.copytree(_MIGRATIONS_DIR, dest, ignore=shutil.ignore_patterns("__pycache__"))
+    assert compileall.compile_dir(dest, legacy=True, quiet=1)
+    for source in dest.rglob("*.py"):
+        source.unlink()
+    return dest
+
+
+@pytest.mark.regression
+def test_migrate_runs_compiled_only_migrations(tmp_path, monkeypatch):
+    """The 0.5.0 APK opened on "no such table: color": Alembic skipped the .pyc-only revisions."""
+    monkeypatch.setattr(database_module, "_MIGRATIONS_DIR", _sourceless_copy(tmp_path / "migrations"))
+    database = Database(tmp_path / "apk.db")
+    database.migrate()
+    assert {"color", "event", "match"} <= set(inspect(database.engine).get_table_names())
+    with database.session() as s:
+        assert s.scalar(text("SELECT version_num FROM alembic_version")) == _head_revision()
+    database.dispose()
+
+
+def test_migrate_refuses_to_run_without_migrations(tmp_path, monkeypatch):
+    """No revisions found must fail loudly, not leave an empty database behind."""
+    empty = tmp_path / "migrations"
+    shutil.copytree(_MIGRATIONS_DIR, empty, ignore=shutil.ignore_patterns("__pycache__", "versions"))
+    (empty / "versions").mkdir()
+    monkeypatch.setattr(database_module, "_MIGRATIONS_DIR", empty)
+    database = Database(tmp_path / "empty.db")
+    with pytest.raises(RuntimeError, match="no migrations found"):
+        database.migrate()
+    assert inspect(database.engine).get_table_names() == []
     database.dispose()
 
 
@@ -62,9 +97,7 @@ def test_each_migration_step_upgrades_a_database_with_data(tmp_path):
     from alembic.script import ScriptDirectory
 
     database = Database(tmp_path / "steps.db")
-    cfg = Config()
-    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
-    cfg.attributes["connection_engine"] = database.engine
+    cfg = alembic_config(database.engine)
     revisions = [r.revision for r in reversed(list(ScriptDirectory.from_config(cfg).walk_revisions()))]
     seeded = False
     for revision in revisions:
@@ -81,8 +114,7 @@ def test_each_migration_step_upgrades_a_database_with_data(tmp_path):
 def _head_revision() -> str:
     from alembic.script import ScriptDirectory
 
-    cfg = Config()
-    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
+    cfg = alembic_config()
     return ScriptDirectory.from_config(cfg).get_current_head()
 
 
@@ -130,9 +162,7 @@ def test_draws_are_rejected(sample_event, seeded_db):
 def test_migration_0002_turns_stored_draws_into_losses(tmp_path):
     """A draw is a loss for both players, so history logged with draws keeps its games as losses."""
     database = Database(tmp_path / "draws.db")
-    cfg = Config()
-    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
-    cfg.attributes["connection_engine"] = database.engine
+    cfg = alembic_config(database.engine)
     command.upgrade(cfg, "0001")
     with database.engine.begin() as conn:
         conn.execute(text("INSERT INTO leader (id, code, name) VALUES (1, 'OP01-001', 'Zoro')"))
@@ -164,9 +194,7 @@ def test_schema_refuses_impossible_placements(sample_event, seeded_db, placement
 
 def test_migration_0003_adds_empty_placement_to_existing_events(tmp_path):
     database = Database(tmp_path / "placement.db")
-    cfg = Config()
-    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
-    cfg.attributes["connection_engine"] = database.engine
+    cfg = alembic_config(database.engine)
     command.upgrade(cfg, "0002")
     with database.engine.begin() as conn:
         conn.execute(text("INSERT INTO event (id, name, event_type_id, date) VALUES (1, 'old', 1, '2026-01-01')"))

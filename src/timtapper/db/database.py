@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.803606
-Revised: 2026/10/11 16:27:22.277157
+Revised: 2026/10/12 18:01:07.680738
 
 The on-device database: one SQLite file, schema owned by Alembic (migrations
 ship inside the app and run on every start, so an app update never wipes or
@@ -15,6 +15,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -30,6 +31,19 @@ def _enable_foreign_keys(dbapi_conn, _record) -> None:
     cur.close()
 
 
+def alembic_config(engine: Engine | None = None, migrations_dir: Path | None = None) -> Config:
+    """Alembic settings for the bundled migrations, run on `engine` when given.
+
+    `sourceless`: `flet build` ships the app as .pyc only, and without it Alembic skips revision files
+    that have no .py beside them, so a fresh install found no migrations and got no tables."""
+    cfg = Config()
+    cfg.set_main_option("script_location", str(migrations_dir or _MIGRATIONS_DIR))
+    cfg.set_main_option("sourceless", "true")
+    if engine is not None:
+        cfg.attributes["connection_engine"] = engine
+    return cfg
+
+
 class Database:
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -40,9 +54,9 @@ class Database:
 
     def migrate(self) -> None:
         """Bring the schema up to the latest revision."""
-        cfg = Config()
-        cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
-        cfg.attributes["connection_engine"] = self.engine
+        cfg = alembic_config(self.engine)
+        if ScriptDirectory.from_config(cfg).get_current_head() is None:  # else upgrade is a silent no-op
+            raise RuntimeError(f"no migrations found in {cfg.get_main_option('script_location')}")
         _log.info("migrating database at %s", self.path)
         command.upgrade(cfg, "head")
 
