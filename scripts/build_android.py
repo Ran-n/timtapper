@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 11:01:44.904139
-Revised: 2026/10/13 11:04:04.961104
+Revised: 2026/10/13 16:36:23.073937
 
 Build a release-signed Android bundle (for Google Play) or per-ABI APKs (for sideloading)
 and copy them into dist/ with the version in the name:
@@ -14,10 +14,13 @@ Signs with the upload key. flet build reads it from the FLET_ANDROID_SIGNING_* v
 are filled in from ../secrets/timtapper-upload.jks (alias "upload") and the password in
 ../secrets/timtapper-upload.pass, both kept outside the repository. Without a key the build stops instead of
 falling back to flet's debug key, which Google Play rejects. After building, each artifact's certificate is
-checked against the key store's.
+checked against the key store's: with keytool for the bundle (JAR-signed) and with the Android SDK's apksigner
+for APKs (APK Signature Scheme v2/v3 only, which keytool can't read).
 """
 
 import argparse
+import base64
+import hashlib
 import os
 import re
 import shutil
@@ -104,17 +107,47 @@ def versioned_name(artifact: Path, version: str) -> str:
     return f"{name}-{version}{sep}{rest}{artifact.suffix}"
 
 
-def _certificate(command: list[str], env: Mapping[str, str] | None = None) -> str:
+def _run(command: list[str], env: Mapping[str, str] | None = None) -> str:
     result = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
-    pem = re.search(r"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", result.stdout, re.DOTALL)
-    if result.returncode or not pem:
-        raise BuildError(f"{' '.join(command[:2])} found no certificate: {result.stderr.strip() or result.stdout}")
-    return pem.group()
+    if result.returncode:
+        raise BuildError(f"{' '.join(command[:2])} failed: {result.stderr.strip() or result.stdout.strip()}")
+    return result.stdout
+
+
+def _pem_digest(command: list[str], env: Mapping[str, str] | None = None) -> str:
+    """SHA-256 of the one certificate `command` prints as PEM, as lowercase hex."""
+    pem = re.search(r"-----BEGIN CERTIFICATE-----(.+?)-----END CERTIFICATE-----", _run(command, env), re.DOTALL)
+    if not pem:
+        raise BuildError(f"{' '.join(command[:2])} found no certificate")
+    return hashlib.sha256(base64.b64decode("".join(pem.group(1).split()))).hexdigest()
+
+
+def find_apksigner(environ: Mapping[str, str] = os.environ) -> Path:
+    """apksigner from the newest build-tools of the Android SDK flet builds with."""
+    homes = [environ.get("ANDROID_HOME"), environ.get("ANDROID_SDK_ROOT")]
+    homes += [Path.home() / "Android" / "sdk", Path(environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk"]
+    name = "apksigner.bat" if os.name == "nt" else "apksigner"
+    for home in filter(None, homes):
+        found = sorted(
+            Path(home).glob(f"build-tools/*/{name}"), key=lambda p: [int(n) for n in re.findall(r"\d+", p.parent.name)]
+        )
+        if found:
+            return found[-1]
+    raise BuildError("no apksigner in any Android SDK build-tools (set ANDROID_HOME)")
+
+
+def _apk_digest(apk: Path) -> str:
+    # the minimum SDK only picks which signature schemes verify must find; this check is about who signed
+    out = _run([str(find_apksigner()), "verify", "--print-certs", "--min-sdk-version", "24", str(apk)])
+    digests = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([0-9a-f]{64})$", out, re.MULTILINE)
+    if len(digests) != 1:
+        raise BuildError(f"apksigner verify found {len(digests)} signers in {apk.name}, expected 1")
+    return digests[0]
 
 
 def check_signed(artifact: Path, env: Mapping[str, str]) -> None:
     """Raise unless `artifact` carries the upload key's certificate (and not flet's debug one)."""
-    expected = _certificate(
+    expected = _pem_digest(
         [
             "keytool",
             "-exportcert",
@@ -128,7 +161,11 @@ def check_signed(artifact: Path, env: Mapping[str, str]) -> None:
         ],
         env={**os.environ, **env},
     )
-    if _certificate(["keytool", "-printcert", "-rfc", "-jarfile", str(artifact)]) != expected:
+    if artifact.suffix == ".apk":
+        actual = _apk_digest(artifact)
+    else:
+        actual = _pem_digest(["keytool", "-printcert", "-rfc", "-jarfile", str(artifact)])
+    if actual != expected:
         raise BuildError(f"{artifact.name} is not signed with the upload key")
 
 

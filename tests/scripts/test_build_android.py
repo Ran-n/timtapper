@@ -2,10 +2,11 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 11:04:05.049410
-Revised: 2026/10/13 11:04:05.049410
+Revised: 2026/10/13 16:36:23.152207
 
 Release Android builds: version codes, signing environment, flet command, dist names and the
-upload-key certificate check (against real keytool/jarsigner signatures).
+upload-key certificate check (against real keytool/jarsigner signatures for bundles and real
+apksigner v2/v3 signatures for APKs).
 """
 
 import importlib.util
@@ -26,6 +27,18 @@ _spec.loader.exec_module(build_android)
 BuildError = build_android.BuildError
 PASSWORD = "test-password"
 needs_jdk = pytest.mark.skipif(not shutil.which("keytool") or not shutil.which("jarsigner"), reason="needs a JDK")
+
+
+def _apksigner() -> Path | None:
+    try:
+        return build_android.find_apksigner()
+    except build_android.BuildError:
+        return None
+
+
+needs_apksigner = pytest.mark.skipif(
+    not shutil.which("keytool") or _apksigner() is None, reason="needs a JDK and the Android SDK build-tools"
+)
 
 
 def test_version_code_examples():
@@ -226,6 +239,87 @@ def test_check_signed_rejects_an_unsigned_archive(tmp_path, upload_key):
         z.writestr("base/manifest/AndroidManifest.xml", b"manifest")
     with pytest.raises(BuildError, match="found no certificate"):
         build_android.check_signed(archive, upload_key)
+
+
+def _apk(tmp_path: Path, name: str) -> Path:
+    apk = tmp_path / name
+    with zipfile.ZipFile(apk, "w") as z:
+        z.writestr("AndroidManifest.xml", b"manifest")
+    return apk
+
+
+def _signed_apk(tmp_path: Path, store: Path, alias: str) -> Path:
+    """An APK signed the way flet's release APKs are: APK Signature Scheme v2/v3 only, no JAR signature."""
+    apk = _apk(tmp_path, f"signed-by-{alias}.apk")
+    subprocess.run(
+        [
+            str(_apksigner()),
+            "sign",
+            "--ks",
+            str(store),
+            "--ks-key-alias",
+            alias,
+            "--ks-pass",
+            f"pass:{PASSWORD}",
+            "--min-sdk-version",
+            "24",
+            "--v1-signing-enabled",
+            "false",
+            str(apk),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return apk
+
+
+@needs_apksigner
+@pytest.mark.regression
+def test_check_signed_accepts_an_apk_signed_without_a_jar_signature(tmp_path, upload_key):
+    # keytool -printcert -jarfile reads only JAR (v1) signatures, so every v2-only release APK was
+    # rejected with "Not a signed jar file" even though it carried the upload key
+    apk = _signed_apk(tmp_path, Path(upload_key[build_android.STORE_ENV]), "upload")
+    build_android.check_signed(apk, upload_key)
+
+
+@needs_apksigner
+def test_check_signed_rejects_an_apk_signed_with_another_key(tmp_path, upload_key):
+    other = tmp_path / "debug.jks"
+    _make_key(other, "androiddebugkey", "Android Debug")
+    apk = _signed_apk(tmp_path, other, "androiddebugkey")
+    with pytest.raises(BuildError, match="not signed with the upload key"):
+        build_android.check_signed(apk, upload_key)
+
+
+@needs_apksigner
+def test_check_signed_rejects_an_unsigned_apk(tmp_path, upload_key):
+    with pytest.raises(BuildError, match="apksigner.* failed"):
+        build_android.check_signed(_apk(tmp_path, "unsigned.apk"), upload_key)
+
+
+def _build_tools(home: Path, *versions: str) -> None:
+    name = "apksigner.bat" if build_android.os.name == "nt" else "apksigner"
+    for version in versions:
+        (home / "build-tools" / version).mkdir(parents=True)
+        (home / "build-tools" / version / name).write_text("")
+
+
+def test_find_apksigner_picks_the_newest_build_tools_by_number(tmp_path):
+    _build_tools(tmp_path, "9.0.0", "35.0.0", "34.0.0")
+    found = build_android.find_apksigner({"ANDROID_HOME": str(tmp_path), "LOCALAPPDATA": str(tmp_path / "none")})
+    assert found.parent.name == "35.0.0"
+
+
+def test_find_apksigner_falls_back_to_android_sdk_root(tmp_path):
+    _build_tools(tmp_path / "sdk", "34.0.0")
+    found = build_android.find_apksigner({"ANDROID_SDK_ROOT": str(tmp_path / "sdk"), "LOCALAPPDATA": str(tmp_path)})
+    assert found.parent.name == "34.0.0"
+
+
+def test_find_apksigner_without_an_sdk_refuses(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_android.Path, "home", lambda: tmp_path)
+    with pytest.raises(BuildError, match="no apksigner"):
+        build_android.find_apksigner({"LOCALAPPDATA": str(tmp_path)})
 
 
 def test_main_reports_a_failed_build_and_exits_1(monkeypatch):

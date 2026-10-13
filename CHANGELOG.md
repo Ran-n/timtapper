@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/13 15:56:41.823927 )
+[//]: # (+ Revised: 	2026/10/13 16:46:53.648476 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -14,6 +14,11 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [1.2.1] — 2026-10-13
 
+### Changed
+
+- Shortened the README to a first read with a download button for the latest release; every feature in detail now lives in `docs/FEATURES.md`, and building, testing and the leader catalogue in `docs/DEVELOPMENT.md`
+- Retook the README screenshots
+
 ### Removed
 
 - Removed every portrait taken from another site: all 138 bundled portraits are now cropped from the card art by `scripts/build_leaders.py`
@@ -22,6 +27,8 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 - Fixed the leader portraits that cut off, or missed, the leader's face: all 138 were checked by hand against the full card, each now frames the whole head, and the two-character cards ST12-001 and ST30-001 show both faces
 - Fixed the "SAMPLE" watermark showing across the face in 32 portraits: it's now removed before cropping, recovered exactly where it's see-through and painted over from the surrounding art on the 4 cards where it's solid
+- Fixed Settings showing 1.2.0 as the app version
+- Fixed `scripts/build_android.py apk` rejecting every release APK as unsigned: APKs carry only v2/v3 signatures, which keytool can't read, so they're now checked with the Android SDK's apksigner
 - Fixed the leader picker keeping its old order after a round's opponent was changed (or the round made a bye or played again): it lists your most-played opponents first, and now counts the change straight away
 - Fixed a leader update stopping halfway when a card image was too large to open safely: that leader's portrait is now skipped and the rest still download
 
