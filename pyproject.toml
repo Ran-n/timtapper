@@ -1,6 +1,6 @@
 [project]
 name = "timtapper"
-version = "0.5.2"
+version = "1.0.0"
 description = "Local-first One Piece TCG match tracker (Flet, Android + desktop) with shareable stat images."
 readme = "README.md"
 authors = [{ name = "Ran#" }]
