@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/13 12:44:18.299260 )
+[//]: # (+ Revised: 	2026/10/13 12:44:40.619595 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -15,6 +15,10 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 
 - Added the Dracula (with its Alucard light palette) and Rosé Pine (Main and Dawn) themes
+
+### Fixed
+
+- Fixed the portraits of OP03-022, OP10-099 and ST13-001 to frame their faces
 
 ## [1.1.0] — 2026-10-13
 
