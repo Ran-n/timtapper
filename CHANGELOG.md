@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/13 12:44:50.923825 )
+[//]: # (+ Revised: 	2026/10/13 12:44:57.549436 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -16,6 +16,7 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 - Added the Dracula (with its Alucard light palette) and Rosé Pine (Main and Dawn) themes
 - Added `scripts/build_android.py`: a Google Play bundle or per-ABI APKs signed with the upload key (never the debug key), checked for its certificate and copied into `dist/` with the version in the name
+- Added a privacy policy (PRIVACY.md) for the Google Play listing: nothing collected, public card data downloaded only
 
 ### Fixed
 

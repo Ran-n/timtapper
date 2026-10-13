@@ -241,6 +241,11 @@ docs/                   logo.png wordmark and screenshots/ for the README
 tests/                  mirrors src/timtapper; rendered/ drives the real app (marker `desktop`)
 ```
 
+## Privacy
+
+timtapper collects nothing: your data stays on your device, and the app only downloads public card data. See
+[PRIVACY.md](PRIVACY.md), the policy linked from the Google Play listing.
+
 ## Disclaimer
 
 timtapper is a fan-made tool. It is not affiliated with or endorsed by Bandai, Eiichiro Oda or Shueisha. The leader
