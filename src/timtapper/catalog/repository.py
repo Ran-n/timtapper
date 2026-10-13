@@ -2,14 +2,16 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.221073
-Revised: 2026/10/12 23:54:36.552363
+Revised: 2026/10/13 08:59:20.685159
 
-Leader catalogue persistence: upsert from LeaderRecords, read as plain Leader values.
+Leader catalogue persistence: upsert from LeaderRecords, read as plain Leader values; the sets' release dates,
+and from them the set an event on a given day was played in.
 """
 
+import datetime as dt
 import json
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -70,6 +72,12 @@ def load_bundled_sources(path: Path = BUNDLED_LEADERS) -> tuple[str, ...]:
     return tuple(raw.get("sources", ()))
 
 
+def load_bundled_releases(path: Path = BUNDLED_LEADERS) -> dict[str, dt.date]:
+    """Set code -> English release date, as bundled (empty for a list built before they were recorded)."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {code: dt.date.fromisoformat(day) for code, day in raw.get("releases", {}).items()}
+
+
 class LeaderRepository:
     def __init__(self, db: Database) -> None:
         self.db = db
@@ -103,6 +111,31 @@ class LeaderRepository:
         _log.info("leader catalogue synced: %d added, %d updated", added, updated)
         return added, updated
 
+    def set_releases(self, releases: Mapping[str, dt.date]) -> int:
+        """Store each set's release date, adding sets not seen yet; a set left out keeps the date it has.
+        Returns how many dates changed."""
+        changed = 0
+        with self.db.session() as s:
+            sets = {cs.code: cs for cs in s.scalars(select(CardSet))}
+            for code, day in releases.items():
+                card_set = sets.get(code)
+                if card_set is None:
+                    s.add(CardSet(code=code, release_date=day))
+                elif card_set.release_date != day:
+                    card_set.release_date = day
+                else:
+                    continue
+                changed += 1
+        if changed:
+            _log.info("%d set release dates stored", changed)
+        return changed
+
+    def release_dates(self) -> dict[str, dt.date]:
+        """Set code -> release date, for the sets that have one."""
+        with self.db.session() as s:
+            rows = s.execute(select(CardSet.code, CardSet.release_date).where(CardSet.release_date.is_not(None)))
+            return {code: day for code, day in rows}
+
     def ensure(self, s: Session, code: str) -> LeaderRow:
         """Leader row for `code`, creating a bare placeholder when unknown (e.g. a backup from a newer catalogue)."""
         row = s.scalar(select(LeaderRow).where(LeaderRow.code == code))
@@ -130,6 +163,12 @@ class LeaderRepository:
     def count(self) -> int:
         with self.db.session() as s:
             return s.scalar(select(func.count()).select_from(LeaderRow)) or 0
+
+
+def install_bundled(repo: LeaderRepository, path: Path = BUNDLED_LEADERS) -> None:
+    """Bring the catalogue up to the list shipped with the app: its leaders and its sets' release dates."""
+    repo.upsert(load_bundled(path))
+    repo.set_releases(load_bundled_releases(path))
 
 
 def search(leaders: list[Leader], query: str) -> list[Leader]:
@@ -176,3 +215,20 @@ def sort_set_codes(codes: Iterable[str]) -> list[str]:
 def set_codes(leaders: Iterable[Leader]) -> list[str]:
     """The sets the leaders come from, in sort_set_codes' order."""
     return sort_set_codes(leader.set_code for leader in leaders if leader.set_code)
+
+
+def is_main_set(code: str) -> bool:
+    """A main booster (OP01, OP16...): the sets formats are named after."""
+    return _set_sort_key(code)[:2] == (0, 0)
+
+
+def set_on(day: dt.date, codes: Iterable[str], releases: Mapping[str, dt.date]) -> str | None:
+    """The set an event on `day` is played in: the newest main set out by then (extra boosters, starters and promo
+    packs join the format of the main set before them). With no release date known for any main set, the newest of
+    `codes`; with dates known but nothing out yet, None."""
+    ordered = sort_set_codes(codes)
+    main = [code for code in ordered if is_main_set(code) and code in releases]
+    if not main:
+        return ordered[0] if ordered else None
+    out = [code for code in main if releases[code] <= day]
+    return max(out, key=lambda code: releases[code]) if out else None

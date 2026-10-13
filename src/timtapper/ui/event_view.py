@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.952473
-Revised: 2026/10/13 01:17:14.707740
+Revised: 2026/10/13 08:59:20.982995
 
 Event screen: everything edited in place — name, type, date, standing, set,
 own leader and notes in the header; each round as an expandable tile: Swiss,
@@ -153,7 +153,7 @@ class EventScreen:
         def pick_date(_e) -> None:
             def on_change(e: ft.Event[ft.DatePicker]) -> None:
                 if e.control.value:
-                    self._save_event(date=picked_day(e.control.value))
+                    self._save_event(**self.ctx.redate(ev, picked_day(e.control.value)))
 
             self.ctx.page.show_dialog(
                 ft.DatePicker(

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:12.217340
-Revised: 2026/10/13 07:39:26.697116
+Revised: 2026/10/13 08:59:21.441659
 """
 
 import asyncio
@@ -22,8 +22,15 @@ NEW = LeaderRecord("OP99-001", "Newbie", "OP99", "Future", ("Red",))
 
 @pytest.fixture
 def api(monkeypatch):
-    """Fake optcgapi: `api["sources"]` is what the set list returns (or raises); calls are counted."""
-    state = {"sources": load_bundled_sources(), "set_checks": 0, "leader_downloads": 0}
+    """Fake optcgapi and Limitless TCG: `api["sources"]` is what the set list returns (or raises), `api["releases"]`
+    the release dates (or what they raise); calls are counted."""
+    state = {
+        "sources": load_bundled_sources(),
+        "releases": {"OP99": dt.date(2027, 1, 8)},
+        "set_checks": 0,
+        "leader_downloads": 0,
+        "release_checks": 0,
+    }
 
     def sources():
         state["set_checks"] += 1
@@ -35,9 +42,16 @@ def api(monkeypatch):
         state["leader_downloads"] += 1
         return [NEW]
 
+    def releases():
+        state["release_checks"] += 1
+        if isinstance(state["releases"], Exception):
+            raise state["releases"]
+        return state["releases"]
+
     monkeypatch.setattr(updates_mod, "fetch_sources", sources)
     monkeypatch.setattr(sync_mod, "fetch_sources", sources)
     monkeypatch.setattr(sync_mod, "fetch_leaders", leaders)
+    monkeypatch.setattr(sync_mod, "fetch_release_dates", releases)
     monkeypatch.setattr(sync_mod.portraits, "download_missing", lambda codes: (len(codes), 0))
     return state
 
@@ -49,6 +63,7 @@ def with_new_set(api, set_id="OP-99"):
 async def test_current_catalogue_only_records_the_check(ctx, api, prefs, page):
     await ctx.leader_updates.run_if_due()
     assert api["set_checks"] == 1 and api["leader_downloads"] == 0
+    assert api["release_checks"] == 0  # every main set already has its date
     assert PREF_CHECKED in prefs and PREF_SOURCES not in prefs
     assert page.dialogs == []
 
@@ -58,6 +73,7 @@ async def test_new_set_triggers_update_and_notifies(ctx, api, prefs, page):
     await ctx.leader_updates.run_if_due()
     assert api["leader_downloads"] == 1
     assert any(ld.code == "OP99-001" for ld in ctx.leaders)
+    assert ctx.release_dates["OP99"] == dt.date(2027, 1, 8)
     assert "OP-99" in prefs[PREF_SOURCES].split(",")
     assert page.dialogs[-1].content.value == "1 new leaders added"
     assert page.dialogs[-1].data == "info"
@@ -187,6 +203,40 @@ async def test_updates_never_overlap(ctx, prefs, monkeypatch):
     await asyncio.gather(ctx.leader_updates.run(), ctx.leader_updates.run())
     assert peaks == [1, 1]
     assert prefs[PREF_SOURCES] == "OP-01"
+
+
+def undated_set(ctx):
+    """OP99 synced while Limitless TCG didn't list it yet: in the catalogue, with no release date."""
+    ctx.leader_repo.upsert([NEW])
+    ctx.invalidate_leaders()
+
+
+async def test_a_main_set_without_its_date_has_it_asked_for_again(ctx, api, prefs, page):
+    undated_set(ctx)
+    assert "OP99" not in ctx.release_dates
+    await ctx.leader_updates.run_if_due()
+    assert api["release_checks"] == 1 and api["leader_downloads"] == 0
+    assert ctx.release_dates["OP99"] == dt.date(2027, 1, 8)  # the cache was dropped, the new date is seen
+    assert page.dialogs == []
+
+
+async def test_a_date_still_missing_is_asked_for_on_the_next_check_only(ctx, api, prefs):
+    undated_set(ctx)
+    api["releases"] = {}
+    await ctx.leader_updates.run_if_due()
+    await ctx.leader_updates.run_if_due()  # checked a moment ago: not due
+    assert api["release_checks"] == 1
+    assert "OP99" not in ctx.release_dates
+
+
+@pytest.mark.parametrize("failure", [CatalogError("limitless down"), RuntimeError("boom")])
+async def test_a_failed_release_date_check_is_logged_not_shown(ctx, api, prefs, page, caplog, failure):
+    undated_set(ctx)
+    api["releases"] = failure
+    await ctx.leader_updates.run_if_due()
+    assert "set release dates not refreshed" in caplog.text
+    assert page.dialogs == []
+    assert PREF_CHECKED in prefs  # the set list check itself went fine
 
 
 @pytest.mark.live

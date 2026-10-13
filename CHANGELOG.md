@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/13 08:07:37.512695 )
+[//]: # (+ Revised: 	2026/10/13 09:33:41.362263 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- Added each set's English release date, bundled and synced from Limitless TCG; a main set still missing one is asked for again at the daily check
+
+### Changed
+
+- Changed a new event's set from the newest set to the main set out on its date; changing the date moves the set with it unless it was picked by hand
 
 ## [1.0.0] — 2026-10-13
 

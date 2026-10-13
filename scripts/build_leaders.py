@@ -2,10 +2,11 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.795206
-Revised: 2026/10/13 07:39:23.876145
+Revised: 2026/10/13 08:59:21.130828
 
 Refresh the leader list bundled with the app (src/timtapper/assets/data/leaders.json)
-and the leader portraits (src/timtapper/assets/leaders/*.webp) from optcgapi.com.
+and the leader portraits (src/timtapper/assets/leaders/*.webp) from optcgapi.com,
+and the sets' release dates from Limitless TCG.
 Installed apps pick up new sets on their own; run this before a release so fresh
 installs start current and skip that first download:
 
@@ -23,6 +24,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent.parent / "src" / "timtapper"
 sys.path.insert(0, str(APP_DIR))
 
+from catalog.limitless import fetch_release_dates  # noqa: E402
 from catalog.optcgapi import IMAGE_TIMEOUT, CatalogError, client_session, fetch_leaders, fetch_sources  # noqa: E402
 from catalog.portraits import (  # noqa: E402
     BUNDLED_DIR,
@@ -67,12 +69,15 @@ def main() -> int:
     try:
         leaders = fetch_leaders()
         sources = fetch_sources()
+        releases = fetch_release_dates()
     except CatalogError as exc:
         log.error("could not build the leader list: %s", exc)
         return 1
     payload = {
         "generated": dt.date.today().isoformat(),
         "sources": list(sources),  # lets the app tell when a newer set is out
+        # set code -> English release date: a new event goes in the set out on its date
+        "releases": {code: day.isoformat() for code, day in sorted(releases.items())},
         "leaders": [r.to_json() for r in leaders],
     }
     OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")

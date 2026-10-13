@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/13 07:39:28.221889 )
+[//]: # (+ Revised: 	2026/10/13 09:02:09.738213 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -34,8 +34,10 @@ device, and a JSON backup moves them to another install.
   ("Top 4 · #3 of 32", "1st place", "Dropped"; testing sessions have no standings).
   Search the list by name, or open its filters to narrow it by your leader, event type and set; the filters stay set
   while you open an event and come back. A new event is named after its type and count ("Local #4"), starts in the
-  newest set, follows a type change while you haven't renamed it, and is discarded if you go back without changing
-  anything.
+  set that was out on its date (the newest main booster by then, by English release date; extra boosters, starters
+  and promo packs join the format before them), follows a type change while you haven't renamed it, and is discarded
+  if you go back without changing anything. Changing the date moves the set with it, unless you picked the set
+  yourself.
 - **Rounds**, the way [davyback.gg](https://davyback.gg) logs them, and then some: each is **Swiss**, **top cut** or a
   **bye** (no opponent, an automatic win, shown with a jester where a leader would be). A Swiss row reads die roll,
   turn order and result; tap any of them to cycle it (the die shows a green six when you won it, a red one when you
@@ -84,18 +86,20 @@ device, and a JSON backup moves them to another install.
 - **Leader catalogue**: 138 leaders up to OP17 ship with the app, each with a small portrait cropped from its card art,
   so it works offline. New sets arrive on their own: once a day, at startup, the app asks
   [optcgapi.com](https://optcgapi.com) for its list of sets (a few KB) and downloads leaders and portraits only when a
-  new set is listed. Failures are logged and retried on the next start. *Settings → Update leaders* forces a refresh.
+  new set is listed. Each set's English release date comes from [Limitless TCG](https://onepiece.limitlesstcg.com/cards)
+  (optcgapi.com has none) on that same update, and is asked for again at the daily check while a main set still has
+  none. Failures are logged and retried on the next start. *Settings → Update leaders* forces a refresh.
 - **Backup**: export every event to a JSON file and restore it on any install.
 
 ## Stack
 
-| Layer   | Technology                                                       |
-|---------|------------------------------------------------------------------|
-| UI      | Flet 1.0 (Android APK + desktop)                                 |
-| Storage | SQLite via SQLAlchemy 2.0, schema migrated by Alembic on startup |
-| Images  | Pillow, with the Poppins font bundled (OFL)                      |
-| Leaders | Bundled JSON + optcgapi.com (httpx)                              |
-| Tooling | uv, ruff, pytest (+ hypothesis, respx)                           |
+| Layer   | Technology                                                            |
+|---------|-----------------------------------------------------------------------|
+| UI      | Flet 1.0 (Android APK + desktop)                                      |
+| Storage | SQLite via SQLAlchemy 2.0, schema migrated by Alembic on startup      |
+| Images  | Pillow, with the Poppins font bundled (OFL)                           |
+| Leaders | Bundled JSON + optcgapi.com, release dates from Limitless TCG (httpx) |
+| Tooling | uv, ruff, pytest (+ hypothesis, respx)                                |
 
 ## Requirements
 
@@ -143,7 +147,8 @@ returns nothing on desktop, so the script grabs the window with Pillow); keep th
 ## Refresh the bundled leaders
 
 Installed apps fetch new sets themselves, so this only matters for fresh installs: run it before a release so they
-start current. It rewrites `leaders.json`, including the set ids the app compares against to spot a new release, and
+start current. It rewrites `leaders.json`, including the set ids the app compares against to spot a new release and
+each set's release date, and
 adds a portrait to `assets/leaders/` for every leader that lacks one (`--force` re-crops them all):
 
 ```sh
@@ -170,7 +175,7 @@ downloads on its own always get the default crop until the next release ships th
 ```sh
 uv run pytest                 # unit, DB, migrations, UI widget-tree, property, regression tests
 uv run pytest --cov           # the same, failing below 99% branch coverage (fail_under in pyproject.toml)
-uv run pytest -m "live and not desktop"  # against the real optcgapi.com and davyback.gg (network, ~40 s)
+uv run pytest -m "live and not desktop"  # against the real optcgapi.com, davyback.gg and Limitless TCG (network, ~40 s)
 uv run pytest -m desktop      # the real app, rendered (Windows; takes over the mouse and screen for ~2 min)
 uv run pytest -m "desktop or live"       # both, including a real click on Update leaders in the real app
 uv run ruff format src scripts tests && uv run ruff check src scripts tests
@@ -206,7 +211,8 @@ dp, where the labels are longest: one set per scaling, since text renders differ
 ```
 src/timtapper/          Flet app root (flet build packages this folder)
   main.py               entry point: open DB, migrate, sync leaders, route
-  catalog/              leader catalogue: optcgapi parser, bundled list, repository, portraits, daily sync
+  catalog/              leader catalogue: optcgapi and Limitless TCG parsers, bundled list, repository, portraits,
+                        daily sync
   events/               events and rounds: CRUD as plain dataclasses
   stats/                pure stat functions (records, splits, matchups)
   share/                Pillow share cards + share-sheet/save delivery

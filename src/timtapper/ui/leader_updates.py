@@ -2,13 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:11.971755
-Revised: 2026/10/13 07:39:25.170476
+Revised: 2026/10/13 08:59:20.833201
 
 Keeps the leader catalogue current. The Settings button calls run(); at
 startup run_if_due() checks in the background, at most once a day, whether
 optcgapi.com lists a set this install hasn't synced yet, and only then
-downloads the multi-MB card lists. Background failures are logged, never
-shown: the user didn't ask for this update, and the next start retries.
+downloads the multi-MB card lists. A main set still missing its release
+date has it asked for again on that check. Background failures are logged,
+never shown: the user didn't ask for this update, and the next start retries.
 """
 
 import asyncio
@@ -18,8 +19,8 @@ from typing import TYPE_CHECKING
 import flet as ft
 
 from catalog.optcgapi import CatalogError, fetch_sources
-from catalog.repository import load_bundled_sources
-from catalog.sync import SyncResult, is_due, new_sources, sync_leaders
+from catalog.repository import load_bundled_sources, set_codes
+from catalog.sync import SyncResult, is_due, new_sources, sync_leaders, sync_release_dates, undated_main_sets
 from core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -65,6 +66,7 @@ class LeaderUpdater:
         fresh = new_sources({*stored, *load_bundled_sources()}, remote)
         if not fresh:
             _log.info("leader catalogue is current (%d sets)", len(remote))
+            await self._date_undated_sets()
             await self._remember(None)
             return
         _log.info("new sets out (%s) — updating leaders", ", ".join(fresh))
@@ -80,6 +82,23 @@ class LeaderUpdater:
             _log.warning("background leader update: %d portraits missing", result.failed_portraits)
         if result.added:
             self.ctx.notify(self.ctx._("{n} new leaders added").format(n=result.added))
+
+    async def _date_undated_sets(self) -> None:
+        """Ask Limitless TCG again for main sets synced before it listed them. Never raises."""
+        undated = undated_main_sets(set_codes(self.ctx.leaders), self.ctx.release_dates)
+        if not undated:
+            return
+        _log.info("no release date yet for %s — asking again", ", ".join(undated))
+        try:
+            changed = await asyncio.to_thread(sync_release_dates, self.ctx.leader_repo)
+        except CatalogError as exc:
+            _log.warning("set release dates not refreshed: %s", exc)
+            return
+        except Exception:  # a background task has no caller to raise to: log it, the next start retries
+            _log.exception("set release dates not refreshed")
+            return
+        if changed:
+            self.ctx.invalidate_leaders()
 
     # ---- persisted state ----------------------------------------------
     async def _recall(self) -> tuple[dt.datetime | None, tuple[str, ...]]:

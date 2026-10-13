@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.253199
-Revised: 2026/10/12 23:54:37.116463
+Revised: 2026/10/13 08:59:21.660533
 """
 
 import compileall
@@ -304,6 +304,31 @@ def test_migration_0005_makes_every_round_a_best_of_1_keeping_its_game(tmp_path)
         rows = conn.execute(text("SELECT id, result, went_first, won_die_roll FROM match ORDER BY id")).all()
         assert rows == [(1, "W", 0, 1), (2, None, None, None)]
     assert "game" not in inspect(database.engine).get_table_names()
+    database.dispose()
+
+
+def test_migration_0006_gives_sets_a_release_date_and_takes_it_back(tmp_path):
+    database = Database(tmp_path / "releases.db")
+    cfg = alembic_config(database.engine)
+    command.upgrade(cfg, "0005")
+    with database.engine.begin() as conn:
+        conn.execute(text("INSERT INTO card_set (id, code, name) VALUES (1, 'OP01', 'Romance Dawn')"))
+        conn.execute(text("INSERT INTO leader (id, code, name, set_id) VALUES (1, 'OP01-001', 'Roronoa Zoro', 1)"))
+        conn.execute(
+            text("INSERT INTO event (id, name, event_type_id, date, set_id) VALUES (1, 'old', 2, '2026-01-01', 1)")
+        )
+    command.upgrade(cfg, "0006")
+    with database.engine.begin() as conn:
+        assert conn.execute(text("SELECT code, name, release_date FROM card_set")).all() == [
+            ("OP01", "Romance Dawn", None)  # not known until the catalogue fills it in
+        ]
+        conn.execute(text("UPDATE card_set SET release_date = '2022-12-02'"))
+    command.downgrade(cfg, "0005")
+    with database.engine.connect() as conn:
+        assert conn.execute(text("SELECT code, name FROM card_set")).all() == [("OP01", "Romance Dawn")]
+        assert conn.execute(text("SELECT set_id FROM event")).scalar() == 1  # the event keeps its set
+        assert conn.execute(text("SELECT set_id FROM leader")).scalar() == 1
+    assert "release_date" not in {c["name"] for c in inspect(database.engine).get_columns("card_set")}
     database.dispose()
 
 

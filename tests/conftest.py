@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:45.015285
-Revised: 2026/10/12 23:54:36.799637
+Revised: 2026/10/13 08:59:21.204679
 
 Shared fixtures. Every DB test runs against a real, freshly migrated SQLite
 file (never mocks), seeded with the bundled leader catalogue.
@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from catalog import portraits
-from catalog.repository import LeaderRepository, load_bundled
+from catalog.repository import LeaderRepository, install_bundled
 from db import Database
 from events.repository import EventRepository
 
@@ -39,7 +39,7 @@ def db(tmp_path):
 
 @pytest.fixture
 def seeded_db(db):
-    LeaderRepository(db).upsert(load_bundled())
+    install_bundled(LeaderRepository(db))
     return db
 
 

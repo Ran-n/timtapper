@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.780273
-Revised: 2026/10/13 07:39:27.258881
+Revised: 2026/10/13 08:59:21.588014
 """
 
 import datetime as dt
@@ -824,6 +824,41 @@ async def test_the_events_set_and_dropped_are_set_in_place(screen, events, sampl
     switch.value = True
     await fire(switch.on_change, switch)
     assert events.get(sample_event.id).dropped is True
+
+
+async def pick_date(screen, page, day):
+    btn = by_data(screen.body, "date")
+    await fire(btn.on_click, btn)
+    picker = page.dialogs[-1]
+    picker.value = day
+    await fire(picker.on_change, picker)
+
+
+async def test_a_new_event_moved_back_in_time_follows_with_its_set(ctx, page, events):
+    draft = ctx.new_event("locals", dt.date(2026, 10, 12), None)
+    s = EventScreen(ctx, draft.id)
+    s.build()
+    assert by_data(s.body, "set").value == "OP17"
+    await pick_date(s, page, dt.date(2026, 7, 4))
+    assert events.get(draft.id).set_code == "OP16"
+    assert by_data(s.body, "set").value == "OP16"
+
+
+async def test_a_set_picked_by_hand_stays_when_the_date_changes(ctx, page, events):
+    draft = ctx.new_event("locals", dt.date(2026, 10, 12), None)
+    s = EventScreen(ctx, draft.id)
+    s.build()
+    dd = by_data(s.body, "set")
+    dd.value = "EB03"
+    await fire(dd.on_select, dd)
+    await pick_date(s, page, dt.date(2026, 7, 4))
+    assert events.get(draft.id).date == dt.date(2026, 7, 4)
+    assert events.get(draft.id).set_code == "EB03"
+
+
+async def test_a_set_not_noted_stays_not_noted_when_the_date_changes(screen, page, events, sample_event):
+    await pick_date(screen, page, dt.date(2026, 7, 4))
+    assert events.get(sample_event.id).set_code is None
 
 
 def test_a_set_the_catalogue_lost_still_shows(ctx, events, sample_event, seeded_db):

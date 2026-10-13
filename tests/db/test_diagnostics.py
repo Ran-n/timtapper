@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 19:05:54.099962
-Revised: 2026/10/12 23:54:37.199935
+Revised: 2026/10/13 08:59:21.744885
 
 The startup report shown when the database won't open.
 """
@@ -18,7 +18,7 @@ def test_report_lists_tables_stamp_and_bundled_migrations(tmp_path):
     database.dispose()
     report = startup_report(tmp_path / "ok.db", MIGRATIONS_DIR, ["INFO alembic: ran"])
     assert "color, event, event_type" in report
-    assert "alembic_version: [('0005',)]" in report
+    assert "alembic_version: [('0006',)]" in report
     assert "0001_initial.py" in report and "0005_games.py" in report
     assert report.endswith("log:\nINFO alembic: ran")
 

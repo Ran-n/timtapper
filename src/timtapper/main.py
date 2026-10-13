@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/13 07:39:25.534821
+Revised: 2026/10/13 08:59:21.057270
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
@@ -12,7 +12,7 @@ Everything stays on the device: there is no server.
 
 import flet as ft
 
-from catalog.repository import LeaderRepository, load_bundled
+from catalog.repository import LeaderRepository, install_bundled
 from core.logging import APP_LOGGER, LogTail, get_logger, setup_logging
 from core.paths import ASSETS_DIR, db_path
 from db import Database
@@ -43,7 +43,7 @@ def shape_window(page: ft.Page) -> None:
 def open_database() -> Database:
     db = Database(db_path())
     db.migrate()
-    LeaderRepository(db).upsert(load_bundled())
+    install_bundled(LeaderRepository(db))
     return db
 
 

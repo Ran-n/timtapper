@@ -2,12 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.019766
-Revised: 2026/10/12 16:54:59.869355
+Revised: 2026/10/13 08:59:21.280432
 """
 
 import datetime as dt
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from catalog.optcgapi import LeaderRecord
 from catalog.repository import (
@@ -15,10 +17,14 @@ from catalog.repository import (
     Leader,
     LeaderRepository,
     filter_leaders,
+    install_bundled,
+    is_main_set,
     load_bundled,
+    load_bundled_releases,
     load_bundled_sources,
     search,
     set_codes,
+    set_on,
 )
 
 
@@ -168,3 +174,96 @@ def test_short_name_is_what_players_call_the_leader(name, short):
 def test_catalogue_keeps_the_full_names(leaders):
     names = {ld.name for ld in leaders.all()}
     assert {"Donquixote Doflamingo", 'Eustass"Captain"Kid'} <= names
+
+
+# ---- release dates and the set an event is played in ---------------------------------
+def test_bundled_releases_missing_key(tmp_path):
+    old = tmp_path / "leaders.json"
+    old.write_text('{"generated": "2026-01-01", "leaders": []}', encoding="utf-8")
+    assert load_bundled_releases(old) == {}
+
+
+def test_install_bundled_stores_leaders_and_release_dates(db):
+    repo = LeaderRepository(db)
+    install_bundled(repo)
+    assert repo.count() == len(load_bundled())
+    assert repo.release_dates() == load_bundled_releases()
+
+
+def test_set_releases_adds_updates_and_keeps(db):
+    repo = LeaderRepository(db)
+    repo.upsert([LeaderRecord("OP98-001", "Old", "OP98", "Past", ("Red",))])
+    assert repo.release_dates() == {}
+    assert repo.set_releases({"OP98": dt.date(2026, 1, 1), "OP99": dt.date(2026, 4, 1)}) == 2  # OP99: no leaders yet
+    assert repo.set_releases({"OP98": dt.date(2026, 1, 2)}) == 1  # corrected; OP99 left out keeps its date
+    assert repo.set_releases({"OP98": dt.date(2026, 1, 2)}) == 0
+    assert repo.release_dates() == {"OP98": dt.date(2026, 1, 2), "OP99": dt.date(2026, 4, 1)}
+    repo.upsert([LeaderRecord("OP99-001", "New", "OP99", "Future", ("Blue",))])  # the set row it made is reused
+    assert {ld.set_code for ld in repo.all()} == {"OP98", "OP99"}
+    assert repo.release_dates()["OP99"] == dt.date(2026, 4, 1)
+
+
+@pytest.mark.parametrize(
+    ("code", "main"),
+    [("OP01", True), ("OP17", True), ("EB03", False), ("ST29", False), ("PRB02", False), ("XYZ", False)],
+)
+def test_is_main_set(code, main):
+    assert is_main_set(code) is main
+
+
+RELEASES = {
+    "OP14": dt.date(2026, 1, 16),
+    "EB03": dt.date(2026, 2, 20),
+    "OP15": dt.date(2026, 4, 3),
+    "OP16": dt.date(2026, 6, 12),
+    "ST31": dt.date(2026, 7, 31),
+}
+CODES = ["OP14", "EB03", "OP15", "OP16", "OP17", "ST31"]  # OP17: in the catalogue, date not known yet
+
+
+@pytest.mark.parametrize(
+    ("day", "played_in"),
+    [
+        (dt.date(2026, 4, 3), "OP15"),  # out that very day
+        (dt.date(2026, 4, 2), "OP14"),
+        (dt.date(2026, 3, 1), "OP14"),  # EB03 is out, but it joins OP14's format
+        (dt.date(2026, 8, 15), "OP16"),  # a starter after it changes nothing; OP17 has no date yet
+        (dt.date(2030, 1, 1), "OP16"),
+        (dt.date(2025, 12, 31), None),  # before any set it knows of
+    ],
+)
+def test_set_on_picks_the_newest_main_set_out_by_then(day, played_in):
+    assert set_on(day, CODES, RELEASES) == played_in
+
+
+def test_set_on_without_any_main_set_dated_falls_back_to_the_newest():
+    assert set_on(dt.date(2026, 1, 1), CODES, {"ST31": dt.date(2026, 7, 31)}) == "OP17"
+    assert set_on(dt.date(2026, 1, 1), CODES, {}) == "OP17"
+
+
+def test_set_on_without_any_set():
+    assert set_on(dt.date(2026, 1, 1), [], RELEASES) is None
+
+
+def test_set_on_ignores_dated_sets_outside_the_catalogue():
+    """Only sets with leaders are in the set dropdown, so only they are picked."""
+    assert set_on(dt.date(2026, 5, 1), ["OP14"], RELEASES) == "OP14"
+
+
+def test_set_on_with_the_bundled_dates(leaders):
+    codes = set_codes(leaders.all())
+    releases = leaders.release_dates()
+    assert set_on(dt.date(2022, 12, 2), codes, releases) == "OP01"
+    assert set_on(dt.date(2024, 5, 3), codes, releases) == "OP06"  # EB01's release day
+    assert set_on(dt.date(2026, 10, 12), codes, releases) == "OP17"
+
+
+@pytest.mark.property
+@given(st.dates(dt.date(2020, 1, 1), dt.date(2030, 12, 31)), st.dates(dt.date(2020, 1, 1), dt.date(2030, 12, 31)))
+def test_property_set_on_never_goes_back_in_time(a, b):
+    """A later day never gets an older set, and the set picked is always out by then."""
+    early, late = sorted((a, b))
+    first, second = set_on(early, CODES, RELEASES), set_on(late, CODES, RELEASES)
+    if first is not None:
+        assert RELEASES[first] <= early
+        assert second is not None and RELEASES[second] >= RELEASES[first]

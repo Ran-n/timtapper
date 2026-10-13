@@ -2,12 +2,12 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.873250
-Revised: 2026/10/13 07:39:23.328620
+Revised: 2026/10/13 08:59:20.608933
 
 ORM schema. BCNF: every non-key attribute depends on a whole candidate key
 and nothing else —
 - color / event_type: lookup tables (key: id, candidate: name/key).
-- card_set: code -> name.
+- card_set: code -> name, release date.
 - leader: code -> name, set; its colors live in leader_color (multi-valued).
 - event: id -> name, type, date, own leader, notes, placement, players, dropped, set.
 - match (a round): id and (event_id, round_no) are both candidate keys; every other
@@ -65,6 +65,7 @@ class CardSet(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     code: Mapped[str] = mapped_column(String(16), unique=True)
     name: Mapped[str | None] = mapped_column(String(120))
+    release_date: Mapped[dt.date | None] = mapped_column(Date)  # its English release; None: not known yet
 
 
 class LeaderColor(Base):

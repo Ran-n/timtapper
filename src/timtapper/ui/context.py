@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.770833
-Revised: 2026/10/13 07:39:25.356267
+Revised: 2026/10/13 08:59:20.909037
 
 Per-session app context handed to every screen: repositories, the cached
 leader catalogue, translation, notifications, preferences and navigation.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import flet as ft
 
-from catalog.repository import Leader, LeaderRepository, set_codes
+from catalog.repository import Leader, LeaderRepository, set_codes, set_on
 from core.logging import get_logger
 from db import Database
 from events.naming import suggest_name
@@ -56,6 +56,7 @@ class AppContext:
         self.notify = make_notifier(page, lambda: self.scheme)
         self._leaders: list[Leader] | None = None
         self._leaders_by_id: dict[int, Leader] | None = None
+        self._release_dates: dict[str, dt.date] | None = None
         self.on_appearance_change: Callable[[], None] | None = None
         # the events list's search and filters, kept while you open an event and come back
         self.event_filters = Filters()
@@ -136,21 +137,40 @@ class AppContext:
             self._leaders_by_id = {leader.id: leader for leader in self.leaders}
         return self._leaders_by_id
 
+    @property
+    def release_dates(self) -> dict[str, dt.date]:
+        """Set code -> release date, for the sets that have one."""
+        if self._release_dates is None:
+            self._release_dates = self.leader_repo.release_dates()
+        return self._release_dates
+
     def invalidate_leaders(self) -> None:
         """Drop the cache (catalogue refreshed, or play counts changed the picker order)."""
-        self._leaders = self._leaders_by_id = None
+        self._leaders = self._leaders_by_id = self._release_dates = None
+
+    def set_on(self, day: dt.date) -> str | None:
+        """The set an event on `day` was played in, as far as the catalogue knows."""
+        return set_on(day, set_codes(self.leaders), self.release_dates)
 
     # ---- events -------------------------------------------------------
     def suggested_name(self, event_type: str, exclude_id: int | None = None) -> str:
         """What a new event of `event_type` is called: "Local #4" after three locals."""
         return suggest_name(event_name_template(self._, event_type), self.events.names_of_type(event_type, exclude_id))
 
+    def redate(self, event: Event, day: dt.date) -> dict:
+        """The fields to save to move `event` to `day`: its set follows the date while it is still the one its old
+        date gave it; a set you picked yourself (or "Not noted") stays."""
+        fields: dict = {"date": day}
+        if day != event.date and event.set_code == self.set_on(event.date):
+            fields["set_code"] = self.set_on(day)
+        return fields
+
     def new_event(self, event_type: str, date: dt.date, leader_id: int | None) -> Event:
         """Create an event under its suggested name; it stays a draft until something is added to it."""
         event = self.events.create(self.suggested_name(event_type), event_type, date, leader_id)
-        newest = set_codes(self.leaders)
-        if newest:  # played in the newest set unless you say otherwise
-            event = self.events.update(event.id, set_code=newest[0])
+        played_in = self.set_on(date)
+        if played_in:  # played in the set out on its date unless you say otherwise
+            event = self.events.update(event.id, set_code=played_in)
         self.draft = event
         return self.draft
 

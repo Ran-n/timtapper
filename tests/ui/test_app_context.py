@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/13 07:39:27.643468
+Revised: 2026/10/13 08:59:21.514521
 """
 
 import datetime as dt
@@ -313,6 +313,7 @@ def test_open_database_migrates_and_seeds(tmp_path):
         from catalog.repository import LeaderRepository
 
         assert LeaderRepository(db).count() > 100
+        assert LeaderRepository(db).release_dates()["OP01"] == dt.date(2022, 12, 2)
         assert db.path.parent == tmp_path / "data"
     finally:
         db.dispose()
@@ -405,7 +406,7 @@ async def test_startup_failure_report_carries_the_migration_log(page, monkeypatc
     await main.main(page)
     report = added[0].content.controls[1].value
     assert "Running upgrade  -> 0001" in report
-    assert "alembic_version: [('0005',)]" in report
+    assert "alembic_version: [('0006',)]" in report
 
 
 @pytest.mark.parametrize("handler", ["on_close", "on_disconnect"])
@@ -487,8 +488,64 @@ async def test_quitting_closes_the_database_even_when_dropping_the_draft_fails(p
 def test_a_new_event_is_played_in_the_newest_set(ctx):
     from catalog.repository import set_codes
 
+    draft = make_draft(ctx)  # dated 2026-10-12: OP17 came out on 2026-08-28
+    assert draft.set_code == set_codes(ctx.leaders)[0] == "OP17"
+
+
+@pytest.mark.parametrize(
+    ("day", "played_in"),
+    [
+        (dt.date(2026, 8, 27), "OP16"),  # the day before OP17
+        (dt.date(2026, 8, 28), "OP17"),
+        (dt.date(2024, 5, 3), "OP06"),  # EB01's release day: still OP06's format
+        (dt.date(2022, 11, 30), None),  # before OP01
+    ],
+)
+def test_a_new_event_is_played_in_the_set_out_on_its_date(ctx, day, played_in):
+    assert ctx.new_event("locals", day, None).set_code == played_in
+
+
+def test_a_new_event_without_any_release_date_known_is_played_in_the_newest_set(ctx, monkeypatch):
+    """A catalogue from before release dates were kept: the old behaviour, the newest main set."""
+    monkeypatch.setattr(type(ctx), "release_dates", property(lambda self: {}))
+    assert ctx.new_event("locals", dt.date(2023, 1, 1), None).set_code == "OP17"
+
+
+def test_release_dates_are_cached_with_the_leaders(ctx):
+    dates = ctx.release_dates
+    assert ctx.release_dates is dates and dates["OP01"] == dt.date(2022, 12, 2)
+    ctx.leader_repo.set_releases({"OP01": dt.date(2022, 12, 3)})
+    assert ctx.release_dates["OP01"] == dt.date(2022, 12, 2)
+    ctx.invalidate_leaders()
+    assert ctx.release_dates["OP01"] == dt.date(2022, 12, 3)
+
+
+@pytest.mark.parametrize(
+    ("chosen", "day", "fields"),
+    [
+        # still the set its date gave it: it follows the new date
+        ("OP17", dt.date(2026, 7, 1), {"date": dt.date(2026, 7, 1), "set_code": "OP16"}),
+        ("OP17", dt.date(2022, 11, 1), {"date": dt.date(2022, 11, 1), "set_code": None}),
+        # picked by hand, or "Not noted": it stays
+        ("OP15", dt.date(2026, 7, 1), {"date": dt.date(2026, 7, 1)}),
+        ("EB03", dt.date(2026, 7, 1), {"date": dt.date(2026, 7, 1)}),
+        (None, dt.date(2026, 7, 1), {"date": dt.date(2026, 7, 1)}),
+        # the same day picked again: nothing but the date
+        ("OP17", dt.date(2026, 10, 12), {"date": dt.date(2026, 10, 12)}),
+    ],
+)
+def test_redate_moves_the_set_only_while_it_follows_the_date(ctx, events, chosen, day, fields):
     draft = make_draft(ctx)
-    assert draft.set_code == set_codes(ctx.leaders)[0]
+    event = events.update(draft.id, set_code=chosen)
+    assert ctx.redate(event, day) == fields
+
+
+def test_redated_back_the_set_follows_again(ctx, events):
+    """Moved to July (OP16) and back to October: OP16 is what July gives, so it follows back to OP17."""
+    event = make_draft(ctx)
+    event = events.update(event.id, **ctx.redate(event, dt.date(2026, 7, 1)))
+    event = events.update(event.id, **ctx.redate(event, dt.date(2026, 10, 12)))
+    assert event.set_code == "OP17"
 
 
 def test_a_new_event_without_any_set_known_has_none(ctx, monkeypatch):
