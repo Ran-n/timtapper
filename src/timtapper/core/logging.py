@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.370391
-Revised: 2026/10/12 19:13:14.524790
+Revised: 2026/10/13 11:44:58.044316
 
 Logging setup for the whole app: one named logger tree (`timtapper.*`),
 isolated from third-party noise, level configurable via `LOG_LEVEL`.
@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 APP_LOGGER = "timtapper"
@@ -49,7 +49,7 @@ class LogTail(logging.Handler):
         self.lines.append(self.format(record))
 
     @contextmanager
-    def attached(self, *names: str, level: int = logging.INFO) -> Iterator[LogTail]:
+    def attached(self, *names: str, level: int = logging.INFO) -> Generator[LogTail]:
         """Collect from the `names` loggers at `level` or above while inside; their levels come back after."""
         loggers = [logging.getLogger(name) for name in names]
         saved = [lg.level for lg in loggers]

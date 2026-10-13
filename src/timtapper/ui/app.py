@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.676210
-Revised: 2026/10/12 21:24:33.282716
+Revised: 2026/10/13 11:44:58.669215
 
 Screen routing. Tabs (/events, /stats, /settings) replace the view stack;
 /event/<id> is pushed on top so Android's back button returns to the list.
@@ -54,7 +54,7 @@ def build_view(ctx: AppContext, route: str) -> ft.View:
     if route.startswith("/event/"):
         try:
             screen = EventScreen(ctx, int(route.removeprefix("/event/")))
-        except (ValueError, EventError):
+        except ValueError, EventError:
             _log.warning("route %s points at no event — back to the list", route)
             ctx.notify(_("That event no longer exists"), error=True)
             return build_view(ctx, "/events")

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.147840
-Revised: 2026/10/13 07:39:23.519148
+Revised: 2026/10/13 11:44:57.736906
 
 Leader data from optcgapi.com — a public, read-only card API. Used both by
 scripts/build_leaders.py (to refresh the leaders.json bundled with the app)
@@ -11,7 +11,7 @@ differently.
 """
 
 import re
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
@@ -108,7 +108,7 @@ def parse_leaders(cards: list[dict]) -> list[LeaderRecord]:
 
 
 @contextmanager
-def client_session(client: httpx.Client | None = None, timeout: float = LIST_TIMEOUT) -> Iterator[httpx.Client]:
+def client_session(client: httpx.Client | None = None, timeout: float = LIST_TIMEOUT) -> Generator[httpx.Client]:
     """The caller's client, or a fresh one (`timeout` seconds per request) closed on exit."""
     if client is not None:
         yield client

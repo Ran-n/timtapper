@@ -2,14 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.803606
-Revised: 2026/10/12 19:13:14.893855
+Revised: 2026/10/13 11:44:58.355093
 
 The on-device database: one SQLite file, schema owned by Alembic (migrations
 ship inside the app and run on every start, so an app update never wipes or
 breaks existing history).
 """
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -61,7 +61,7 @@ class Database:
         command.upgrade(cfg, "head")
 
     @contextmanager
-    def session(self) -> Iterator[Session]:
+    def session(self) -> Generator[Session]:
         """Unit of work: commits on success, rolls back (and re-raises) on error."""
         session = self._sessions()
         try:

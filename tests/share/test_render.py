@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.477606
-Revised: 2026/10/13 00:41:29.547873
+Revised: 2026/10/13 11:44:59.003496
 """
 
 import datetime as dt
@@ -463,8 +463,9 @@ def test_a_best_of_3s_games_line_up_under_it_in_the_apps_columns(monkeypatch):
     monkeypatch.setattr(
         render.Card,
         "pill",
-        lambda self, cx, cy, label, fill, **kw: pills.append((cx, cy, label))
-        or real_pill(self, cx, cy, label, fill, **kw),
+        lambda self, cx, cy, label, fill, **kw: (
+            pills.append((cx, cy, label)) or real_pill(self, cx, cy, label, fill, **kw)
+        ),
     )
     rs = [Round(1, 1, 2, 3, "top_cut", "", (Game(1, "L", True, True), Game(2, "W", False), Game(3, "W", True)))]
     render.event_card(event(rs), LEADERS, identity, "Locals")
