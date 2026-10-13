@@ -2,9 +2,9 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.518880
-Revised: 2026/10/13 09:37:21.758056
+Revised: 2026/10/13 12:45:32.147210
 
 App version shown in Settings (kept equal to pyproject.toml by tests/test_version.py).
 """
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
