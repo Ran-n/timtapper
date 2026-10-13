@@ -2,10 +2,11 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.709234
-Revised: 2026/10/12 16:55:01.605295
+Revised: 2026/10/13 07:39:26.107881
 """
 
 import datetime as dt
+from dataclasses import replace
 
 import flet as ft
 import pytest
@@ -47,6 +48,25 @@ async def test_new_event_reuses_last_leader(ctx, sample_event, page, events):
     assert created.leader_id == sample_event.leader_id
     assert created.date == dt.date.today()
     assert page.routes == [f"/event/{created.id}"]
+
+
+async def test_new_event_is_named_after_its_type(ctx, sample_event, events):
+    """The FAB makes a locals; with one locals logged it is "Local #2", and it is the draft."""
+    _body, fab = events_view.build(ctx)
+    await fire(fab.on_click, fab)
+    created = events.list()[0]
+    assert (created.name, created.event_type) == ("Local #2", "locals")
+    assert ctx.draft == created
+
+
+async def test_new_event_name_is_translated(ctx, events):
+    from i18n import set_lang
+
+    set_lang(ctx.page, "gl")
+    events.create("Testeo", "testing", dt.date(2020, 1, 1))  # another type: not counted
+    _body, fab = events_view.build(ctx)
+    await fire(fab.on_click, fab)
+    assert events.list()[0].name == "Local #1"
 
 
 def test_translated(ctx):
@@ -109,7 +129,7 @@ def test_type_and_record_lead_the_tile_across_its_full_width(ctx, sample_event):
 
 
 def test_event_without_games_shows_a_dash(ctx, events):
-    events.create("Fresh", "online", dt.date(2026, 1, 1))
+    events.create("Fresh", "treasure_cup", dt.date(2026, 1, 1))
     body = tiles(events_view.build(ctx)[0])
     assert texts(by_data(body[0], "record-badge")) == ["—"]
     assert "rate-badge" not in [c.data for c in walk(body[0])]
@@ -123,7 +143,23 @@ def test_tile_type_badge_shows_every_type(ctx, events):
         events.create(f"E{i}", key, dt.date(2026, 1, 1 + i))
     body = tiles(events_view.build(ctx)[0])
     shown = {texts(by_data(tile, "event-type"))[0]: tile for tile in body}
-    assert set(shown) == {"Testing", "Locals", "Regional", "National", "Online", "Other"}
+    assert set(shown) == {
+        "Testing",
+        "Pirates Party",
+        "Locals",
+        "Release event",
+        "Sealed",
+        "Heroines Battle",
+        "Team battle",
+        "Store Championship",
+        "Treasure Cup",
+        "Flagship Battle",
+        "Extra Grand Battle",
+        "Regional",
+        "National",
+        "World Championship",
+        "Other",
+    }
     for tile in body:
         badge_icons = [c.icon for c in walk(by_data(tile, "event-type")) if isinstance(c, ft.Icon)]
         assert len(badge_icons) == 1 and badge_icons[0] in EVENT_TYPE_ICONS.values()
@@ -132,7 +168,7 @@ def test_tile_type_badge_shows_every_type(ctx, events):
 def test_unknown_event_type_reads_other(ctx, sample_event):
     import dataclasses
 
-    tile = events_view.event_tile(ctx, dataclasses.replace(sample_event, event_type="worlds"))
+    tile = events_view.event_tile(ctx, dataclasses.replace(sample_event, event_type="moon_cup"))
     badge = by_data(tile, "event-type")
     assert texts(badge) == ["Other"]
     assert [c.icon for c in walk(badge) if isinstance(c, ft.Icon)] == [ft.Icons.EVENT_OUTLINED]
@@ -161,7 +197,7 @@ def tile_row(tile) -> ft.Row:
 
 
 def test_tile_portrait_frame_uses_leader_colours(ctx, sample_event):
-    from ui.theme import CARD_COLORS
+    from core.card_colors import CARD_COLORS
 
     leader = ctx.leaders_by_id[sample_event.leader_id]
     frame = by_data(tiles(events_view.build(ctx)[0])[0], "portrait-frame")
@@ -176,7 +212,7 @@ def test_tile_portrait_frame_uses_leader_colours(ctx, sample_event):
 @pytest.fixture
 def three_events(ctx, events, leader_ids):
     events.create("Sunday locals", "locals", dt.date(2026, 10, 5), leader_ids[0])
-    events.create("Online league", "online", dt.date(2026, 10, 6), leader_ids[0])
+    events.create("Treasure Cup Madrid", "treasure_cup", dt.date(2026, 10, 6), leader_ids[0])
     events.create("Regional day 1", "regional", dt.date(2026, 10, 7), leader_ids[1])
     return events
 
@@ -224,19 +260,38 @@ async def test_type_and_leader_dropdowns_filter_and_stay_open(ctx, three_events,
     toggle = by_data(body[0], "event-filter-toggle")
     await fire(toggle.on_click, toggle)
     dd = by_data(body[1], "filter-type")
-    dd.value = "online"
+    dd.value = "treasure_cup"
     await fire(dd.on_select, dd)
-    assert names(body) == ["Online league"]
+    assert names(body) == ["Treasure Cup Madrid"]
     assert toggle.disabled and toggle.icon_color == ft.Colors.PRIMARY  # can't hide a filter that's on
     leader = by_data(body[1], "filter-leader")
     assert {o.key for o in leader.options} == {"all", str(leader_ids[0]), str(leader_ids[1])}
     leader.value = str(leader_ids[1])
     await fire(leader.on_select, leader)
-    assert names(body) == []  # online AND leader 2: none
+    assert names(body) == []  # Treasure Cup AND leader 2: none
     type_dd = by_data(body[1], "filter-type")
     type_dd.value = "all"
     await fire(type_dd.on_select, type_dd)
     assert names(body) == ["Regional day 1"]
+
+
+async def test_leader_dropdown_shows_each_leaders_portrait(ctx, three_events, leader_ids):
+    from ui.filters import OPTION_PORTRAIT
+
+    body, _fab = events_view.build(ctx)
+    toggle = by_data(body[0], "event-filter-toggle")
+    await fire(toggle.on_click, toggle)
+    dd = by_data(body[1], "filter-leader")
+    everyone, *options = dd.options
+    assert everyone.leading_icon == ft.Icons.GROUPS_OUTLINED and dd.leading_icon == ft.Icons.GROUPS_OUTLINED
+    for option in options:
+        frame = option.leading_icon
+        assert frame.data == "portrait-frame" and frame.width == OPTION_PORTRAIT
+    dd.value = str(leader_ids[1])
+    await fire(dd.on_select, dd)
+    picked = by_data(body[1], "filter-leader").leading_icon  # the field shows who is picked
+    code = ctx.leaders_by_id[leader_ids[1]].code
+    assert picked.data == "portrait-frame" and picked.content.content.src == f"leaders/{code}.webp"
 
 
 async def test_no_match_offers_to_clear_everything(ctx, three_events):
@@ -271,7 +326,8 @@ def test_tile_shows_the_standing_beside_the_leader_in_one_piece(ctx, events, sam
     events.update(sample_event.id, placement=3, players=32)
     tile = tiles(events_view.build(ctx)[0])[0]
     standing = by_data(tile, "tile-standing")
-    assert texts(standing) == ["#3 of 32"]  # non-breaking: never split over two lines
+    assert texts(standing)[0].replace(" ", " ") == "Top 4 · #3 of 32"  # the bracket first
+    assert " " not in texts(standing)[0]  # non-breaking: never split over two lines
     date_line = tile_row(tile).controls[1].controls[2]
     assert date_line.wrap and date_line.controls[1] is standing  # after the date, dropping whole to a new line
     assert texts(by_data(tile, "tile-date")) == [f"{sample_event.date.isoformat()} · 4 rounds"]
@@ -280,3 +336,41 @@ def test_tile_shows_the_standing_beside_the_leader_in_one_piece(ctx, events, sam
 def test_tile_without_a_standing_shows_none(ctx, sample_event):
     tile = tiles(events_view.build(ctx)[0])[0]
     assert "tile-standing" not in [c.data for c in walk(tile)]
+
+
+@pytest.mark.parametrize(
+    ("placement", "players", "dropped", "shown"),
+    [(1, 8, False, "1st place · #1 of 8"), (40, None, False, "Top 64 · #40"), (None, 32, True, "Dropped · 32 players")],
+)
+def test_tile_standing_reads_as_brackets(ctx, events, sample_event, placement, players, dropped, shown):
+    events.update(sample_event.id, placement=placement, players=players, dropped=dropped)
+    tile = tiles(events_view.build(ctx)[0])[0]
+    assert texts(by_data(tile, "tile-standing"))[0].replace(" ", " ") == shown
+
+
+async def test_events_filter_by_set(ctx, events, sample_event):
+    events.update(sample_event.id, set_code="OP16")
+    events.create("Older", "locals", dt.date(2025, 1, 1))
+    ctx.event_filters_open = True
+    body, _fab = events_view.build(ctx)
+    dd = by_data(body[1], "filter-set")
+    assert [o.key for o in dd.options] == ["all", "OP16"]  # only the sets your events were played in
+    dd.value = "OP16"
+    await fire(dd.on_select, dd)
+    assert names(body) == ["Sunday locals"]
+
+
+@pytest.mark.regression
+async def test_a_filter_kept_after_its_last_event_went_still_shows_its_value(ctx, events, sample_event, leader_ids):
+    """The filters outlive the events: delete the only event with that leader or set and the dropdown went blank
+    while the filter was still on (the toggle disabled, the list empty), with nothing saying what narrowed it."""
+    events.update(sample_event.id, set_code="OP16")
+    events.create("Older", "locals", dt.date(2025, 1, 1), leader_ids[1])  # the list isn't empty: the filters show
+    ctx.event_filters = replace(ctx.event_filters, own_leader_id=sample_event.leader_id, set_code="OP16")
+    events.delete(sample_event.id)
+    body, _fab = events_view.build(ctx)
+    leader_dd, set_dd = by_data(body[1], "filter-leader"), by_data(body[1], "filter-set")
+    assert leader_dd.value == str(sample_event.leader_id)
+    assert str(sample_event.leader_id) in [o.key for o in leader_dd.options]
+    assert [o.key for o in set_dd.options] == ["all", "OP16"]
+    assert names(body) == []

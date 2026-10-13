@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.221073
-Revised: 2026/10/12 16:54:57.692382
+Revised: 2026/10/12 23:54:36.552363
 
 Leader catalogue persistence: upsert from LeaderRecords, read as plain Leader values.
 """
@@ -168,6 +168,11 @@ def _set_sort_key(code: str) -> tuple:
     return (0 if rank < len(_SET_PREFIX_ORDER) else 1, rank, prefix, -number)
 
 
-def set_codes(leaders: Iterable[Leader]) -> list[str]:
+def sort_set_codes(codes: Iterable[str]) -> list[str]:
     """Distinct set codes, newest first within OP, EB, ST, PRB, other prefixes, then unparsable codes."""
-    return sorted({leader.set_code for leader in leaders if leader.set_code}, key=_set_sort_key)
+    return sorted(set(codes), key=_set_sort_key)
+
+
+def set_codes(leaders: Iterable[Leader]) -> list[str]:
+    """The sets the leaders come from, in sort_set_codes' order."""
+    return sort_set_codes(leader.set_code for leader in leaders if leader.set_code)

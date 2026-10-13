@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:03.377682
-Revised: 2026/10/12 16:55:00.598214
+Revised: 2026/10/13 07:39:25.924836
 
 The real app, rendered: what the pixels on screen show, and what real clicks do.
 
@@ -13,8 +13,9 @@ their exact theme colours (pixels.py). Taps are real mouse clicks.
 
 import pytest
 
+from core.card_colors import CARD_COLORS
 from pixels import Blob, count, find, holes
-from ui.theme import CARD_COLORS, THEMES
+from ui.theme import THEMES
 
 pytestmark = pytest.mark.desktop
 
@@ -55,23 +56,32 @@ def test_record_and_rate_are_two_pills_side_by_side(app, scheme, mode, width):
 
 
 @pytest.mark.parametrize(("mode", "width"), [("dark", 0), ("light", 0), ("dark", NARROW)])
-def test_type_and_record_share_a_full_width_top_line(app, scheme, mode, width):
-    """The type pill starts over the portrait and the record ends at the card's edge, on one line even at 360 dp."""
+def test_type_and_record_share_a_full_width_top_line(app, mode, width):
+    """The type pill starts over the portrait and the record ends at the card's edge, on one line even at 360 dp;
+    each type is drawn in its tier's accent (Regional: primary, Locals: secondary, Treasure Cup: tertiary…)."""
+    from ui.widgets import tier_color
+
     img = app.show("/events", mode, width)
-    s = scheme(mode)
-    types = [t for t in pills(img, s.tint(s.primary, 0.22)) if t.y1 < above_fab(img)]
+    s = THEMES["gruvbox"].scheme(dark=mode == "dark")
+    shown = [e["id"] for e in app.send("events")]
+    kinds = [app.send("event", event_id=i)["event_type"] for i in shown]
+    tints = {k: s.tint(tier_color(k, s), 0.22) for k in kinds}
+    # the left half only: a casual type's tint is the record pill's too, and records sit at the right
+    types = sorted(
+        (t for c in set(tints.values()) for t in pills(img, c) if t.x0 < img.width / 2 and t.y1 < above_fab(img)),
+        key=lambda t: t.y0,
+    )
     rates = pills(img, s.tint(s.success, 0.22)) + pills(img, s.tint(s.error, 0.22))
     assert len(types) >= 4  # every tile above the "New event" button
     assert len({t.x0 for t in types}) == 1  # one left edge, not stretched
     assert all(t.w < img.width / 2 for t in types)
     portraits = [b for b in find(img, CARD_COLORS["Purple"], tol=6, min_area=100) if b.w >= 50]
     assert portraits and all(abs(t.x0 - portraits[0].x0) <= 2 for t in types)  # over the portrait
-    for t in types:
+    for t, kind in zip(types, kinds, strict=False):  # tiles are in the list's order
         beside = [r for r in rates if abs(r.cy - t.cy) <= 2]
         assert beside, f"no record on the type pill's line at {t.box}"  # never wrapped under it
         assert all(r.x1 >= img.width - 40 for r in beside)  # pushed to the card's right edge
-    # the pill's text and icon are drawn in the primary colour
-    assert all(count(img, s.primary, t.box) > 20 for t in types)
+        assert count(img, tier_color(kind, s), t.box) > 20, kind  # the pill's text and icon in its tier's accent
 
 
 @pytest.mark.parametrize("mode", ["dark", "light"])

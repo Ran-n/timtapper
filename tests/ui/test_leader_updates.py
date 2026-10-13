@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:12.217340
-Revised: 2026/10/11 17:20:12.217340
+Revised: 2026/10/13 07:39:26.697116
 """
 
 import asyncio
@@ -112,6 +112,20 @@ async def test_failed_background_update_is_logged_not_shown(ctx, api, prefs, pag
     assert prefs == {} and page.dialogs == []
 
 
+@pytest.mark.regression
+async def test_an_unexpected_background_failure_is_logged_not_raised(ctx, api, prefs, page, monkeypatch, caplog):
+    """Only CatalogError was caught, so a database error escaped the background task."""
+    with_new_set(api)
+
+    def broken():
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(sync_mod, "fetch_leaders", broken)
+    await ctx.leader_updates.run_if_due()
+    assert "background leader update failed" in caplog.text and "database is locked" in caplog.text
+    assert page.dialogs == []
+
+
 async def test_missing_portraits_are_logged(ctx, api, prefs, monkeypatch, caplog):
     with_new_set(api)
     monkeypatch.setattr(sync_mod.portraits, "download_missing", lambda codes: (0, len(codes)))
@@ -124,6 +138,16 @@ async def test_malformed_check_time_is_ignored(ctx, api, prefs, caplog):
     await ctx.leader_updates.run_if_due()
     assert api["set_checks"] == 1
     assert "ignoring malformed" in caplog.text
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(("hours_ago", "checks"), [(1, 0), (25, 1)])
+async def test_check_time_without_a_zone_reads_as_utc(ctx, api, prefs, hours_ago, checks):
+    """A stored time without a zone used to raise TypeError (naive minus aware) and kill the background check."""
+    then = dt.datetime.now(dt.UTC).replace(tzinfo=None) - dt.timedelta(hours=hours_ago)
+    prefs[PREF_CHECKED] = then.isoformat()
+    await ctx.leader_updates.run_if_due()
+    assert api["set_checks"] == checks
 
 
 async def test_unusable_prefs_still_check_and_log(ctx, api, monkeypatch, caplog):
@@ -163,3 +187,12 @@ async def test_updates_never_overlap(ctx, prefs, monkeypatch):
     await asyncio.gather(ctx.leader_updates.run(), ctx.leader_updates.run())
     assert peaks == [1, 1]
     assert prefs[PREF_SOURCES] == "OP-01"
+
+
+@pytest.mark.live
+async def test_live_background_check_on_first_start(ctx, prefs, page):
+    """The startup check against the real API: it records the check and never shows an error."""
+    await ctx.leader_updates.run_if_due()
+    assert PREF_CHECKED in prefs
+    assert not [d for d in page.dialogs if getattr(d, "data", None) == "error"]
+    assert not ctx.leader_updates.busy

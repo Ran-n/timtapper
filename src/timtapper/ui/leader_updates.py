@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:11.971755
-Revised: 2026/10/11 17:21:29.038291
+Revised: 2026/10/13 07:39:25.170476
 
 Keeps the leader catalogue current. The Settings button calls run(); at
 startup run_if_due() checks in the background, at most once a day, whether
@@ -73,6 +73,9 @@ class LeaderUpdater:
         except CatalogError as exc:
             _log.warning("background leader update failed: %s", exc)
             return
+        except Exception:  # a background task has no caller to raise to: log it, the next start retries
+            _log.exception("background leader update failed")
+            return
         if result.failed_portraits:
             _log.warning("background leader update: %d portraits missing", result.failed_portraits)
         if result.added:
@@ -93,6 +96,9 @@ class LeaderUpdater:
                 checked = dt.datetime.fromisoformat(raw_checked)
             except ValueError:
                 _log.warning("ignoring malformed %s=%r", PREF_CHECKED, raw_checked)
+            else:
+                if checked.tzinfo is None:  # stored without a zone: it was UTC, and comparing it to now would raise
+                    checked = checked.replace(tzinfo=dt.UTC)
         return checked, tuple(s for s in (raw_sources or "").split(",") if s)
 
     async def _remember(self, sources: tuple[str, ...] | None) -> None:

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:43:10.736405
-Revised: 2026/10/11 17:43:10.736405
+Revised: 2026/10/13 07:39:24.069895
 
 Replace bundled leader portraits with davyback.gg's hand-made leader icons
 where it has one. davyback.gg's terms forbid reusing its content without
@@ -60,6 +60,11 @@ def to_portrait(raw: bytes) -> bytes:
     return out.getvalue()
 
 
+def listed() -> set[str]:
+    """Codes whose bundled portrait came from davyback.gg on an earlier run."""
+    return set(json.loads(LIST.read_text(encoding="utf-8"))) if LIST.is_file() else set()
+
+
 def main() -> int:
     setup_logging()
     log = get_logger("scripts.fetch_davyback_portraits")
@@ -81,7 +86,9 @@ def main() -> int:
             except (httpx.HTTPError, UnidentifiedImageError, OSError) as exc:
                 log.error("icon for %s failed: %s", code, exc)
                 failed.append(code)
-    LIST.write_text(json.dumps(sorted(saved), indent=1) + "\n", encoding="utf-8")
+    # an icon fetched on an earlier run is still davyback's (and still kept from build_leaders.py's re-crop) when this
+    # run couldn't fetch it again: listing only this run's would let one failed download expose it to a re-crop
+    LIST.write_text(json.dumps(sorted(listed() | set(saved)), indent=1) + "\n", encoding="utf-8")
     log.info("portraits from davyback.gg: %d written, %d failed", len(saved), len(failed))
     return 1 if failed else 0
 

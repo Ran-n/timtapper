@@ -1,0 +1,17 @@
+# Codeberg (Forgejo Actions): enable Actions in the repository settings for this to run.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: codeberg-tiny
+    steps:
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - uses: https://github.com/astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - run: bash scripts/ci.sh

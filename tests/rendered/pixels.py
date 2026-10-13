@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:02.744293
-Revised: 2026/10/12 13:16:02.744293
+Revised: 2026/10/12 21:24:33.821412
 
 Find things in a capture of the real app by colour: masks, connected blobs and their holes.
 Pure Pillow, so the rendered tests need nothing the app doesn't already ship with.
@@ -93,7 +93,11 @@ def find(img: Image.Image, color: str, *, tol: int = 8, min_area: int = 1) -> li
 def holes(img: Image.Image, blob: Blob, color: str, *, tol: int = 40, min_area: int = 3) -> list[Blob]:
     """Blobs of `color` strictly inside `blob`'s box (pips on a die, a check on a dot)."""
     inner = img.crop(blob.box)
-    return [b for b in find(inner, color, tol=tol, min_area=min_area) if b.x0 > 0 and b.y0 > 0]
+    # touching any side of the box is the background showing round its corner, not a hole in it
+    w, h = inner.size
+    return [
+        b for b in find(inner, color, tol=tol, min_area=min_area) if b.x0 > 0 and b.y0 > 0 and b.x1 < w and b.y1 < h
+    ]
 
 
 def count(img: Image.Image, color: str, box: tuple[int, int, int, int], tol: int = 40) -> int:

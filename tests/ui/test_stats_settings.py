@@ -2,10 +2,11 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.861081
-Revised: 2026/10/12 16:55:01.905065
+Revised: 2026/10/13 01:17:15.926761
 """
 
 import datetime as dt
+import json
 
 import flet as ft
 import pytest
@@ -56,9 +57,9 @@ def test_best_and_worst_matchup_each_get_a_full_row(ctx, sample_event):
 
 
 async def test_stats_filters(ctx, sample_event, events, leader_ids):
-    other = events.create("Other deck", "online", dt.date(2026, 1, 1), leader_ids[5])
+    other = events.create("Other deck", "treasure_cup", dt.date(2026, 1, 1), leader_ids[5])
     r = events.add_round(other.id, leader_ids[1])
-    events.update_round(r.id, result="L")
+    events.update_game(r.id, 1, result="L")
     s = StatsScreen(ctx)
     s.build()
     assert "2-2" in texts(s.body)
@@ -93,18 +94,46 @@ async def test_stats_share(ctx, sample_event, monkeypatch, tag, title):
     assert calls[0][0].exists() and calls[0][1] == title
 
 
+@pytest.mark.parametrize("card", ["summary_card", "matchups_card"])
+@pytest.mark.parametrize("narrowed", [True, False])
+async def test_stats_share_passes_the_one_leader_played(ctx, sample_event, monkeypatch, card, narrowed):
+    """Narrowed to one own leader, the shared card gets that leader for its header portrait."""
+    from share import render
+    from stats.compute import Filters
+
+    seen = []
+    monkeypatch.setattr(render, card, lambda *args: seen.append(args[-1]))
+
+    async def fake_share(draw, *, title, mime_type="image/png"):
+        draw()
+
+    monkeypatch.setattr(ctx, "share_file", fake_share)
+    s = StatsScreen(ctx)
+    if narrowed:
+        s.filters = Filters(sample_event.leader_id)
+    s.build()
+    btn = by_data(s.body, "share-summary" if card == "summary_card" else "share-matchups")
+    await fire(btn.on_click, btn)
+    assert seen == [ctx.leaders_by_id[sample_event.leader_id] if narrowed else None]
+
+
 # ---- leader picker --------------------------------------------------------
 async def test_picker_search_and_limit(ctx):
     picked = []
     sheet = build_picker(ctx, "Pick", picked.append)
     field, results = by_data(sheet, "leader-search"), by_data(sheet, "leader-results")
-    assert len(results.controls) == MAX_RESULTS
+    assert len(ctx.leaders) > MAX_RESULTS
+    assert len([c for c in results.controls if isinstance(c.data, int)]) == MAX_RESULTS
+    # the list says it stops, so a leader past the cut isn't taken for missing
+    assert texts(by_data(results, "more-leaders")) == [
+        f"{MAX_RESULTS} of {len(ctx.leaders)} leaders — search to find the rest"
+    ]
     field.value = "zzzz-no-match"
     await fire(field.on_change, field)
     assert texts(results) == ["No leader matches"]
     field.value = "OP01-001"
     await fire(field.on_change, field)
-    assert len(results.controls) == 1
+    assert len(results.controls) == 1  # under the cut: no hint
     ctx.page.dialogs.append(sheet)
     await fire(results.controls[0].on_click, results.controls[0])
     assert picked[0].code == "OP01-001"
@@ -150,7 +179,7 @@ async def test_update_leaders_success(settings, ctx, monkeypatch, page, prefs, f
     assert prefs["timtapper.leader_sources"] == "OP-99"
 
 
-async def test_update_leaders_offline(settings, monkeypatch, page, prefs):
+async def test_update_leaders_offline(settings, monkeypatch, page, prefs, caplog):
     def offline():
         raise CatalogError("offline")
 
@@ -160,6 +189,23 @@ async def test_update_leaders_offline(settings, monkeypatch, page, prefs):
     assert page.dialogs[-1].data == "error"
     assert settings.busy is False
     assert prefs == {}
+    assert any(r.name == "timtapper.ui.settings" and r.levelname == "WARNING" for r in caplog.records)
+
+
+@pytest.mark.regression
+async def test_update_leaders_reports_an_unexpected_failure(settings, monkeypatch, page, prefs, caplog):
+    """Anything but a download error (a database error, a full disk) left the button with no message."""
+
+    def broken():
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(sync_mod, "fetch_leaders", broken)
+    btn = by_data(settings.body, "update-leaders")
+    await fire(btn.on_click, btn)
+    assert page.dialogs[-1].data == "error"
+    assert page.dialogs[-1].content.value == "Could not update leaders (RuntimeError)"
+    assert "leader update failed" in caplog.text
+    assert settings.busy is False
 
 
 async def test_export_backup(settings, ctx, sample_event, monkeypatch):
@@ -195,7 +241,7 @@ async def test_import_backup_flow(settings, ctx, sample_event, events, monkeypat
     data = export_backup(events.list(), ctx.leaders_by_id)
     path = tmp_path / "b.json"
     path.write_bytes(data)
-    events.create("extra", "online", dt.date(2026, 1, 2))
+    events.create("extra", "treasure_cup", dt.date(2026, 1, 2))
     monkeypatch.setattr(
         settings_mod.ft, "FilePicker", FakePicker([ft.FilePickerFile(1, "b.json", len(data), path=str(path))])
     )
@@ -206,6 +252,21 @@ async def test_import_backup_flow(settings, ctx, sample_event, events, monkeypat
     await fire(dialog.actions[1].on_click, dialog.actions[1])
     assert [e.name for e in events.list()] == ["Sunday locals"]
     assert "Events restored: 1" in page.dialogs[-1].content.value
+
+
+async def test_a_restore_that_brings_new_leaders_updates_their_count(settings, ctx, monkeypatch, page, tmp_path):
+    from backup.json_backup import FORMAT, VERSION
+
+    before = len(ctx.leaders)
+    event = {"name": "x", "event_type": "locals", "date": "2026-01-01", "leader": "OP99-001", "rounds": []}
+    data = json.dumps({"format": FORMAT, "version": VERSION, "events": [event]}).encode()
+    monkeypatch.setattr(
+        settings_mod.ft, "FilePicker", FakePicker([ft.FilePickerFile(1, "b.json", len(data), bytes=data)])
+    )
+    btn = by_data(settings.body, "import")
+    await fire(btn.on_click, btn)
+    await fire(page.dialogs[-1].actions[1].on_click, page.dialogs[-1].actions[1])
+    assert f"{before + 1} leaders in the catalogue. New sets are added automatically." in texts(settings.body)
 
 
 async def test_import_invalid_file_reports_error(settings, events, sample_event, monkeypatch, page, tmp_path):
@@ -220,6 +281,24 @@ async def test_import_invalid_file_reports_error(settings, events, sample_event,
     await fire(dialog.actions[1].on_click, dialog.actions[1])
     assert page.dialogs[-1].data == "error"
     assert len(events.list()) == 1
+
+
+@pytest.mark.regression
+async def test_an_invalid_backup_is_explained_in_the_users_language(settings, monkeypatch, page, tmp_path):
+    """The reason after "No es una copia válida:" was English."""
+    from i18n import set_lang
+
+    set_lang(page, "es")
+    path = tmp_path / "bad.json"
+    path.write_bytes(b"{}")
+    monkeypatch.setattr(
+        settings_mod.ft, "FilePicker", FakePicker([ft.FilePickerFile(1, "bad.json", 2, path=str(path))])
+    )
+    btn = by_data(settings.body, "import")
+    await fire(btn.on_click, btn)
+    dialog = page.dialogs[-1]
+    await fire(dialog.actions[1].on_click, dialog.actions[1])
+    assert page.dialogs[-1].content.value == "No es una copia válida: no es una copia de timtapper"
 
 
 @pytest.mark.parametrize(
@@ -240,6 +319,44 @@ async def test_import_unreadable_file(settings, monkeypatch, page):
     btn = by_data(settings.body, "import")
     await fire(btn.on_click, btn)
     assert page.dialogs[-1].content.value == "Could not read that file"
+
+
+async def test_import_from_a_path_that_cannot_be_read(settings, monkeypatch, page, tmp_path, caplog):
+    gone = tmp_path / "gone.json"
+    monkeypatch.setattr(
+        settings_mod.ft, "FilePicker", FakePicker([ft.FilePickerFile(1, "gone.json", 0, path=str(gone))])
+    )
+    btn = by_data(settings.body, "import")
+    await fire(btn.on_click, btn)
+    assert page.dialogs[-1].content.value == "Could not read that file"
+    assert "could not read" in caplog.text
+
+
+@pytest.mark.regression
+async def test_import_reports_an_unexpected_failure_and_keeps_the_events(
+    settings, ctx, events, sample_event, monkeypatch, page, tmp_path
+):
+    """A database error during the restore reached no one: the dialog closed and nothing was said."""
+    from backup.json_backup import export_backup
+
+    data = export_backup(events.list(), ctx.leaders_by_id)
+    path = tmp_path / "b.json"
+    path.write_bytes(data)
+    monkeypatch.setattr(
+        settings_mod.ft, "FilePicker", FakePicker([ft.FilePickerFile(1, "b.json", len(data), path=str(path))])
+    )
+
+    def broken(db, raw):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(settings_mod, "import_backup", broken)
+    btn = by_data(settings.body, "import")
+    await fire(btn.on_click, btn)
+    dialog = page.dialogs[-1]
+    await fire(dialog.actions[1].on_click, dialog.actions[1])
+    assert page.dialogs[-1].data == "error"
+    assert page.dialogs[-1].content.value == "Could not restore the backup (RuntimeError)"
+    assert [e.name for e in events.list()] == ["Sunday locals"]
 
 
 async def test_language_and_theme(settings, ctx, monkeypatch):
@@ -273,6 +390,12 @@ def test_theme_swatches_mark_the_active_theme(settings, ctx):
     widths = {key: sw.border.top.width for key, sw in swatches.items()}
     assert widths["gruvbox"] > max(w for k, w in widths.items() if k != "gruvbox")
     assert "Classic" in texts(swatches["classic"])
+
+
+def test_theme_names_are_never_ellipsized(settings):
+    """Text is never cut off with "…" anywhere (project rule); the swatch labels were."""
+    labels = [c for key in THEMES for c in walk(by_data(settings.body, f"theme-{key}")) if isinstance(c, ft.Text)]
+    assert labels and all(t.overflow != ft.TextOverflow.ELLIPSIS and t.max_lines is None for t in labels)
 
 
 def test_every_language_has_a_flag():
@@ -349,3 +472,55 @@ def test_mode_labels_never_wrap(ctx, lang):
         assert isinstance(seg.label, ft.Text) and seg.label.no_wrap
         assert seg.label.overflow == ft.TextOverflow.VISIBLE and seg.icon is not None
     assert [seg.label.value for seg in segments] == [ctx._("System"), ctx._("Light"), ctx._("Dark")]
+
+
+@pytest.mark.live
+async def test_live_update_leaders_button(settings, ctx, page, prefs):
+    """Settings → Update leaders against the real optcgapi.com: no mocks between the button and the database."""
+    before = len(ctx.leaders)
+    btn = by_data(settings.body, "update-leaders")
+    await fire(btn.on_click, btn)
+    message = page.dialogs[-1]
+    assert message.data == "info", message.content.value  # an error snackbar means the real update failed
+    assert message.content.value.startswith("Leaders updated:")
+    assert len(ctx.leaders) >= before
+    assert "OP-01" in prefs["timtapper.leader_sources"].split(",")
+    assert settings.busy is False and not by_data(settings.body, "update-leaders").disabled
+
+
+def test_stats_show_games_and_who_chose_the_turn(ctx, events, sample_event, leader_ids):
+    r = events.add_round(sample_event.id, leader_ids[2], "top_cut")
+    events.update_game(r.id, 1, result="L", went_first=True, chose_turn=True)
+    events.update_game(r.id, 2, result="W")  # you chose (lost game 1)
+    events.update_game(r.id, 3, result="W")  # they chose (you won game 2)
+    s = StatsScreen(ctx)
+    s.build()
+    shown = texts(s.body)
+    for label in ("You chose turn", "They chose turn", "Games"):
+        assert label in shown
+    games_tile = by_data(s.body, "games")
+    assert "4-2" in texts(games_tile)  # sample: W L W + this round's L W W
+    assert "3-1" in shown  # matches: the best of 3 counts once
+
+
+def test_byes_get_their_own_tile_and_stay_out_of_the_record(ctx, events, sample_event):
+    events.add_round(sample_event.id, None, "bye")
+    s = StatsScreen(ctx)
+    s.build()
+    games = by_data(s.body, "games")
+    assert "Byes" in texts(games) and "1" in texts(games)
+    assert "2-1" in texts(s.body)  # the record still counts only the played rounds
+
+
+def test_no_byes_no_byes_tile(ctx, sample_event):
+    s = StatsScreen(ctx)
+    s.build()
+    assert "Byes" not in texts(s.body)
+
+
+def test_the_scope_names_the_set(ctx, events, sample_event):
+    from stats.compute import Filters
+
+    s = StatsScreen(ctx)
+    s.filters = Filters(set_code="OP16")
+    assert s.scope_label() == "All leaders · OP16"

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:45.015285
-Revised: 2026/10/11 17:20:13.181089
+Revised: 2026/10/12 23:54:36.799637
 
 Shared fixtures. Every DB test runs against a real, freshly migrated SQLite
 file (never mocks), seeded with the bundled leader catalogue.
@@ -67,9 +67,9 @@ def sample_event(events, leader_ids):
     r2 = events.add_round(ev.id, leader_ids[2])
     r3 = events.add_round(ev.id, leader_ids[1])
     events.add_round(ev.id, leader_ids[3])
-    events.update_round(r1.id, result="W", went_first=True, won_die_roll=True)
-    events.update_round(r2.id, result="L", went_first=False, won_die_roll=False)
-    events.update_round(r3.id, result="W")
+    events.update_game(r1.id, 1, result="W", went_first=True, chose_turn=True)
+    events.update_game(r2.id, 1, result="L", went_first=False, chose_turn=False)
+    events.update_game(r3.id, 1, result="W")
     return events.get(ev.id)
 
 

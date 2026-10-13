@@ -2,8 +2,10 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/12 19:13:15.871785
+Revised: 2026/10/13 07:39:27.643468
 """
+
+import datetime as dt
 
 import flet as ft
 import pytest
@@ -16,7 +18,8 @@ from share.deliver import Delivery
 from ui import app as app_mod
 from ui import context as context_mod
 from ui.app import TABS, build_view, install_routing
-from uitools import fire
+from ui.context import PREF_LANG
+from uitools import fire, texts
 
 
 # ---- routing ------------------------------------------------------------------
@@ -111,6 +114,93 @@ async def test_back_pops_then_needs_double_press(ctx, page, sample_event, monkey
     assert closed == [True]
 
 
+# ---- new-event drafts -------------------------------------------------------------
+def make_draft(ctx, leader_id=None):
+    return ctx.new_event("locals", dt.date(2026, 10, 12), leader_id)
+
+
+def test_new_event_is_a_draft_under_its_suggested_name(ctx, events, sample_event):
+    draft = make_draft(ctx, sample_event.leader_id)
+    assert ctx.draft == draft == events.get(draft.id)
+    assert draft.name == "Local #2"
+
+
+def test_untouched_draft_is_dropped(ctx, events):
+    draft = make_draft(ctx)
+    ctx.drop_untouched_draft()
+    with pytest.raises(EventError):
+        events.get(draft.id)
+    assert ctx.draft is None
+
+
+TOUCHES = {
+    "name": lambda ev, d, ids: ev.update(d.id, name="Store champs"),
+    "notes": lambda ev, d, ids: ev.update(d.id, notes="bring sleeves"),
+    "type": lambda ev, d, ids: ev.update(d.id, event_type="regional"),
+    "date": lambda ev, d, ids: ev.update(d.id, date=dt.date(2026, 1, 1)),
+    "leader": lambda ev, d, ids: ev.update(d.id, leader_id=ids[0]),
+    "players": lambda ev, d, ids: ev.update(d.id, players=16),
+    "round": lambda ev, d, ids: ev.add_round(d.id, ids[1]),
+}
+
+
+@pytest.mark.parametrize("touch", TOUCHES.values(), ids=TOUCHES.keys())
+def test_touched_draft_is_kept(ctx, events, leader_ids, touch):
+    draft = make_draft(ctx)
+    touch(events, draft, leader_ids)
+    ctx.drop_untouched_draft()
+    assert events.get(draft.id)
+    assert ctx.draft is None
+
+
+def test_draft_deleted_from_its_menu_is_no_error(ctx, events):
+    draft = make_draft(ctx)
+    events.delete(draft.id)
+    ctx.drop_untouched_draft()
+    assert ctx.draft is None
+
+
+def test_without_a_draft_nothing_is_dropped(ctx, events, sample_event):
+    ctx.drop_untouched_draft()
+    assert events.get(sample_event.id) == sample_event
+
+
+def test_leaving_the_draft_drops_it_before_the_list_is_built(ctx, page, events):
+    route_change = install_routing(ctx)
+    draft = make_draft(ctx)
+    page.route = f"/event/{draft.id}"
+    route_change()
+    assert events.get(draft.id)  # still on its screen: kept
+    page.route = "/events"
+    route_change()
+    assert events.list() == []
+    assert "No events yet" in texts(page.views[-1].controls[0])
+
+
+async def back_from_draft(ctx, page, touch=None):
+    route_change = install_routing(ctx)
+    route_change()
+    draft = make_draft(ctx)
+    page.route = f"/event/{draft.id}"
+    route_change()
+    if touch:
+        touch(draft)
+    await page.on_view_pop(None)
+    page.route = page.routes[-1]
+    route_change()  # what Flet does after navigate()
+    return draft
+
+
+async def test_back_from_an_untouched_draft_drops_it(ctx, page, events, sample_event):
+    await back_from_draft(ctx, page)
+    assert [e.id for e in events.list()] == [sample_event.id]
+
+
+async def test_back_from_a_draft_with_a_round_keeps_it(ctx, page, events, leader_ids):
+    draft = await back_from_draft(ctx, page, lambda d: events.add_round(d.id, leader_ids[0]))
+    assert [e.id for e in events.list()] == [draft.id]
+
+
 def test_language_change_rebuilds_top_view(ctx, page):
     install_routing(ctx)()
     from i18n import set_lang
@@ -118,6 +208,12 @@ def test_language_change_rebuilds_top_view(ctx, page):
     set_lang(page, "es")
     ctx.on_appearance_change()
     assert page.views[-1].appbar.title.value == "Eventos"
+
+
+def test_an_appearance_change_before_any_screen_is_shown_builds_nothing(ctx, page):
+    install_routing(ctx)
+    ctx.on_appearance_change()  # e.g. the device turned dark while the first screen was still loading
+    assert page.views == []
 
 
 # ---- context --------------------------------------------------------------------
@@ -164,12 +260,26 @@ async def test_share_file_success_and_saved(ctx, monkeypatch, page, tmp_path):
     assert page.dialogs[-1].content.value == "Saved"
 
 
+@pytest.mark.parametrize("outcome", [Delivery.SHARED, Delivery.CANCELLED])
+async def test_share_file_says_nothing_when_shared_or_cancelled(ctx, monkeypatch, page, tmp_path, outcome):
+    out = tmp_path / "x.png"
+    out.write_bytes(b"x")
+
+    async def fake_deliver(path, *, title, mime_type):
+        return outcome
+
+    monkeypatch.setattr(context_mod, "deliver", fake_deliver)
+    await ctx.share_file(lambda: out, title="t")
+    assert page.dialogs == []  # the share sheet was the feedback (or you closed it)
+
+
 async def test_share_file_render_failure(ctx, page):
     def broken():
         raise ValueError("bad font")
 
     await ctx.share_file(broken, title="t")
-    assert "ValueError" in page.dialogs[-1].content.value
+    # "file", not "image": backups go through here too
+    assert page.dialogs[-1].content.value == "Could not create the file (ValueError)"
 
 
 async def test_share_file_delivery_failure(ctx, monkeypatch, page, tmp_path):
@@ -186,6 +296,14 @@ def test_leader_cache_invalidation(ctx, leaders):
     assert ctx.leaders is first
     ctx.invalidate_leaders()
     assert ctx.leaders is not first and ctx.leaders == first
+
+
+def test_leaders_by_id_is_cached_with_the_leaders(ctx):
+    by_id = ctx.leaders_by_id
+    assert ctx.leaders_by_id is by_id  # built once, not on every tile and round row
+    assert by_id == {leader.id: leader for leader in ctx.leaders}
+    ctx.invalidate_leaders()
+    assert ctx.leaders_by_id is not by_id and ctx.leaders_by_id == by_id
 
 
 # ---- entry point ------------------------------------------------------------------
@@ -246,6 +364,32 @@ async def test_main_reports_database_failure(page, monkeypatch):
     assert "migrations:" in report.value
 
 
+async def test_database_failure_speaks_the_saved_language(page, prefs, monkeypatch):
+    """The failure screen comes before the app (no context yet), yet says what went wrong in your language."""
+    added = []
+    page.add = added.append
+    prefs[PREF_LANG] = "es"
+
+    def broken():
+        raise OSError("disk full")
+
+    monkeypatch.setattr(main, "open_database", broken)
+    await main.main(page)
+    message, report = added[0].content.controls
+    assert message.value == "timtapper no pudo abrir su base de datos: OSError: disk full"
+    assert report.value.startswith("timtapper ")  # the report stays English: it's for whoever fixes the app
+
+
+async def test_unreadable_language_falls_back_to_the_default(page, monkeypatch, caplog):
+    class Broken:
+        async def get(self, key):
+            raise RuntimeError("no storage")
+
+    monkeypatch.setattr(context_mod.ft, "SharedPreferences", Broken)
+    assert await context_mod.saved_language() == "en"
+    assert "could not read the saved language" in caplog.text
+
+
 async def test_startup_failure_report_carries_the_migration_log(page, monkeypatch):
     """A phone has no debugger: what Alembic did must be on the failure screen itself."""
     added = []
@@ -261,7 +405,7 @@ async def test_startup_failure_report_carries_the_migration_log(page, monkeypatc
     await main.main(page)
     report = added[0].content.controls[1].value
     assert "Running upgrade  -> 0001" in report
-    assert "alembic_version: [('0003',)]" in report
+    assert "alembic_version: [('0005',)]" in report
 
 
 @pytest.mark.parametrize("handler", ["on_close", "on_disconnect"])
@@ -285,8 +429,11 @@ async def test_every_quit_path_closes_the_database(page, monkeypatch, handler):
     disposed = []
     real_dispose = opened[0].dispose
     monkeypatch.setattr(opened[0], "dispose", lambda: (disposed.append(True), real_dispose()))
+    dropped = []
+    monkeypatch.setattr(context_mod.AppContext, "drop_untouched_draft", lambda self: dropped.append(True))
     getattr(page, handler)(None)
     assert disposed == [True]
+    assert dropped == [True]  # an untouched new event does not outlive the app either
 
 
 def test_run_sets_up_logging_then_starts_flet(monkeypatch):
@@ -309,3 +456,41 @@ def test_launcher_puts_the_app_root_on_the_path_and_runs_main(monkeypatch):
     launcher.run()
     assert started == [True]
     assert sys.path[0] == str(Path(launcher.__file__).resolve().parent)
+
+
+@pytest.mark.regression
+async def test_quitting_closes_the_database_even_when_dropping_the_draft_fails(page, monkeypatch, caplog):
+    """A database error while dropping the draft skipped db.dispose() and left the file open."""
+    opened = []
+    real_open = main.open_database
+    monkeypatch.setattr(main, "open_database", lambda: opened.append(real_open()) or opened[-1])
+
+    class Prefs:
+        async def get(self, key):
+            return None
+
+    monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
+    await main.main(page)
+    disposed = []
+    real_dispose = opened[0].dispose
+    monkeypatch.setattr(opened[0], "dispose", lambda: (disposed.append(True), real_dispose()))
+
+    def broken(self):
+        raise RuntimeError("disk I/O error")
+
+    monkeypatch.setattr(context_mod.AppContext, "drop_untouched_draft", broken)
+    page.on_disconnect(None)
+    assert disposed == [True]
+    assert "could not drop the untouched draft event" in caplog.text
+
+
+def test_a_new_event_is_played_in_the_newest_set(ctx):
+    from catalog.repository import set_codes
+
+    draft = make_draft(ctx)
+    assert draft.set_code == set_codes(ctx.leaders)[0]
+
+
+def test_a_new_event_without_any_set_known_has_none(ctx, monkeypatch):
+    monkeypatch.setattr(type(ctx), "leaders", property(lambda self: []))
+    assert make_draft(ctx).set_code is None

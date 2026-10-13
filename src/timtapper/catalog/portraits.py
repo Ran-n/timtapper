@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:19.051520
-Revised: 2026/10/12 16:54:57.552992
+Revised: 2026/10/13 07:39:23.702794
 
 Leader portraits: a small square crop of each leader card's art (the face sits
 in the upper middle of every card; a two-character card gets one strip per face,
@@ -20,7 +20,7 @@ from pathlib import Path
 import httpx
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, UnidentifiedImageError
 
-from catalog.optcgapi import IMAGE_URL
+from catalog.optcgapi import IMAGE_TIMEOUT, IMAGE_URL, client_session
 from core.logging import get_logger
 from core.paths import ASSETS_DIR, data_dir
 
@@ -138,19 +138,16 @@ def download_missing(codes: list[str], client: httpx.Client | None = None) -> tu
     """Download portraits for leaders that have none yet into the cache. Returns (saved, failed)."""
     missing = [c for c in codes if source(c) is None]
     saved = failed = 0
-    owns_client = client is None
-    client = client or httpx.Client(timeout=30, follow_redirects=True)
     try:
-        for code in missing:
-            try:
-                (cache_dir() / filename(code)).write_bytes(download(code, client))
-                saved += 1
-            except PortraitError as exc:
-                _log.warning("portrait download failed: %s", exc)
-                failed += 1
+        with client_session(client, IMAGE_TIMEOUT) as c:
+            for code in missing:
+                try:
+                    (cache_dir() / filename(code)).write_bytes(download(code, c))
+                    saved += 1
+                except (PortraitError, OSError) as exc:  # OSError: the cache folder is full or not writable
+                    _log.warning("portrait for %s not saved: %s", code, exc)
+                    failed += 1
     finally:
-        if owns_client:
-            client.close()
         source.cache_clear()
     if missing:
         _log.info("portraits: %d downloaded, %d failed", saved, failed)

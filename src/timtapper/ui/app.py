@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.676210
-Revised: 2026/10/11 23:25:32.169180
+Revised: 2026/10/12 21:24:33.282716
 
 Screen routing. Tabs (/events, /stats, /settings) replace the view stack;
 /event/<id> is pushed on top so Android's back button returns to the list.
@@ -111,6 +111,8 @@ def install_routing(ctx: AppContext) -> Callable[..., None]:
 
     def route_change(_e=None) -> None:
         route = page.route if page.route in TABS or page.route.startswith("/event/") else "/events"
+        if ctx.draft is not None and route != f"/event/{ctx.draft.id}":
+            ctx.drop_untouched_draft()  # before the list is built, so it never shows
         view = build_view(ctx, route)
         if view.route in TABS:
             page.views.clear()  # tabs are lateral: don't grow the back stack

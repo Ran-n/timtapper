@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:37.050848 )
-[//]: # (+ Revised: 	2026/10/11 17:36:52.358334 )
+[//]: # (+ Revised: 	2026/10/12 22:05:37.271383 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 Thank you for your interest in contributing.
@@ -52,8 +52,9 @@ Open an issue and include:
 1. Fork the repository
 2. Branch from `main`
 3. Make your change
-4. Commit following the style below
-5. Open a pull request against `main` and describe *why* the change is needed
+4. Run `bash scripts/ci.sh` (what CI runs: locked install, format check, lint, tests with the coverage gate)
+5. Commit following the style below
+6. Open a pull request against `main` and describe *why* the change is needed
 
 One concern per PR — do not bundle unrelated changes.
 

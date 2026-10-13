@@ -1,0 +1,9 @@
+check:
+  image: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+  variables:
+    UV_LINK_MODE: copy
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - bash scripts/ci.sh

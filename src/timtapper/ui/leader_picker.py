@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.041772
-Revised: 2026/10/12 01:37:35.931722
+Revised: 2026/10/13 07:39:24.995450
 
 Searchable leader picker in a bottom sheet (most-played opponents first),
 narrowed by color dots (a leader must have every selected color) and a set
@@ -14,11 +14,11 @@ from collections.abc import Awaitable, Callable
 import flet as ft
 
 from catalog.repository import Leader, filter_leaders, set_codes
+from core.card_colors import CARD_COLORS
 from core.logging import get_logger
 from db.models import COLORS
 from i18n import color_label
 from ui.context import AppContext
-from ui.theme import CARD_COLORS
 from ui.widgets import leader_row, update_if_mounted
 
 _log = get_logger("ui.picker")
@@ -60,6 +60,20 @@ def build_picker(ctx: AppContext, title: str, on_pick: Callable[[Leader], Awaita
             )
             for leader in found[:MAX_RESULTS]
         ] or [ft.Container(padding=24, content=ft.Text(_("No leader matches"), color=ft.Colors.ON_SURFACE_VARIANT))]
+        if len(found) > MAX_RESULTS:  # say the list stops, so a leader further down isn't taken for missing
+            results.controls.append(
+                ft.Container(
+                    padding=ft.Padding(12, 8, 12, 8),
+                    content=ft.Text(
+                        _("{shown} of {total} leaders — search to find the rest").format(
+                            shown=MAX_RESULTS, total=len(found)
+                        ),
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                    data="more-leaders",
+                )
+            )
 
     def refresh() -> None:
         _log.debug("filter query=%r colors=%s set=%r", state["query"], sorted(colors), state["set_code"])

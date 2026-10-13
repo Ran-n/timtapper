@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.420418
-Revised: 2026/10/12 16:54:59.579318
+Revised: 2026/10/13 07:39:24.438355
 
 Small building blocks reused across screens.
 """
@@ -14,10 +14,11 @@ import flet as ft
 
 from catalog import portraits
 from catalog.repository import Leader
+from core.card_colors import leader_hues
 from core.die import CORNER_RADIUS, DIE_PIPS, LOST_PIPS, PIP_DIAMETER, WON_PIPS
 from i18n import Translate, event_type_label
 from stats.compute import Record, percent
-from ui.theme import CARD_COLORS, FONT_HEAVY, FONT_SEMIBOLD, UNKNOWN_COLOR, Scheme
+from ui.theme import FONT_HEAVY, FONT_SEMIBOLD, Scheme
 
 RADIUS = 18
 
@@ -77,11 +78,6 @@ def logo(size: int = 32) -> ft.Image:
     return ft.Image(src=LOGO_MARK, width=size, height=size, fit=ft.BoxFit.CONTAIN, data="logo")
 
 
-def _leader_colors(colors: tuple[str, ...]) -> list[str]:
-    """Display hues for a leader's card colors; unknown or missing colors fall back to UNKNOWN_COLOR."""
-    return [CARD_COLORS.get(c, UNKNOWN_COLOR) for c in colors] or [UNKNOWN_COLOR]
-
-
 def _color_frame(colors: list[str]) -> dict:
     """Container fill for a frame: solid for one color, equal hard-edged top-to-bottom bands (as color_bar) for more."""
     if len(colors) == 1:
@@ -104,7 +100,7 @@ def portrait_border(size: int) -> int:
 
 def color_bar(colors: tuple[str, ...], height: int | None = 28, width: int = 8) -> ft.Control:
     """Vertical stripes, one per leader color — the app's leader 'icon'. `height=None`: sized by its parent."""
-    stripes = _leader_colors(colors)
+    stripes = leader_hues(colors)
     return ft.Container(
         width=width,
         height=height,
@@ -127,7 +123,33 @@ def leader_portrait(leader: Leader | None, size: int = 32) -> ft.Control:
         padding=border,
         data="portrait-frame",
         content=_portrait_face(portraits.source(leader.code), size - 2 * border, size // 4 - border),
-        **_color_frame(_leader_colors(leader.colors)),
+        **_color_frame(leader_hues(leader.colors)),
+    )
+
+
+BYE_JOKER = "bye_joker.png"  # drawn by scripts/make_bye_joker.py; the share cards paste the same image
+
+
+def bye_portrait(scheme: Scheme, size: int = 32) -> ft.Control:
+    """A bye's stand-in for a leader portrait: a joker's hat (an opponent you never played), framed in the top-cut
+    gold and sized like a portrait."""
+    border = portrait_border(size)
+    inner = size - 2 * border
+    return ft.Container(
+        width=size,
+        height=size,
+        border_radius=size // 4,
+        padding=border,
+        bgcolor=scheme.tertiary,
+        data="bye-portrait",
+        content=ft.Container(
+            width=inner,
+            height=inner,
+            border_radius=size // 4 - border,
+            bgcolor=scheme.surface_highest,
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            content=ft.Image(src=BYE_JOKER, width=inner, height=inner, fit=ft.BoxFit.CONTAIN),
+        ),
     )
 
 
@@ -223,23 +245,62 @@ def pill(
     )
 
 
-# One per db.models.EVENT_TYPES value. All share the primary accent (the others already
-# mean win/loss/top cut), so the icon is what tells types apart.
+# One per db.models.EVENT_TYPES value: with the tier colour below, what tells types apart.
 EVENT_TYPE_ICONS: dict[str, str] = {
     "testing": ft.Icons.SCIENCE_OUTLINED,
+    "pirates_party": ft.Icons.CELEBRATION_OUTLINED,
     "locals": ft.Icons.STOREFRONT_OUTLINED,
+    "release": ft.Icons.NEW_RELEASES_OUTLINED,
+    "sealed": ft.Icons.INVENTORY_2_OUTLINED,
+    "heroines_battle": ft.Icons.FACE_3_OUTLINED,
+    "team": ft.Icons.GROUPS_OUTLINED,
+    "store_championship": ft.Icons.WORKSPACE_PREMIUM_OUTLINED,
+    "treasure_cup": ft.Icons.DIAMOND_OUTLINED,
+    "flagship": ft.Icons.SAILING_OUTLINED,
+    "extra_battle": ft.Icons.BOLT_OUTLINED,
     "regional": ft.Icons.MAP_OUTLINED,
     "national": ft.Icons.FLAG_OUTLINED,
-    "online": ft.Icons.LANGUAGE,
+    "worlds": ft.Icons.PUBLIC,
     "other": ft.Icons.EVENT_OUTLINED,
 }
 
 
+# Each type's tier, colour-coded as davyback.gg does it but in the theme's own accents, so every theme reads them:
+# the championship ladder, premier store events, store events, and casual play
+EVENT_TYPE_TIERS: dict[str, str] = {
+    "regional": "championship",
+    "national": "championship",
+    "worlds": "championship",
+    "treasure_cup": "premier",
+    "flagship": "premier",
+    "extra_battle": "premier",
+    "store_championship": "store",
+    "locals": "store",
+    "heroines_battle": "store",
+    "testing": "casual",
+    "pirates_party": "casual",
+    "release": "casual",
+    "sealed": "casual",
+    "team": "casual",
+    "other": "casual",
+}
+
+
+def tier_color(key: str, scheme: Scheme) -> str:
+    """The accent an event type's pill is drawn in (an unknown type reads as casual, like 'Other')."""
+    return {
+        "championship": scheme.primary,
+        "premier": scheme.tertiary,
+        "store": scheme.secondary,
+        "casual": scheme.fg_muted,
+    }[EVENT_TYPE_TIERS.get(key, "casual")]
+
+
 def event_type_pill(_: Translate, key: str, scheme: Scheme) -> ft.Control:
-    """The event type as icon + translated label; an unknown key reads 'Other', like event_type_label."""
+    """The event type as icon + translated label in its tier's colour; an unknown key reads 'Other'."""
     return pill(
         event_type_label(_, key),
-        scheme.primary,
+        tier_color(key, scheme),
         scheme,
         size=12,
         icon=EVENT_TYPE_ICONS.get(key, EVENT_TYPE_ICONS["other"]),
@@ -297,17 +358,24 @@ def result_badge(result: str | None, scheme: Scheme, size: int = 36) -> ft.Contr
     )
 
 
+TURN_ICONS = {True: ft.Icons.LOOKS_ONE, False: ft.Icons.LOOKS_TWO}  # keycaps, like davyback.gg's 1️⃣ / 2️⃣
+
+
 def turn_badge(went_first: bool | None, scheme: Scheme, first: str, second: str, size: int = 36) -> ft.Control:
-    """`first`/`second` when known, a muted dash when not; labels come translated from the caller."""
-    known = went_first is not None
+    """Went first or second as a 1 / 2 keycap, a muted dash while unknown. `first`/`second` (translated by the
+    caller) are what a screen reader says for the keycap."""
+    if went_first is None:
+        content: ft.Control = ft.Text("—", size=size * 0.36, color=ft.Colors.ON_SURFACE_VARIANT)
+    else:
+        content = ft.Icon(
+            TURN_ICONS[went_first],
+            size=size * 0.72,
+            color=scheme.fg,
+            semantics_label=first if went_first else second,
+        )
     return _badge(
-        ft.Text(
-            (first if went_first else second) if known else "—",
-            size=size * 0.36,
-            font_family=FONT_HEAVY if known else None,
-            color=scheme.fg if known else ft.Colors.ON_SURFACE_VARIANT,
-        ),
-        scheme.surface_high if known else ft.Colors.SURFACE_CONTAINER_HIGHEST,
+        content,
+        scheme.surface_high if went_first is not None else ft.Colors.SURFACE_CONTAINER_HIGHEST,
         width=size + 4,
         height=size,
     )
@@ -357,6 +425,40 @@ def die_badge(won_die_roll: bool | None, scheme: Scheme, size: int = 36) -> ft.C
         die_face(WON_PIPS if won_die_roll else LOST_PIPS, color, scheme.on_accent, size * 0.6),
         scheme.tint(color, 0.22),
         width=size + 8,
+        height=size,
+    )
+
+
+def chooser_badge(chose: bool | None, scheme: Scheme, you: str, them: str, size: int = 36) -> ft.Control:
+    """Who chose the turn order where no die decided it (top cut, later games): `you` in the primary accent,
+    `them` neutral, a muted hand while unknown. Labels come translated from the caller."""
+    if chose is None:
+        return _badge(
+            ft.Icon(ft.Icons.FRONT_HAND_OUTLINED, size=size * 0.45, color=ft.Colors.ON_SURFACE_VARIANT),
+            ft.Colors.SURFACE_CONTAINER_HIGHEST,
+            width=size + 8,
+            height=size,
+        )
+    color = scheme.primary if chose else scheme.fg
+    return _badge(
+        ft.Text(you if chose else them, size=size * 0.32, font_family=FONT_HEAVY, color=color),
+        scheme.tint(scheme.primary, 0.22) if chose else scheme.surface_high,
+        width=size + 8,
+        height=size,
+    )
+
+
+def score_badge(wins: int, losses: int, result: str | None, scheme: Scheme, size: int = 36) -> ft.Control:
+    """A best of 3's game score ("2-1"): filled in the result's colour once decided, muted while it's played."""
+    return _badge(
+        ft.Text(
+            f"{wins}-{losses}",
+            size=size * 0.36,
+            font_family=FONT_HEAVY,
+            color=scheme.on_accent if result else ft.Colors.ON_SURFACE_VARIANT,
+        ),
+        scheme.results[result] if result else ft.Colors.SURFACE_CONTAINER_HIGHEST,
+        width=size + 6,
         height=size,
     )
 

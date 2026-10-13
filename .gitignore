@@ -9,3 +9,4 @@ storage/
 .coverage
 *.db
 build_apk.log
+dist/

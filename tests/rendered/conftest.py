@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:03.055435
-Revised: 2026/10/12 16:55:00.458146
+Revised: 2026/10/13 00:30:08.214395
 
 One real app for the whole rendered-test session: scripts/app_driver.py runs it,
 scripts/app_window.py captures and clicks it. Windows only; marked `desktop`.
@@ -13,6 +13,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -51,6 +52,9 @@ class DrivenApp:
         ready = self._next()
         self.newest = ready["newest"]
         self.window.wait_open()
+        self.capture()
+        # the first click after the window opens can be lost while it takes focus: spend it on the inert title
+        self.window.click(200 * self.scale, 28 * self.scale)
 
     def _read(self) -> None:
         for line in self.proc.stdout:
@@ -95,6 +99,54 @@ class DrivenApp:
         """A real click at dp (x, y) of a capture, then the settled screen it produced."""
         self.window.click(x * self.scale, y * self.scale)
         return self.capture()
+
+    def fields(self, s) -> list:
+        """The outlined input fields on screen now, in dp (see locate.fields)."""
+        from locate import fields
+
+        return fields(self.window.capture(), s, self.scale)
+
+    def rings(self, color: str, **size) -> list:
+        """Outlines in `color` on screen now (outlined buttons), in dp (see locate.rings)."""
+        from locate import rings
+
+        return rings(self.window.capture(), color, self.scale, **size)
+
+    def pick(self, field, index: int, options: int) -> None:
+        """Open the dropdown `field` and tap its option `index` (of `options`), wherever the menu opens."""
+        from locate import menu_rows
+
+        before = self.capture()
+        after = self.click(field.cx, field.cy)
+        self.click(*menu_rows(before, after, field, options)[index])
+
+    def tap(self, x: float, y: float) -> None:
+        """A real click at dp (x, y) without waiting for the screen to settle (a spinner never does)."""
+        self.window.click(x * self.scale, y * self.scale)
+
+    def type(self, text: str) -> None:
+        self.window.type_text(text)
+
+    def press(self, *keys: str) -> None:
+        self.window.press(*keys)
+
+    def scroll(self, x: float, y: float, notches: int) -> Image.Image:
+        """Turn the wheel over dp (x, y) (positive: towards the end), then the settled screen."""
+        self.window.scroll(x * self.scale, y * self.scale, notches)
+        return self.capture()
+
+    def reset(self) -> None:
+        """The demo data as it started (tests that change data call this in `finally`)."""
+        self.newest = self.send("reset")
+
+    def wait_until(self, check, timeout: float = 15, what: str = "the app"):
+        """Poll `check()` until it returns something truthy; that value, or a failure naming `what`."""
+        deadline = time.monotonic() + timeout
+        while not (result := check()):
+            if time.monotonic() > deadline:
+                raise AssertionError(f"{what} did not happen within {timeout:.0f}s")
+            time.sleep(0.2)
+        return result
 
     def quit(self) -> None:
         try:

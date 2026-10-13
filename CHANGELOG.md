@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/12 19:16:20.878712 )
+[//]: # (+ Revised: 	2026/10/13 08:07:10.173835 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,43 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- Added Swiss, top cut and bye rounds: a bye has no opponent, counts as a win in the event standing and shows a jester where a leader would be
+- Added best of 3 rounds holding each game's turn order, result and who chose the turn order (higher seed in game 1, then the previous game's loser, overridable); top cut defaults to best of 3 and any round switches between Bo1 and Bo3
+- Added a confirmation before a Bo3→Bo1 or played→bye switch drops games holding a result or turn order
+- Added the set an event was played in (newest by default) and a dropped flag; placement shows as a bracket ("Top 4 · #3 of 32", "1st place", "Dropped")
+- Added a set filter to the events list and stats screen, and leader portraits in the stats leader filter
+- Added a game record, per-game turn and die splits and a who-chose-the-turn split to stats; a best of 3 counts once in the match record and byes stay out of win rates and matchups
+- Added the leader's portrait to the header of share cards for stats narrowed to one leader
+- Added default event names from the type and count ("Local #4"), following a type change until renamed; a new event left unchanged is discarded
+- Added a "60 of N leaders — search to find the rest" line when the leader picker's list is cut
+- Added backup format version 3 (round kinds, best-of games, set, dropped); version 1 and 2 files still restore
+- Added translated backup errors that name the event, round and game at fault
+- Added CI on GitHub, GitLab and Codeberg running `scripts/ci.sh` (locked sync, format check, lint, tests with the coverage gate)
+- Added golden-image tests for the share cards and rendered baselines for Spanish, Galician, empty, bye and Bo3 screens
+
+### Changed
+
+- Changed event types to Bandai's official tiers: Pirates Party, locals, release event, sealed, Heroines Battle, team battle, Store Championship, Treasure Cup, Flagship Battle, Extra Grand Battle, regional, national and World Championship, plus testing and other
+- Changed rounds to stay collapsed unless opened, and an opened round to stay open until closed
+- Changed the share card's event name to shrink and wrap onto a second line instead of being cut
+- Changed the launcher icon to the bare mark centred in Android's adaptive-icon safe circle, without the name
+
+### Removed
+
+- Removed the "online" event type: stored online events and those in old backups become "other"
+
+### Fixed
+
+- Fixed rendered share cards and exported backups piling up in the temp folder: ones older than a day are deleted
+- Fixed saving a share card or backup over an existing file on desktop keeping the old file's contents
+- Fixed the database error screen showing in English whatever the chosen language
+- Fixed a failed background leader update or backup restore going unreported; both now log and show the error
+- Fixed the startup leader check crashing on a last-check time stored without a time zone
+- Fixed a leader catalogue entry with a non-text name, colour or set breaking the whole sync
+- Fixed a full or read-only portrait cache aborting the portrait download instead of skipping that portrait
 
 ## [0.5.2] — 2026-10-12
 

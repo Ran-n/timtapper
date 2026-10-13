@@ -2,23 +2,25 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.770833
-Revised: 2026/10/12 16:54:58.690793
+Revised: 2026/10/13 07:39:25.356267
 
 Per-session app context handed to every screen: repositories, the cached
 leader catalogue, translation, notifications, preferences and navigation.
 """
 
 import asyncio
+import datetime as dt
 from collections.abc import Callable
 from pathlib import Path
 
 import flet as ft
 
-from catalog.repository import Leader, LeaderRepository
+from catalog.repository import Leader, LeaderRepository, set_codes
 from core.logging import get_logger
 from db import Database
-from events.repository import EventRepository
-from i18n import Translate, get_lang, set_lang, tr
+from events.naming import suggest_name
+from events.repository import Event, EventError, EventRepository
+from i18n import DEFAULT_LANG, Translate, event_name_template, get_lang, set_lang, tr
 from share.deliver import Delivery, deliver
 from stats.compute import Filters
 from ui.leader_updates import LeaderUpdater
@@ -32,6 +34,16 @@ PREF_THEME = "timtapper.theme"  # mode: system/light/dark (key predates named th
 PREF_PALETTE = "timtapper.palette"
 
 
+async def saved_language() -> str:
+    """The language chosen in Settings; the default when none was, or when it can't be read. Kept apart from the other
+    preferences so the database failure screen, shown before there is any app, still speaks it."""
+    try:
+        return await ft.SharedPreferences().get(PREF_LANG) or DEFAULT_LANG
+    except Exception:
+        _log.warning("could not read the saved language — using the default", exc_info=True)
+        return DEFAULT_LANG
+
+
 class AppContext:
     def __init__(self, page: ft.Page, db: Database) -> None:
         self.page = page
@@ -43,10 +55,13 @@ class AppContext:
         self.theme: AppTheme = get_theme(None)
         self.notify = make_notifier(page, lambda: self.scheme)
         self._leaders: list[Leader] | None = None
+        self._leaders_by_id: dict[int, Leader] | None = None
         self.on_appearance_change: Callable[[], None] | None = None
         # the events list's search and filters, kept while you open an event and come back
         self.event_filters = Filters()
         self.event_filters_open = False
+        # the event "New event" just made, as it was made: dropped if you leave it without adding anything
+        self.draft: Event | None = None
 
     # ---- translation / preferences ------------------------------------
     @property
@@ -58,9 +73,9 @@ class AppContext:
         return get_lang(self.page)
 
     async def load_prefs(self) -> None:
+        set_lang(self.page, await saved_language())
         try:
             prefs = ft.SharedPreferences()
-            set_lang(self.page, await prefs.get(PREF_LANG) or "en")
             self.theme_mode = await prefs.get(PREF_THEME) or DEFAULT_MODE
             self.theme = get_theme(await prefs.get(PREF_PALETTE))
         except Exception:
@@ -117,11 +132,41 @@ class AppContext:
 
     @property
     def leaders_by_id(self) -> dict[int, Leader]:
-        return {leader.id: leader for leader in self.leaders}
+        if self._leaders_by_id is None:
+            self._leaders_by_id = {leader.id: leader for leader in self.leaders}
+        return self._leaders_by_id
 
     def invalidate_leaders(self) -> None:
         """Drop the cache (catalogue refreshed, or play counts changed the picker order)."""
-        self._leaders = None
+        self._leaders = self._leaders_by_id = None
+
+    # ---- events -------------------------------------------------------
+    def suggested_name(self, event_type: str, exclude_id: int | None = None) -> str:
+        """What a new event of `event_type` is called: "Local #4" after three locals."""
+        return suggest_name(event_name_template(self._, event_type), self.events.names_of_type(event_type, exclude_id))
+
+    def new_event(self, event_type: str, date: dt.date, leader_id: int | None) -> Event:
+        """Create an event under its suggested name; it stays a draft until something is added to it."""
+        event = self.events.create(self.suggested_name(event_type), event_type, date, leader_id)
+        newest = set_codes(self.leaders)
+        if newest:  # played in the newest set unless you say otherwise
+            event = self.events.update(event.id, set_code=newest[0])
+        self.draft = event
+        return self.draft
+
+    def drop_untouched_draft(self) -> None:
+        """Leaving the new event's screen: if nothing was changed or added, it was never wanted — delete it."""
+        draft, self.draft = self.draft, None
+        if draft is None:
+            return
+        try:
+            current = self.events.get(draft.id)
+        except EventError:
+            _log.info("draft event %d is already gone", draft.id)
+            return
+        if current == draft:
+            self.events.delete(draft.id)
+            _log.info("draft event %d left untouched — dropped", draft.id)
 
     # ---- navigation ---------------------------------------------------
     def navigate(self, route: str) -> None:
@@ -135,7 +180,8 @@ class AppContext:
             path = await asyncio.to_thread(render)
         except Exception as exc:
             _log.exception("could not render %s", title)
-            self.notify(_("Could not create the image ({error})").format(error=type(exc).__name__), error=True)
+            # "file": a share card or a backup
+            self.notify(_("Could not create the file ({error})").format(error=type(exc).__name__), error=True)
             return
         try:
             outcome = await deliver(path, title=title, mime_type=mime_type)

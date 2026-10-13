@@ -25,7 +25,15 @@ timtapper = "timtapper.launcher:run"
 desktop = ["flet[all]==1.0.*"]
 
 [dependency-groups]
-dev = ["flet[all]==1.0.*", "pytest>=8", "pytest-asyncio>=1.1", "respx>=0.22", "hypothesis>=6.100", "pytest-cov>=5"]
+dev = [
+    "flet[all]==1.0.*",
+    "pytest>=8",
+    "pytest-asyncio>=1.1",
+    "respx>=0.22",
+    "hypothesis>=6.100",
+    "pytest-cov>=5",
+    "resvg-py>=0.5.0",
+]
 
 [tool.flet]
 product = "Timtapper"
@@ -50,7 +58,7 @@ markers = [
     "property: hypothesis-driven property-based test",
     "snapshot: compares rendered output against a checked-in baseline",
     "regression: pins a fixed bug; the docstring or a comment says what used to go wrong",
-    "live: hits the real optcgapi.com endpoint (network) — kept out of the default run",
+    "live: hits the real optcgapi.com and davyback.gg (network) — kept out of the default run",
     "desktop: drives the real app window (Windows; takes over the mouse and screen) — kept out of the default run",
 ]
 addopts = "-m \"not live and not desktop\""
@@ -74,7 +82,7 @@ ignore = []
 
 # flet runs src/timtapper as the app root, so these top-level packages are ours
 [tool.ruff.lint.isort]
-known-first-party = ["catalog", "core", "db", "events", "i18n", "share", "stats", "backup", "ui", "main", "uitools", "pixels", "app_driver", "app_window"]
+known-first-party = ["catalog", "core", "db", "events", "i18n", "share", "stats", "backup", "ui", "main", "uitools", "pixels", "locate", "app_driver", "app_window"]
 
 [tool.ruff.format]
 quote-style = "double"

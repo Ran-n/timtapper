@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.253199
-Revised: 2026/10/12 19:13:16.193736
+Revised: 2026/10/12 23:54:37.116463
 """
 
 import compileall
@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from db import Database
 from db import database as database_module
 from db.database import MIGRATIONS_DIR, alembic_config
-from db.models import COLORS, EVENT_TYPES, Color, Event, EventType, Match
+from db.models import COLORS, EVENT_TYPES, Color, Event, EventType, Game, Match
 
 
 def test_migrate_creates_all_tables(db):
@@ -29,7 +29,8 @@ def test_migrate_creates_all_tables(db):
 def test_migrate_seeds_lookup_tables_in_order(db):
     with db.session() as s:
         assert [c.name for c in s.scalars(select(Color).order_by(Color.id))] == list(COLORS)
-        assert [t.key for t in s.scalars(select(EventType).order_by(EventType.id))] == list(EVENT_TYPES)
+        # every type, though not in display order: 0004 appended the official types (screens use EVENT_TYPES' order)
+        assert {t.key for t in s.scalars(select(EventType))} == set(EVENT_TYPES)
 
 
 def test_migrate_is_idempotent(db):
@@ -104,10 +105,14 @@ def test_each_migration_step_upgrades_a_database_with_data(tmp_path):
         command.upgrade(cfg, revision)
         if not seeded and "event" in inspect(database.engine).get_table_names():
             with database.engine.begin() as conn:  # plain SQL: the ORM model has columns later revisions add
+                conn.execute(text("INSERT INTO leader (id, code, name) VALUES (1, 'OP01-001', 'Roronoa Zoro')"))
                 conn.execute(text("INSERT INTO event (name, event_type_id, date) VALUES ('kept', 1, '2026-01-01')"))
+                conn.execute(text("INSERT INTO match (event_id, round_no, opponent_leader_id) VALUES (1, 1, 1)"))
             seeded = True
         with database.engine.connect() as conn:
             assert conn.execute(text("SELECT name FROM event")).scalar() == "kept"
+            # a round too: rebuilding a table it cascades from used to delete it (see the 0003 regression below)
+            assert conn.execute(text("SELECT count(*) FROM match")).scalar() == 1, revision
     database.dispose()
 
 
@@ -142,9 +147,13 @@ def test_session_rolls_back_on_error(db):
         assert s.scalar(select(Event).where(Event.name == "rolled back")) is None
 
 
+def first_game(s, round_id: int) -> Game:
+    return s.scalar(select(Game).where(Game.match_id == round_id, Game.game_no == 1))
+
+
 def test_result_check_constraint(sample_event, seeded_db):
     with pytest.raises(IntegrityError), seeded_db.session() as s:
-        s.get(Match, sample_event.rounds[0].id).result = "X"
+        first_game(s, sample_event.rounds[0].id).result = "X"
 
 
 def test_unique_round_per_event(sample_event, seeded_db):
@@ -156,7 +165,7 @@ def test_unique_round_per_event(sample_event, seeded_db):
 def test_draws_are_rejected(sample_event, seeded_db):
     """The OPTCG has no draws: the schema refuses one."""
     with pytest.raises(IntegrityError), seeded_db.session() as s:
-        s.get(Match, sample_event.rounds[0].id).result = "D"
+        first_game(s, sample_event.rounds[0].id).result = "D"
 
 
 def test_migration_0002_turns_stored_draws_into_losses(tmp_path):
@@ -204,3 +213,137 @@ def test_migration_0003_adds_empty_placement_to_existing_events(tmp_path):
     command.downgrade(cfg, "0002")
     assert "placement" not in {c["name"] for c in inspect(database.engine).get_columns("event")}
     database.dispose()
+
+
+KINDS = "SELECT e.name, t.key FROM event e JOIN event_type t ON t.id = e.event_type_id"
+
+
+def _type_keys(database) -> list[str]:
+    with database.engine.connect() as conn:
+        return [k for (k,) in conn.execute(text("SELECT key FROM event_type ORDER BY id"))]
+
+
+def test_migration_0004_swaps_online_for_the_official_event_types(tmp_path):
+    database = Database(tmp_path / "types.db")
+    cfg = alembic_config(database.engine)
+    command.upgrade(cfg, "0003")
+    with database.engine.begin() as conn:  # 5 = online, 2 = locals (seeded by 0001)
+        conn.execute(text("INSERT INTO event (id, name, event_type_id, date) VALUES (1, 'web', 5, '2026-01-01')"))
+        conn.execute(text("INSERT INTO event (id, name, event_type_id, date) VALUES (2, 'shop', 2, '2026-01-02')"))
+    command.upgrade(cfg, "0004")
+    assert set(_type_keys(database)) == set(EVENT_TYPES)
+    with database.engine.connect() as conn:
+        kinds = {name: key for name, key in conn.execute(text(KINDS))}
+    assert kinds == {"web": "other", "shop": "locals"}  # online became other, nothing else moved
+
+    with database.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO event (id, name, event_type_id, date) "
+                "SELECT 3, 'party', id, '2026-01-03' FROM event_type WHERE key = 'pirates_party'"
+            )
+        )
+    command.downgrade(cfg, "0003")
+    assert _type_keys(database) == ["testing", "locals", "regional", "national", "online", "other"]
+    with database.engine.connect() as conn:
+        kinds = {name: key for name, key in conn.execute(text(KINDS))}
+    assert kinds == {"web": "other", "shop": "locals", "party": "other"}  # newer types fall back to other
+    database.dispose()
+
+
+@pytest.mark.parametrize(("column", "value"), [("game_no", 0), ("game_no", 4)], ids=["game-0", "game-4"])
+def test_schema_refuses_games_outside_a_best_of_3(sample_event, seeded_db, column, value):
+    with pytest.raises(IntegrityError), seeded_db.session() as s:
+        setattr(first_game(s, sample_event.rounds[0].id), column, value)
+
+
+def test_schema_refuses_a_best_of_2(sample_event, seeded_db):
+    with pytest.raises(IntegrityError), seeded_db.session() as s:
+        s.get(Match, sample_event.rounds[0].id).best_of = 2
+
+
+def test_schema_refuses_two_game_ones_in_a_round(sample_event, seeded_db):
+    with pytest.raises(IntegrityError), seeded_db.session() as s:
+        s.add(Game(match_id=sample_event.rounds[0].id, game_no=1))
+
+
+def test_deleting_a_round_deletes_its_games(sample_event, events, seeded_db):
+    events.delete_round(sample_event.rounds[0].id)
+    with seeded_db.session() as s:
+        assert first_game(s, sample_event.rounds[0].id) is None
+
+
+def test_migration_0005_makes_every_round_a_best_of_1_keeping_its_game(tmp_path):
+    database = Database(tmp_path / "games.db")
+    cfg = alembic_config(database.engine)
+    command.upgrade(cfg, "0004")
+    with database.engine.begin() as conn:
+        conn.execute(text("INSERT INTO leader (id, code, name) VALUES (1, 'OP01-001', 'Roronoa Zoro')"))
+        conn.execute(text("INSERT INTO event (id, name, event_type_id, date) VALUES (1, 'old', 2, '2026-01-01')"))
+        conn.execute(
+            text(
+                "INSERT INTO match (id, event_id, round_no, opponent_leader_id, result, went_first, won_die_roll, "
+                "top_cut) VALUES (1, 1, 1, 1, 'W', 0, 1, 1), (2, 1, 2, 1, NULL, NULL, NULL, 0)"
+            )
+        )
+    command.upgrade(cfg, "0005")
+    with database.engine.connect() as conn:
+        kinds = conn.execute(text("SELECT id, best_of, kind FROM match ORDER BY id")).all()
+        assert kinds == [(1, 1, "top_cut"), (2, 1, "swiss")]  # as each was flagged
+        games = conn.execute(
+            text("SELECT match_id, game_no, result, went_first, chose_turn FROM game ORDER BY match_id")
+        )
+        assert games.all() == [(1, 1, "W", 0, 1), (2, 1, None, None, None)]  # the die winner chose the turn order
+    assert "result" not in {c["name"] for c in inspect(database.engine).get_columns("match")}
+
+    with database.engine.begin() as conn:  # a best of 3 added after the upgrade: only game 1 survives a downgrade
+        conn.execute(text("UPDATE match SET best_of = 3 WHERE id = 1"))
+        conn.execute(text("INSERT INTO game (match_id, game_no, result) VALUES (1, 2, 'L')"))
+    command.downgrade(cfg, "0004")
+    with database.engine.connect() as conn:
+        rows = conn.execute(text("SELECT id, result, went_first, won_die_roll FROM match ORDER BY id")).all()
+        assert rows == [(1, "W", 0, 1), (2, None, None, None)]
+    assert "game" not in inspect(database.engine).get_table_names()
+    database.dispose()
+
+
+@pytest.mark.regression
+def test_migration_0003_keeps_every_round(tmp_path):
+    """0003 rebuilt the event table with foreign keys on: dropping the old table cascaded into `match` and deleted
+    every round of every event (anyone upgrading from 0.4 lost their history)."""
+    database = Database(tmp_path / "rounds.db")
+    cfg = alembic_config(database.engine)
+    command.upgrade(cfg, "0002")
+    with database.engine.begin() as conn:
+        conn.execute(text("INSERT INTO leader (id, code, name) VALUES (1, 'OP01-001', 'Roronoa Zoro')"))
+        conn.execute(text("INSERT INTO event (id, name, event_type_id, date) VALUES (1, 'e', 2, '2026-01-01')"))
+        conn.execute(text("INSERT INTO match (event_id, round_no, opponent_leader_id, result) VALUES (1, 1, 1, 'W')"))
+    command.upgrade(cfg, "head")
+    with database.engine.connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM match")).scalar() == 1
+        assert conn.execute(text("SELECT result FROM game")).scalar() == "W"
+    database.dispose()
+
+
+def test_a_migration_that_breaks_foreign_keys_commits_nothing(tmp_path):
+    database = Database(tmp_path / "dangling.db")
+    cfg = alembic_config(database.engine)
+    command.upgrade(cfg, "0004")
+    raw = database.engine.raw_connection()
+    try:  # a round of an event that doesn't exist, slipped in with the keys off
+        raw.driver_connection.execute("PRAGMA foreign_keys=OFF")
+        raw.driver_connection.execute("INSERT INTO match (event_id, round_no, opponent_leader_id) VALUES (999, 1, 999)")
+        raw.driver_connection.commit()
+    finally:
+        raw.close()
+    with pytest.raises(RuntimeError, match="migration broke foreign keys"):
+        command.upgrade(cfg, "0005")
+    with database.engine.connect() as conn:
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0004"
+        assert "game" not in inspect(database.engine).get_table_names()
+    database.dispose()
+
+
+def test_foreign_keys_are_back_on_after_migrating(db):
+    with db.engine.connect() as conn:
+        assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1

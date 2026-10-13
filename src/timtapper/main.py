@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/12 19:13:13.879481
+Revised: 2026/10/13 07:39:25.534821
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
@@ -18,8 +18,9 @@ from core.paths import ASSETS_DIR, db_path
 from db import Database
 from db.database import MIGRATIONS_DIR
 from db.diagnostics import startup_report
+from i18n import set_lang, tr
 from ui.app import install_routing
-from ui.context import AppContext
+from ui.context import AppContext, saved_language
 
 _log = get_logger("main")
 
@@ -47,13 +48,17 @@ def open_database() -> Database:
 
 
 def show_startup_failure(page: ft.Page, exc: Exception, tail: LogTail) -> None:
-    """The error, then what the app could see (selectable, so it can be copied off a phone)."""
+    """The error in the page's language, then what the app could see (selectable, so it can be copied off a phone;
+    left in English, for whoever reads it to fix the app)."""
     report = startup_report(db_path(), MIGRATIONS_DIR, tail.lines)
+    _ = tr(page)
     page.add(
         ft.SafeArea(
             ft.Column(
                 [
-                    ft.Text(f"timtapper could not open its database: {type(exc).__name__}: {exc}"),
+                    ft.Text(
+                        _("timtapper could not open its database: {error}").format(error=f"{type(exc).__name__}: {exc}")
+                    ),
                     ft.Text(report, selectable=True, size=12, font_family="monospace", data="startup-report"),
                 ],
                 scroll=ft.ScrollMode.AUTO,
@@ -73,6 +78,7 @@ async def main(page: ft.Page) -> None:
             db = open_database()
     except Exception as exc:
         _log.exception("could not open the database")
+        set_lang(page, await saved_language())
         show_startup_failure(page, exc, tail)
         return
 
@@ -80,7 +86,12 @@ async def main(page: ft.Page) -> None:
     await ctx.load_prefs()
 
     def on_disconnect(_e) -> None:
-        db.dispose()
+        try:
+            ctx.drop_untouched_draft()
+        except Exception:
+            _log.exception("could not drop the untouched draft event")
+        finally:
+            db.dispose()  # whatever happened above, the database is closed
 
     page.on_disconnect = on_disconnect
     page.on_close = on_disconnect

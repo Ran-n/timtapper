@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.592595
-Revised: 2026/10/11 16:27:22.025224
+Revised: 2026/10/12 22:06:03.906553
 
-Cross-cutting infrastructure: logging setup and on-device storage paths.
+Cross-cutting infrastructure: logging setup, on-device storage paths, translatable errors, die faces.
 """

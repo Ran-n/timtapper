@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 23:25:31.706887
-Revised: 2026/10/12 16:55:01.758719
+Revised: 2026/10/13 07:39:26.293636
 
 Leader picker: text search, color dots (every selected color) and the set dropdown combine.
 """
@@ -168,7 +168,7 @@ async def test_pick_still_calls_on_pick(ctx, page):
 
 @pytest.mark.parametrize("color", ["Red", "Green", "Blue", "Purple", "Black", "Yellow"])
 async def test_every_dot_has_its_colour_and_a_readable_check(ctx, color):
-    from ui.theme import CARD_COLORS
+    from core.card_colors import CARD_COLORS
 
     sheet = make(ctx)
     dot = by_data(sheet, f"color-{color}")

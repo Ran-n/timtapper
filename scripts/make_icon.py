@@ -2,23 +2,22 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.870382
-Revised: 2026/10/12 01:20:00.365202
+Revised: 2026/10/12 21:24:32.826618
 
 Draw the app logo:
 
-- src/timtapper/assets/icon.png (1024x1024): the mark with "timtapper" under
-  it, the "app" highlighted; flet build picks it up for the launcher icon and
-  splash.
-- src/timtapper/assets/icon.ico: the bare mark on its frame, for the Windows
-  window/taskbar (too small for the name to read).
+- src/timtapper/assets/icon.png (1024x1024): the bare mark on its frame, no
+  name, shrunk into Android's adaptive-icon safe circle; flet build picks it
+  up for the launcher icon and splash.
+- src/timtapper/assets/icon.ico: the bare mark at full size, for the Windows
+  window/taskbar (no launcher mask there).
 - src/timtapper/assets/logo_mark.png (512x512): the bare mark on transparency,
   for in-app use (events app bar, empty events screen, Settings -> About).
 - docs/logo.png (480 tall): icon + "timtapper" wordmark with the "app" highlighted, for the README.
 
 The mark is a blue card caught mid-tap (rotating clockwise to rest, the OPTCG
 action the name comes from) with an orange motion arc, carrying a rising bar chart
-for the stats. Everything stays inside the central 66% so Android's adaptive
-icon mask never clips it. Re-run after changing the design:
+for the stats. Re-run after changing the design:
 
     uv run python scripts/make_icon.py
 """
@@ -59,9 +58,10 @@ CREAM = (251, 241, 199)  # gruvbox fg0 (light bg)
 # "timtapper" split so the "app" inside it can be picked out: (text, highlighted)
 NAME_PARTS = (("timt", False), ("app", True), ("er", False))
 APP_NAME = "".join(text for text, _ in NAME_PARTS)
-# (plain, highlight) colors: cream/orange on the icon's dark frame, blue/deep orange on any README background
-ICON_NAME_COLORS = (CREAM, ACCENT)
+# (plain, highlight) colors of the README banner's name: blue/deep orange read on any background
 BANNER_NAME_COLORS = (CARD, ACCENT_DEEP)
+# Android shows an adaptive icon's 108 dp layer through a mask that only promises the central 66 dp circle
+SAFE_RADIUS = SIZE * 66 / 108 / 2
 
 CARD_W, CARD_H, CARD_R = 380, 530, 52
 CARD_CENTER = (500, 540)
@@ -69,12 +69,6 @@ TILT = -20  # degrees; negative = clockwise in PIL, i.e. tapping
 ARC_CENTER = (500, 600)
 ARC_RADIUS = 430
 ARC_START, ARC_END = 228, 296  # PIL angles: clockwise from 3 o'clock
-
-# On the icon the mark shrinks and moves up to leave room for the name, all within the adaptive-icon safe zone
-MARK_BOX_CENTER = (488, 520)  # middle of the card + arc as drawn above
-MARK_SCALE = 0.72
-MARK_AT = (512, 420)
-ICON_NAME_SIZE, ICON_NAME_Y = 124, 790
 
 
 def _s(v: float) -> int:
@@ -151,20 +145,35 @@ def _mark() -> Image.Image:
     return mark
 
 
-def draw_icon(with_name: bool = True) -> Image.Image:
-    """The square icon; `with_name` shrinks the mark and writes the name under it."""
+def _safe_zone_scale(mark: Image.Image) -> float:
+    """How far to shrink `mark`, centred on its bounds, so its farthest drawn pixel is inside SAFE_RADIUS."""
+    x0, y0, x1, y1 = mark.getbbox()
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    alpha = mark.getchannel("A").point(lambda a: 255 if a > 32 else 0).resize((SIZE // 4, SIZE // 4))
+    step = mark.width / alpha.width
+    far = max(
+        math.hypot((x + 0.5) * step - cx, (y + 0.5) * step - cy)
+        for y in range(alpha.height)
+        for x in range(alpha.width)
+        if alpha.getpixel((x, y))
+    )
+    return min(1.0, _s(SAFE_RADIUS) / far)
+
+
+def draw_icon(adaptive: bool = True) -> Image.Image:
+    """The square icon: the bare mark on the dark frame, no name. `adaptive`: shrunk into the launcher's
+    safe circle, centred; otherwise as drawn, full size."""
     img = Image.new("RGBA", (_s(SIZE), _s(SIZE)), (*BG, 255))
     mark = _mark()
-    if not with_name:
+    if not adaptive:
         img.alpha_composite(mark)
         return img.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
-    small = mark.resize((_s(SIZE * MARK_SCALE), _s(SIZE * MARK_SCALE)), Image.Resampling.LANCZOS)
-    ox = MARK_AT[0] - MARK_BOX_CENTER[0] * MARK_SCALE
-    oy = MARK_AT[1] - MARK_BOX_CENTER[1] * MARK_SCALE
-    img.alpha_composite(small, (_s(ox), _s(oy)))
-    d = ImageDraw.Draw(img)
-    font = ImageFont.truetype(str(FONT_HEAVY), _s(ICON_NAME_SIZE))
-    _draw_name(d, _s(SIZE) / 2 - d.textlength(APP_NAME, font=font) / 2, _s(ICON_NAME_Y), font, ICON_NAME_COLORS)
+    scale = _safe_zone_scale(mark)
+    x0, y0, x1, y1 = mark.getbbox()
+    small = mark.resize((round(mark.width * scale), round(mark.height * scale)), Image.Resampling.LANCZOS)
+    ox = _s(SIZE) / 2 - (x0 + x1) / 2 * scale
+    oy = _s(SIZE) / 2 - (y0 + y1) / 2 * scale
+    img.alpha_composite(small, (round(ox), round(oy)))
     return img.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
 
 
@@ -199,14 +208,13 @@ def main() -> None:
     log = get_logger("scripts.make_icon")
     draw_icon().save(ICON_PATH)
     log.info("wrote %s", ICON_PATH)
-    # the .ico and the banner either can't fit the name or spell it out beside the tile: bare mark
-    bare = draw_icon(with_name=False)
-    bare.save(ICO_PATH, sizes=[(n, n) for n in (16, 24, 32, 48, 64, 128, 256)])
+    full = draw_icon(adaptive=False)
+    full.save(ICO_PATH, sizes=[(n, n) for n in (16, 24, 32, 48, 64, 128, 256)])
     log.info("wrote %s", ICO_PATH)
     draw_mark().save(MARK_PATH)
     log.info("wrote %s", MARK_PATH)
     LOGO_PATH.parent.mkdir(parents=True, exist_ok=True)
-    draw_logo(bare).save(LOGO_PATH)
+    draw_logo(full).save(LOGO_PATH)
     log.info("wrote %s", LOGO_PATH)
 
 

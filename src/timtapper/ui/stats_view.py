@@ -2,16 +2,18 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.228774
-Revised: 2026/10/12 16:54:59.298574
+Revised: 2026/10/13 01:17:15.312060
 
-Stats tab: overall record, splits, recent form and the matchup table, filterable by own leader and event type.
+Stats tab: overall record, splits, recent form and the matchup table, filterable by own leader, event type and set.
 """
 
 import flet as ft
 
+from catalog.repository import Leader
+from events.repository import Event
 from i18n import event_type_label
 from share import render
-from stats.compute import Filters, Summary, games, matchups, percent, summarize
+from stats.compute import Filters, Matchup, Summary, matchups, percent, summarize
 from ui.context import AppContext
 from ui.filters import filter_dropdowns
 from ui.theme import FONT_HEAVY
@@ -34,15 +36,22 @@ class StatsScreen:
         self.filters = Filters()
         self.body = ft.Column(spacing=8, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
+    @property
+    def own_leader(self) -> Leader | None:
+        """The one leader the stats are narrowed to, if any."""
+        return self.ctx.leaders_by_id.get(self.filters.own_leader_id)
+
     def scope_label(self) -> str:
         _ = self.ctx._
-        leader = self.ctx.leaders_by_id.get(self.filters.own_leader_id)
+        leader = self.own_leader
         scope = _("Playing {leader}").format(leader=leader.name) if leader else _("All leaders")
         if self.filters.event_type:
             scope += f" · {event_type_label(_, self.filters.event_type)}"
+        if self.filters.set_code:
+            scope += f" · {self.filters.set_code}"
         return scope
 
-    def _filters_row(self, events) -> ft.Control:
+    def _filters_row(self, events: list[Event]) -> ft.Control:
         def apply(filters: Filters) -> None:
             self.filters = filters
             self.refresh()
@@ -54,7 +63,7 @@ class StatsScreen:
         by_id = self.ctx.leaders_by_id
         scheme = self.ctx.scheme
 
-        def matchup_tile(label: str, m) -> ft.Control:
+        def matchup_tile(label: str, m: Matchup | None) -> ft.Control:
             if m is None:
                 value = ft.Text(_("Not enough games"), color=ft.Colors.ON_SURFACE_VARIANT)
             else:
@@ -134,13 +143,26 @@ class StatsScreen:
                 stat_tile(_("Won the die roll"), record_badges(s.die_won, scheme, size=15)),
                 stat_tile(_("Lost the die roll"), record_badges(s.die_lost, scheme, size=15)),
             ]),
+            # every game, whoever chose (die, seed or the previous loser); the record of games behind the matches
+            ft.Row([
+                stat_tile(_("You chose turn"), record_badges(s.chose, scheme, size=15)),
+                stat_tile(_("They chose turn"), record_badges(s.opp_chose, scheme, size=15)),
+            ]),
+            ft.Row(
+                [
+                    stat_tile(_("Games"), record_badges(s.games, scheme, size=15)),
+                    # byes are wins in the standings, but nothing was played: counted apart from the record
+                    *([stat_tile(_("Byes"), big_number(str(s.byes), size=22))] if s.byes else []),
+                ],
+                data="games",
+            ),
             # a row each: side by side, a ~70 dp name column broke "Donquixote Doflamingo" mid-word at 360 dp
             matchup_tile(_("Best matchup"), s.best),
             matchup_tile(_("Worst matchup"), s.worst),
             stat_tile(_("Recent form"), form),
         ]
 
-    def _matchups(self, ms) -> list[ft.Control]:
+    def _matchups(self, ms: list[Matchup]) -> list[ft.Control]:
         _ = self.ctx._
         by_id = self.ctx.leaders_by_id
         if not ms:
@@ -173,15 +195,15 @@ class StatsScreen:
 
     async def _share_summary(self, _e) -> None:
         _ = self.ctx._
-        s, scope, leaders = self._summary_data(), self.scope_label(), self.ctx.leaders_by_id
-        await self.ctx.share_file(lambda: render.summary_card(scope, s, leaders, _), title=_("Overall record"))
+        s, scope, leaders, own = self._summary_data(), self.scope_label(), self.ctx.leaders_by_id, self.own_leader
+        await self.ctx.share_file(lambda: render.summary_card(scope, s, leaders, _, own), title=_("Overall record"))
 
     async def _share_matchups(self, _e) -> None:
         _ = self.ctx._
         events = self.ctx.events.list()
-        s, ms = summarize(events, self.filters), matchups(games(events, self.filters))
-        scope, leaders = self.scope_label(), self.ctx.leaders_by_id
-        await self.ctx.share_file(lambda: render.matchups_card(scope, s, ms, leaders, _), title=_("Matchups"))
+        s, ms = summarize(events, self.filters), matchups(events, self.filters)
+        scope, leaders, own = self.scope_label(), self.ctx.leaders_by_id, self.own_leader
+        await self.ctx.share_file(lambda: render.matchups_card(scope, s, ms, leaders, _, own), title=_("Matchups"))
 
     def _summary_data(self) -> Summary:
         return summarize(self.ctx.events.list(), self.filters)
@@ -190,7 +212,7 @@ class StatsScreen:
         _ = self.ctx._
         events = self.ctx.events.list()
         s = summarize(events, self.filters)
-        ms = matchups(games(events, self.filters))
+        ms = matchups(events, self.filters)
         has_games = s.record.games > 0
         return [
             self._filters_row(events),

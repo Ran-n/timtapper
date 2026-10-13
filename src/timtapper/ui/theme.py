@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.341252
-Revised: 2026/10/12 16:54:59.437757
+Revised: 2026/10/13 07:39:24.248297
 
 App themes and the color vocabulary shared by every screen.
 
@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import flet as ft
 
+from core.card_colors import rgb
 from i18n import Translate
 
 FONT = "Poppins"
@@ -31,27 +32,10 @@ FONTS = {
 THEME_MODES = {"system": ft.ThemeMode.SYSTEM, "light": ft.ThemeMode.LIGHT, "dark": ft.ThemeMode.DARK}
 DEFAULT_MODE = "system"
 
-# OPTCG card colors, same hues as the share cards (share/render.py CARD_COLORS).
-# Game identity, so they stay fixed across themes.
-CARD_COLORS = {
-    "Red": "#d63031",
-    "Green": "#27ae60",
-    "Blue": "#2980cd",
-    "Purple": "#8e44ad",
-    "Black": "#46464a",
-    "Yellow": "#f1c40f",
-}
-UNKNOWN_COLOR = "#5a6270"
-
-
-def _rgb(hex_color: str) -> tuple[int, int, int]:
-    h = hex_color.lstrip("#")
-    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-
 
 def mix(color: str, base: str, amount: float) -> str:
     """`amount` of `color` blended over `base` (0 → base, 1 → color), as #rrggbb."""
-    c, b = _rgb(color), _rgb(base)
+    c, b = rgb(color), rgb(base)
     return "#" + "".join(f"{round(b[i] + (c[i] - b[i]) * amount):02x}" for i in range(3))
 
 

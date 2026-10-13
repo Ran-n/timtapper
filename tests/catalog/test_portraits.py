@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:30.268389
-Revised: 2026/10/12 02:17:25.512370
+Revised: 2026/10/13 01:17:16.552703
 
 Leader portrait cropping, lookup (bundled asset / downloaded cache / none) and download.
 """
@@ -377,3 +377,35 @@ def test_build_leaders_passes_faces_and_overlays(tmp_path, monkeypatch):
     assert calls["OP99-001"] == (portraits.DEFAULT_FACE, None)  # unplaced: default crop, no overlay
     assert "EXT-001" not in calls  # davyback portraits are never re-cropped
     assert (tmp_path / "portraits" / "ST22-001.webp").read_bytes() == b"webp"
+
+
+@pytest.mark.regression
+@respx.mock
+def test_download_missing_counts_an_unwritable_cache_as_a_failure(monkeypatch, caplog):
+    """A full or read-only cache folder raised OSError out of the sync, after the leaders were stored."""
+    respx.get(IMAGE_URL.format(code="OP99-001")).mock(return_value=httpx.Response(200, content=card_jpeg()))
+    respx.get(IMAGE_URL.format(code="OP99-002")).mock(return_value=httpx.Response(200, content=card_jpeg()))
+
+    def full(self, data):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(portraits.Path, "write_bytes", full)
+    assert portraits.download_missing(["OP99-001", "OP99-002"]) == (0, 2)
+    assert "portrait for OP99-001 not saved" in caplog.text
+
+
+@pytest.mark.live
+def test_live_card_image_downloads_and_crops():
+    """IMAGE_URL still serves card art the portrait crop can read (new leaders get their pictures this way)."""
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
+        webp = portraits.download("OP01-001", client)
+    img = Image.open(io.BytesIO(webp))
+    assert (img.format, img.size) == ("WEBP", (portraits.SIZE, portraits.SIZE))
+
+
+@respx.mock
+def test_download_missing_leaves_a_callers_client_open():
+    respx.get(IMAGE_URL.format(code="OP99-001")).mock(return_value=httpx.Response(200, content=card_jpeg()))
+    with httpx.Client() as client:
+        assert portraits.download_missing(["OP99-001"], client) == (1, 0)
+        assert not client.is_closed  # the caller made it, the caller closes it

@@ -2,18 +2,20 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.863138
-Revised: 2026/10/12 16:54:58.990068
+Revised: 2026/10/13 01:17:15.470523
 
-Events tab: every event newest first, with its record; FAB starts a new one.
+Events tab: every event newest first, with its record, behind a search field and the leader, type and set
+filters; FAB starts a new one.
 """
 
 import datetime as dt
+from dataclasses import replace
 
 import flet as ft
 
 from core.logging import get_logger
 from events.repository import Event
-from i18n import standing_label
+from i18n import bracket_label, standing_label
 from stats.compute import Filters, filter_events, record_of
 from ui.context import AppContext
 from ui.filters import filter_dropdowns
@@ -56,7 +58,15 @@ def event_tile(ctx: AppContext, event: Event) -> ft.Control:
     )
     # where you finished, after the date: on the same line when it fits, else the whole of it on the next
     # (its spaces never break, so "#3 of 32" is never split)
-    label = standing_label(_, event.placement, event.players)
+    # the bracket first, as standings are talked about ("Top 4 · #3 of 32"), or "Dropped"
+    label = " · ".join(
+        part
+        for part in (
+            bracket_label(_, event.placement, event.dropped),
+            standing_label(_, event.placement, event.players),
+        )
+        if part
+    )
     standing = (
         [
             ft.Row(
@@ -126,8 +136,7 @@ def event_tile(ctx: AppContext, event: Event) -> ft.Control:
 
 
 def new_event(ctx: AppContext) -> None:
-    _ = ctx._
-    event = ctx.events.create(_("New event"), "locals", dt.date.today(), leader_id=ctx.events.last_used_leader_id())
+    event = ctx.new_event("locals", dt.date.today(), ctx.events.last_used_leader_id())
     _log.info("new event %d from the events tab", event.id)
     ctx.navigate(f"/event/{event.id}")
 
@@ -190,7 +199,7 @@ class EventList:
 
     def _search(self, e) -> None:
         f = self.filters
-        self.apply(Filters(f.own_leader_id, f.event_type, e.control.value or ""))
+        self.apply(replace(f, query=e.control.value or ""))
 
     def _toggle(self, _e) -> None:
         self.ctx.event_filters_open = not self.ctx.event_filters_open
@@ -204,8 +213,8 @@ class EventList:
     def refresh(self) -> None:
         _ = self.ctx._
         f = self.filters
-        # a leader or type filter keeps the dropdowns open, so what narrows the list is always on screen
-        picked = f.own_leader_id is not None or f.event_type is not None
+        # a leader, type or set filter keeps the dropdowns open, so what narrows the list is always on screen
+        picked = f.own_leader_id is not None or f.event_type is not None or f.set_code is not None
         open_ = self.ctx.event_filters_open or picked
         self.toggle.icon = ft.Icons.FILTER_LIST_OFF if open_ else ft.Icons.FILTER_LIST
         self.toggle.icon_color = ft.Colors.PRIMARY if picked else None

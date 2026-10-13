@@ -2,16 +2,18 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:43:10.828223
-Revised: 2026/10/11 17:43:10.828223
+Revised: 2026/10/13 07:39:28.021719
 
 davyback.gg icon scraping: srcset parsing (widest variant per card) and icon -> portrait conversion.
 """
 
 import importlib.util
 import io
+import json
 from pathlib import Path
 
 import pytest
+import respx
 from PIL import Image, UnidentifiedImageError
 
 from catalog.portraits import SIZE
@@ -65,6 +67,23 @@ def test_to_portrait_rejects_non_images():
         davy.to_portrait(b"<html>")
 
 
+@pytest.mark.regression
+@respx.mock
+def test_a_failed_download_keeps_an_earlier_icon_listed(tmp_path, monkeypatch):
+    """The list used to be rewritten from one run's successes: an icon that failed to download once dropped off it,
+    and the next `build_leaders.py --force` re-cropped the card over davyback.gg's icon."""
+    listing = tmp_path / "davyback_portraits.json"
+    listing.write_text('["OP01-001"]', encoding="utf-8")
+    monkeypatch.setattr(davy, "LIST", listing)
+    monkeypatch.setattr(davy, "BUNDLED_DIR", tmp_path)
+    page = f'<img srcset="{A}Zoro_OP01_001_red.z.png 400w"><img srcset="{A}Luffy_OP01_003_red.l.png 400w">'
+    respx.get(f"{davy.SITE}/").respond(text=page)
+    respx.get(f"{davy.SITE}{A}Zoro_OP01_001_red.z.png").respond(status_code=503)
+    respx.get(f"{davy.SITE}{A}Luffy_OP01_003_red.l.png").respond(content=png((120, 120)))
+    assert davy.main() == 1  # the failure is still reported
+    assert json.loads(listing.read_text(encoding="utf-8")) == ["OP01-001", "OP01-003"]
+
+
 def test_davyback_list_matches_bundled_portraits():
     import json
 
@@ -73,3 +92,18 @@ def test_davyback_list_matches_bundled_portraits():
     codes = json.loads((_PATH.parent / "davyback_portraits.json").read_text(encoding="utf-8"))
     assert codes == sorted(set(codes))
     assert all((BUNDLED_DIR / f"{c}.webp").is_file() for c in codes)
+
+
+@pytest.mark.live
+def test_live_davyback_still_serves_icons_for_our_leaders():
+    """The scraper's srcset pattern still matches davyback.gg, and an icon it finds converts to a portrait."""
+    import httpx
+
+    from catalog.repository import load_bundled
+
+    with httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": "timtapper-build"}) as client:
+        icons = davy.largest_icons(client.get(f"{davy.SITE}/").raise_for_status().text)
+        ours = sorted(set(icons) & {r.code for r in load_bundled()})
+        assert ours, "no icon on davyback.gg matches a bundled leader: the page or its srcset format changed"
+        raw = client.get(davy.SITE + icons[ours[0]]).raise_for_status().content
+    assert Image.open(io.BytesIO(davy.to_portrait(raw))).size == (SIZE, SIZE)

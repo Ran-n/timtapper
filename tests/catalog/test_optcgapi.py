@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.098982
-Revised: 2026/10/12 16:55:00.008377
+Revised: 2026/10/12 22:20:11.739860
 """
 
 import httpx
@@ -278,3 +278,54 @@ def test_property_base_print_always_wins_over_alt_arts(cards):
             last = [x for x in cards if x["card_set_id"] == c["card_set_id"] and x["card_image_id"] == x["card_set_id"]]
             last = [x for x in last if x["card_type"] == "Leader" and x["card_color"] not in ("", "Colorless")][-1]
             assert by_code[c["card_set_id"]].name == clean_name(last["card_name"])
+
+
+@pytest.mark.regression
+def test_parse_leaders_skips_entries_that_are_not_objects(caplog):
+    """A non-object in the card list crashed the whole sync with an AttributeError."""
+    leaders = parse_leaders(["junk", None, 7, card("OP01-001", "Zoro")])
+    assert [r.code for r in leaders] == ["OP01-001"]
+    assert "not an object" in caplog.text
+
+
+@pytest.mark.parametrize("field", ["card_set_id", "card_color"])
+def test_parse_leaders_skips_cards_with_non_text_key_fields(field):
+    assert parse_leaders([card("OP01-001", "Zoro") | {field: 42}]) == []
+
+
+def test_parse_leaders_reads_non_text_name_and_set_as_missing():
+    (rec,) = parse_leaders([card("OP01-001", "Zoro") | {"card_name": None, "set_name": 3}])
+    assert (rec.name, rec.set_name) == ("OP01-001", None)
+
+
+@pytest.mark.property
+@given(
+    st.lists(
+        st.one_of(
+            st.none(),
+            st.integers(),
+            st.text(),
+            st.dictionaries(st.text(), st.one_of(st.none(), st.integers(), st.text())),
+        )
+    )
+)
+def test_property_parse_leaders_never_crashes_on_garbage(cards):
+    assert all(isinstance(r, LeaderRecord) for r in parse_leaders(cards))
+
+
+@pytest.mark.live
+def test_live_optcgapi_still_lists_every_bundled_leader_and_set():
+    """A change in the API's shape (field names, base-print ids) would silently drop leaders from an update."""
+    from catalog.repository import load_bundled, load_bundled_sources
+
+    live = {r.code for r in fetch_leaders()}
+    missing = {r.code for r in load_bundled()} - live
+    assert not missing, f"bundled leaders the API no longer lists: {sorted(missing)}"
+    assert set(load_bundled_sources()) <= set(fetch_sources())
+
+
+@pytest.mark.live
+def test_live_optcgapi_names_come_out_clean():
+    """Real names, through clean_name: no card-code tails or "(Parallel)" left over."""
+    dirty = [r.name for r in fetch_leaders() if "(" in r.name or " - " in r.name or r.name != r.name.strip()]
+    assert not dirty, dirty

@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/12 16:54:56.826011 )
+[//]: # (+ Revised: 	2026/10/13 07:39:28.221889 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -27,25 +27,40 @@ device, and a JSON backup moves them to another install.
 
 ### Log as you play
 
-- **Events**: testing, locals, regional, national, online or other, each with a name, date, your leader and notes,
-  plus where you finished and how many played (shown as "#3 of 32"; testing sessions have no standings).
-  Search the list by name, or open its filters to narrow it by your leader and event type; the filters stay set while
-  you open an event and come back.
-- **Rounds**: opponent's leader, result (W/L; the OPTCG has no draws, a drawn game is a loss for both), turn order, die roll, top cut and notes, all edited in place, with no
-  forms or dialogs. Log a round when you sit down and give it a result when the game ends; rounds still being played
-  stay open.
-- **One-tap round rows**: turn order, die roll and result show on every round row. Tap one to cycle its value. The die
-  roll shows a green six when you won it and a red one when you lost it.
+- **Events**: every official One Piece TCG event type (Pirates Party, locals, release events, sealed, Heroines Battle,
+  team battles, Store Championship, Treasure Cup, Flagship Battle, Extra Grand Battle, regional, national, World
+  Championship), plus your own testing sessions and "other", each with a name, date, your leader and notes,
+  plus the set it was played in, where you finished and how many played, shown as standings are talked about
+  ("Top 4 · #3 of 32", "1st place", "Dropped"; testing sessions have no standings).
+  Search the list by name, or open its filters to narrow it by your leader, event type and set; the filters stay set
+  while you open an event and come back. A new event is named after its type and count ("Local #4"), starts in the
+  newest set, follows a type change while you haven't renamed it, and is discarded if you go back without changing
+  anything.
+- **Rounds**, the way [davyback.gg](https://davyback.gg) logs them, and then some: each is **Swiss**, **top cut** or a
+  **bye** (no opponent, an automatic win, shown with a jester where a leader would be). A Swiss row reads die roll,
+  turn order and result; tap any of them to cycle it (the die shows a green six when you won it, a red one when you
+  lost it). Top cut is played as a **best of 3**: the row keeps its round number, shows the score and lists each game
+  under it with its own turn order, result and who chose the turn order (the higher seed in game 1, then whoever lost
+  the game before, filled in for you and tappable for events that do it differently). Any round can be switched
+  between best of 1 and 3; a switch that would drop games holding a result or turn order (best of 3 to 1, or a played
+  round to a bye) asks first. Results are W/L only: the OPTCG has no draws. Round notes show on the row; everything is
+  edited in place, with no forms. Rounds stay collapsed unless you open one, and an open round stays open until you
+  close it.
 - **Leader picker**: search by name, code or color, then narrow by color dots (a leader must have every color you
-  select) and by set. The opponents you face most come first.
+  select) and by set. The opponents you face most come first; the list shows 60 at a time and says how many more a
+  search would find.
 
 ### Understand your results
 
-- **Stats**: overall record and win rate, going 1st vs 2nd, won vs lost die roll, best and worst matchup (3+ games),
-  recent form and a full matchup table. Filter by your leader and by event type.
+- **Stats**: overall record and win rate (a best of 3 counts once; byes stay out), the games behind it, going 1st vs
+  2nd and won vs lost die roll per game, who chose the turn order, best and worst matchup (3+ matches; no worst when it
+  would win as often as the best), recent form and a full matchup table. Filter by your leader (each shown with its portrait), event type and set.
 - **Share images**: 1080×1350 PNG cards rendered on-device for an event, a matchup or your overall summary, with the
-  app's logo and each leader's portrait framed in its colors. The event card puts your placement in a band of its own
-  and shows each round's turn order, die roll and result. On Android they open the system share sheet; on desktop you get a save dialog.
+  app's logo and each leader's portrait framed in its colors; stats narrowed to one leader carry that leader's
+  portrait in the header. The event card puts your placement in a band of its own
+  and shows each round's turn order, die roll and result. A long event name shrinks and wraps onto a second line
+  rather than being cut. On Android they open the system share sheet; on desktop you get a save dialog. Rendered
+  cards and exported backups left in the app's temp folder are deleted after a day.
 
 <p align="center">
   <img src="docs/screenshots/share-card.png" alt="Event share card" width="320">
@@ -155,14 +170,27 @@ downloads on its own always get the default crop until the next release ships th
 ```sh
 uv run pytest                 # unit, DB, migrations, UI widget-tree, property, regression tests
 uv run pytest --cov           # the same, failing below 99% branch coverage (fail_under in pyproject.toml)
-uv run pytest -m live         # also hits the real optcgapi.com
-uv run pytest -m desktop      # the real app, rendered (Windows; takes over the mouse and screen for ~1 min)
+uv run pytest -m "live and not desktop"  # against the real optcgapi.com and davyback.gg (network, ~40 s)
+uv run pytest -m desktop      # the real app, rendered (Windows; takes over the mouse and screen for ~2 min)
+uv run pytest -m "desktop or live"       # both, including a real click on Update leaders in the real app
 uv run ruff format src scripts tests && uv run ruff check src scripts tests
 ```
 
+`scripts/ci.sh` runs what CI runs on every push to `main` and every pull or merge request, on GitHub
+(`.github/workflows/ci.yml`), GitLab (`.gitlab-ci.yml`) and Codeberg (`.forgejo/workflows/ci.yml`, once Actions is
+enabled in the repository settings): a locked `uv sync`, `ruff format --check`, `ruff check` and `pytest --cov`. The
+`live` and `desktop` tests stay local.
+
+The `live` tests check what mocks can't: that the card lists still parse and still hold every bundled leader and
+set, that card images still download and crop, that a full sync fills a real database, that the davyback.gg icon
+scraper still matches the site, and that Settings → Update leaders and the startup check work end to end, in the
+widget tree and (with `desktop`) with a real click in the real window.
+
 Every bug fix comes with a test marked `regression` that says what used to go wrong. The backup format is pinned by
-`tests/backup/golden/v1.json`: a change to the file shape fails until `VERSION` is bumped and the old format still
-imports.
+`tests/backup/golden/`: the current shape is checked in (`v3.json`), so a change to it fails until `VERSION` is bumped,
+and every older pinned file (`v1.json`, `v2.json`) must still restore. The share cards are pinned the same way, in the
+default run: each is rendered from fixed data and compared with an approved image in `tests/share/golden/` (refreshed
+with `TIMTAPPER_UPDATE_BASELINES=1`, like the rendered baselines below).
 
 The `desktop` tests (`tests/rendered/`) start the real app on the demo data from `scripts/app_driver.py`, click it
 with the real mouse and check the captured pixels: badges side by side, die pips, the picker's dots on one line at
@@ -198,6 +226,9 @@ tests/                  mirrors src/timtapper; rendered/ drives the real app (ma
 
 timtapper is a fan-made tool. It is not affiliated with or endorsed by Bandai, Eiichiro Oda or Shueisha. The leader
 portraits in the app and on share cards are small crops of the official card art, which belongs to its owners.
+The jester standing in for a bye's opponent is adapted from Microsoft's [Fluent Emoji](https://github.com/microsoft/fluentui-emoji)
+"Joker" (MIT License, © Microsoft Corporation; the notice ships as `src/timtapper/assets/LICENSE-fluent-emoji.txt`).
+`scripts/bye_jester.svg` is the source; `uv run python scripts/make_bye_joker.py` renders it to the app's PNG.
 
 ## License
 

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.139229
-Revised: 2026/10/12 16:54:59.150303
+Revised: 2026/10/13 01:17:15.010020
 
 Settings tab: language, theme, leader catalogue refresh, backup export/import, about.
 """
@@ -16,7 +16,7 @@ import flet as ft
 from backup.json_backup import BackupError, export_backup, import_backup
 from catalog.optcgapi import CatalogError
 from core.logging import get_logger
-from core.paths import temp_dir
+from core.paths import temp_file
 from core.version import VERSION
 from i18n import LANGUAGES
 from ui.context import AppContext
@@ -52,8 +52,12 @@ class SettingsScreen:
         self.refresh()
         try:
             result = await self.ctx.leader_updates.run()
-        except CatalogError:
+        except CatalogError as exc:
+            _log.warning("leader update failed: %s", exc)
             self.ctx.notify(_("Could not download leaders — check your connection and try again"), error=True)
+        except Exception as exc:
+            _log.exception("leader update failed")
+            self.ctx.notify(_("Could not update leaders ({error})").format(error=type(exc).__name__), error=True)
         else:
             message = _("Leaders updated: {added} new, {updated} changed").format(
                 added=result.added, updated=result.updated
@@ -70,8 +74,8 @@ class SettingsScreen:
         _ = self.ctx._
         events, leaders = self.ctx.events.list(), self.ctx.leaders_by_id
 
-        def write():
-            path = temp_dir() / f"timtapper-backup-{dt.date.today().isoformat()}.json"
+        def write() -> Path:
+            path = temp_file(f"timtapper-backup-{dt.date.today().isoformat()}.json")
             path.write_bytes(export_backup(events, leaders))
             return path
 
@@ -95,7 +99,10 @@ class SettingsScreen:
         picked = files[0]
         data = picked.bytes
         if data is None and picked.path:
-            data = await asyncio.to_thread(Path(picked.path).read_bytes)
+            try:
+                data = await asyncio.to_thread(Path(picked.path).read_bytes)
+            except OSError:
+                _log.warning("could not read %s", picked.path, exc_info=True)
         if not data:
             self.ctx.notify(_("Could not read that file"), error=True)
             return
@@ -105,9 +112,16 @@ class SettingsScreen:
                 n = import_backup(self.ctx.db, data)
             except BackupError as exc:
                 _log.warning("backup import rejected: %s", exc)
-                self.ctx.notify(_("Not a valid backup: {error}").format(error=exc), error=True)
+                self.ctx.notify(_("Not a valid backup: {error}").format(error=exc.translated(_)), error=True)
+                return
+            except Exception as exc:  # the import runs in one transaction: nothing was changed
+                _log.exception("backup import failed")
+                self.ctx.notify(
+                    _("Could not restore the backup ({error})").format(error=type(exc).__name__), error=True
+                )
                 return
             self.ctx.invalidate_leaders()
+            self.refresh()  # the backup may have brought leaders this install didn't list: the count changes
             self.ctx.notify(_("Events restored: {n}").format(n=n))
 
         confirm(
@@ -155,8 +169,6 @@ class SettingsScreen:
                                 font_family=FONT_SEMIBOLD,
                                 color=s.fg,
                                 expand=True,
-                                max_lines=1,
-                                overflow=ft.TextOverflow.ELLIPSIS,
                             ),
                             ft.Icon(ft.Icons.CHECK_CIRCLE, size=18, color=s.primary, visible=selected),
                         ],

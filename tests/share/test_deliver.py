@@ -2,9 +2,10 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.402251
-Revised: 2026/10/11 16:27:24.855620
+Revised: 2026/10/13 07:39:27.454209
 """
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import flet as ft
@@ -80,12 +81,23 @@ async def test_save_cancelled(monkeypatch, png):
     assert await save_as(png) is Delivery.CANCELLED
 
 
-async def test_save_keeps_file_written_by_platform(monkeypatch, png, tmp_path):
+async def test_save_leaves_a_file_the_platform_wrote_alone(monkeypatch, png, tmp_path):
+    """Android may hand back a path the app can read but not write: what the picker wrote there is never rewritten."""
     target = tmp_path / "mobile.png"
-    target.write_bytes(b"written by the OS picker")
+    target.write_bytes(png.read_bytes())  # the picker wrote src_bytes
+    monkeypatch.setattr(deliver_mod.ft, "FilePicker", FakePicker(str(target)))
+    monkeypatch.setattr(Path, "write_bytes", lambda *_a: pytest.fail("rewrote the platform's file"))
+    assert await save_as(png) is Delivery.SAVED
+
+
+@pytest.mark.regression
+async def test_save_over_an_older_file_replaces_it(monkeypatch, png, tmp_path):
+    """Picking an existing file to replace used to keep its old content (it wasn't empty) and still say Saved."""
+    target = tmp_path / "backup.json"
+    target.write_bytes(b"last week's backup")
     monkeypatch.setattr(deliver_mod.ft, "FilePicker", FakePicker(str(target)))
     assert await save_as(png) is Delivery.SAVED
-    assert target.read_bytes() == b"written by the OS picker"
+    assert target.read_bytes() == png.read_bytes()
 
 
 async def test_save_io_error_propagates(monkeypatch, png, tmp_path):

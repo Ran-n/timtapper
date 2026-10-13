@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.159067
-Revised: 2026/10/12 16:54:58.266285
+Revised: 2026/10/13 07:39:22.789856
 
 Translation tables, keyed by the English source string exactly as written
 in the code. English (EN) is built from the ES key set so it stays a
@@ -18,13 +18,39 @@ ES = {
     "Settings": "Ajustes",
     "Press back again to exit": "Pulsa atrás otra vez para salir",
     "That event no longer exists": "Ese evento ya no existe",
+    "timtapper could not open its database: {error}": "timtapper no pudo abrir su base de datos: {error}",
     # event types
     "Testing": "Testeo",
+    "Pirates Party": "Pirates Party",
     "Locals": "Locales",
+    "Release event": "Evento de lanzamiento",
+    "Sealed": "Sellado",
+    "Heroines Battle": "Heroines Battle",
+    "Team battle": "Por equipos",
+    "Store Championship": "Store Championship",
+    "Treasure Cup": "Treasure Cup",
+    "Flagship Battle": "Flagship Battle",
+    "Extra Grand Battle": "Extra Grand Battle",
     "Regional": "Regional",
     "National": "Nacional",
-    "Online": "Online",
+    "World Championship": "Mundial",
     "Other": "Otro",
+    # new event names, numbered per type
+    "Testing #{n}": "Testeo #{n}",
+    "Pirates Party #{n}": "Pirates Party #{n}",
+    "Local #{n}": "Local #{n}",
+    "Release #{n}": "Lanzamiento #{n}",
+    "Sealed #{n}": "Sellado #{n}",
+    "Heroines Battle #{n}": "Heroines Battle #{n}",
+    "Team battle #{n}": "Equipos #{n}",
+    "Store Championship #{n}": "Store Championship #{n}",
+    "Treasure Cup #{n}": "Treasure Cup #{n}",
+    "Flagship #{n}": "Flagship #{n}",
+    "Extra Battle #{n}": "Extra Battle #{n}",
+    "Regional #{n}": "Regional #{n}",
+    "National #{n}": "Nacional #{n}",
+    "Worlds #{n}": "Mundial #{n}",
+    "Event #{n}": "Evento #{n}",
     # events list
     "New event": "Nuevo evento",
     "No events yet": "Aún no hay eventos",
@@ -74,6 +100,11 @@ ES = {
     "Delete round": "Borrar ronda",
     "Delete round {n}?": "¿Borrar la ronda {n}?",
     "This round and its notes will be removed.": "Se eliminarán esta ronda y sus notas.",
+    "Remove noted games?": "¿Quitar partidas anotadas?",
+    "Round {n}: the games this change drops hold results or turn orders, which will be removed.": (
+        "Ronda {n}: las partidas que este cambio quita tienen resultados o turnos anotados, que se eliminarán."
+    ),
+    "Remove": "Quitar",
     "Delete": "Borrar",
     "Cancel": "Cancelar",
     "Delete event": "Borrar evento",
@@ -95,6 +126,7 @@ ES = {
     "Black": "Negro",
     "Yellow": "Amarillo",
     "No leader matches": "Ningún líder coincide",
+    "{shown} of {total} leaders — search to find the rest": "{shown} de {total} líderes; busca para ver el resto",
     # stats
     "All leaders": "Todos los líderes",
     "Playing {leader}": "Jugando {leader}",
@@ -130,7 +162,7 @@ ES = {
     "W-L": "V-D",
     "Win %": "% Vict.",
     "Tracked with timtapper · One Piece TCG": "Registrado con timtapper · One Piece TCG",
-    "Could not create the image ({error})": "No se pudo crear la imagen ({error})",
+    "Could not create the file ({error})": "No se pudo crear el archivo ({error})",
     "Could not share or save the file ({error})": "No se pudo compartir ni guardar el archivo ({error})",
     "Saved": "Guardado",
     # settings
@@ -167,6 +199,8 @@ ES = {
     "Could not open the file picker ({error})": "No se pudo abrir el selector de archivos ({error})",
     "Could not read that file": "No se pudo leer ese archivo",
     "Not a valid backup: {error}": "No es una copia válida: {error}",
+    "Could not restore the backup ({error})": "No se pudo restaurar la copia ({error})",
+    "Could not update leaders ({error})": "No se pudieron actualizar los líderes ({error})",
     "Events restored: {n}": "Eventos restaurados: {n}",
     "Restore this backup?": "¿Restaurar esta copia?",
     "All your current events will be replaced by the ones in the backup.": (
@@ -179,6 +213,141 @@ ES = {
         "Tracker hecho por fans. Sin relación ni respaldo de Bandai, Eiichiro Oda o Shueisha. "
         "Datos de líderes de optcgapi.com."
     ),
+    # rejected edits (events.repository.EventError), shown after "Could not save:"
+    "event name is required": "el evento necesita un nombre",
+    "event name is longer than {max} characters": "el nombre del evento pasa de {max} caracteres",
+    "placement must be a whole number from 1 to {max}": "el puesto tiene que ser un número entero de 1 a {max}",
+    "players must be a whole number from 1 to {max}": "los jugadores tienen que ser un número entero de 1 a {max}",
+    "placement {placement} is past the {players} players": "el puesto {placement} supera los {players} jugadores",
+    "notes must be text": "las notas tienen que ser texto",
+    "date must be a date": "la fecha tiene que ser una fecha",
+    "unknown event type {key!r}": "tipo de evento desconocido {key!r}",
+    "unknown leader id {leader_id}": "líder desconocido (id {leader_id})",
+    "unknown event fields: {fields}": "campos de evento desconocidos: {fields}",
+    "unknown round fields: {fields}": "campos de ronda desconocidos: {fields}",
+    "result must be one of {results} or None": "el resultado tiene que ser uno de {results} o ninguno",
+    "went_first must be true, false or None": "el turno tiene que ser sí, no o desconocido",
+    "event {event_id} not found": "no se encontró el evento {event_id}",
+    "round {round_id} not found": "no se encontró la ronda {round_id}",
+    # rounds: Swiss, top cut, byes; event standings and sets
+    "1st place": "1.º puesto",
+    "2nd place": "2.º puesto",
+    "Top {n}": "Top {n}",
+    "Outside the top {n}": "Fuera del top {n}",
+    "Dropped": "Abandonado",
+    "Not noted": "Sin anotar",
+    "Swiss": "Suiza",
+    "Bye": "Bye",
+    "Byes": "Byes",
+    "Automatic win": "Victoria automática",
+    "Add a bye": "Añadir un bye",
+    "a bye has no games": "un bye no tiene partidas",
+    "a bye has no opponent": "un bye no tiene rival",
+    "a played round needs an opponent": "una ronda jugada necesita un rival",
+    "dropped must be true or false": "abandonado tiene que ser sí o no",
+    "kind must be one of {kinds}": "el tipo de ronda tiene que ser uno de {kinds}",
+    "unknown set {code!r}": "colección desconocida {code!r}",
+    "event {event}, round {round}: a bye has no opponent, not {value!r}": (
+        "evento {event}, ronda {round}: un bye no tiene rival, no {value!r}"
+    ),
+    "event {event}, round {round}: unknown kind of round {value!r}": (
+        "evento {event}, ronda {round}: tipo de ronda desconocido {value!r}"
+    ),
+    "event {event}: dropped must be true/false/null, not {value!r}": (
+        "evento {event}: abandonado tiene que ser true/false/null, no {value!r}"
+    ),
+    "event {event}: the set must be a set code, not {value!r}": (
+        "evento {event}: la colección tiene que ser un código de colección, no {value!r}"
+    ),
+    # best of 3: games and who chose the turn order
+    "Best of 1": "Al mejor de 1",
+    "Best of 3": "Al mejor de 3",
+    "Game {n}": "Partida {n}",
+    "Games": "Partidas",
+    "You": "Tú",
+    "Opp": "Rival",
+    "You chose turn": "Elegiste turno",
+    "They chose turn": "Eligió el rival",
+    "Who chose the turn order — tap to change": "Quién eligió el turno — toca para cambiarlo",
+    "Who chose the turn order: the previous game's loser — tap to change": (
+        "Quién eligió el turno: quien perdió la partida anterior — toca para cambiarlo"
+    ),
+    "games {record}": "partidas {record}",
+    "best_of must be 1 or 3": "al mejor de tiene que ser 1 o 3",
+    "chose_turn must be true, false or None": "quién eligió el turno tiene que ser sí, no o desconocido",
+    "game {game_no} is not part of a best of {best_of}": (
+        "la partida {game_no} no forma parte de un al mejor de {best_of}"
+    ),
+    "unknown game fields: {fields}": "campos de partida desconocidos: {fields}",
+    "event {event}, round {round}: best of must be 1 or 3, not {value!r}": (
+        "evento {event}, ronda {round}: al mejor de tiene que ser 1 o 3, no {value!r}"
+    ),
+    "event {event}, round {round}: the games are not a list": (
+        "evento {event}, ronda {round}: las partidas no son una lista"
+    ),
+    "event {event}, round {round}: more games than a best of {best_of}": (
+        "evento {event}, ronda {round}: más partidas que un al mejor de {best_of}"
+    ),
+    "event {event}, round {round}, game {game}: expected an object": (
+        "evento {event}, ronda {round}, partida {game}: se esperaba un objeto"
+    ),
+    "event {event}, round {round}, game {game}: invalid result {value!r}": (
+        "evento {event}, ronda {round}, partida {game}: resultado no válido {value!r}"
+    ),
+    "event {event}, round {round}, game {game}: the turn order must be true/false/null, not {value!r}": (
+        "evento {event}, ronda {round}, partida {game}: el turno tiene que ser true/false/null, no {value!r}"
+    ),
+    "event {event}, round {round}, game {game}: who chose the turn order must be true/false/null, not {value!r}": (
+        "evento {event}, ronda {round}, partida {game}: quién eligió el turno tiene que ser true/false/null, no "
+        "{value!r}"
+    ),
+    # invalid backup files (backup.json_backup.BackupError), shown after "Not a valid backup:"
+    "not a JSON file: {error}": "no es un archivo JSON: {error}",
+    "not a timtapper backup": "no es una copia de timtapper",
+    "unsupported backup version {version!r}": "versión de copia no compatible {version!r}",
+    "the events are not a list": "los eventos no son una lista",
+    "event {event}: expected an object": "evento {event}: se esperaba un objeto",
+    "event {event}: unknown event type {value!r}": "evento {event}: tipo de evento desconocido {value!r}",
+    "event {event}: invalid date {value!r}": "evento {event}: fecha no válida {value!r}",
+    "event {event}: the rounds are not a list": "evento {event}: las rondas no son una lista",
+    "event {event}: the placement must be a whole number from 1 to {max}, not {value!r}": (
+        "evento {event}: el puesto tiene que ser un número entero de 1 a {max}, no {value!r}"
+    ),
+    "event {event}: the players must be a whole number from 1 to {max}, not {value!r}": (
+        "evento {event}: los jugadores tienen que ser un número entero de 1 a {max}, no {value!r}"
+    ),
+    "event {event}: placement {placement} is past the {players} players": (
+        "evento {event}: el puesto {placement} supera los {players} jugadores"
+    ),
+    "event {event}: the name must be text, not {value!r}": (
+        "evento {event}: el nombre tiene que ser texto, no {value!r}"
+    ),
+    "event {event}: the name is longer than {max} characters": "evento {event}: el nombre pasa de {max} caracteres",
+    "event {event}: the leader must be a leader code, not {value!r}": (
+        "evento {event}: el líder tiene que ser un código de líder, no {value!r}"
+    ),
+    "event {event}: the notes must be text, not {value!r}": (
+        "evento {event}: las notas tienen que ser texto, no {value!r}"
+    ),
+    "event {event}, round {round}: expected an object": "evento {event}, ronda {round}: se esperaba un objeto",
+    "event {event}, round {round}: invalid result {value!r}": (
+        "evento {event}, ronda {round}: resultado no válido {value!r}"
+    ),
+    "event {event}, round {round}: the opponent must be a leader code, not {value!r}": (
+        "evento {event}, ronda {round}: el rival tiene que ser un código de líder, no {value!r}"
+    ),
+    "event {event}, round {round}: the turn order must be true/false/null, not {value!r}": (
+        "evento {event}, ronda {round}: el turno tiene que ser true/false/null, no {value!r}"
+    ),
+    "event {event}, round {round}: the die roll must be true/false/null, not {value!r}": (
+        "evento {event}, ronda {round}: la tirada de dado tiene que ser true/false/null, no {value!r}"
+    ),
+    "event {event}, round {round}: the top cut flag must be true/false/null, not {value!r}": (
+        "evento {event}, ronda {round}: el top cut tiene que ser true/false/null, no {value!r}"
+    ),
+    "event {event}, round {round}: the notes must be text, not {value!r}": (
+        "evento {event}, ronda {round}: las notas tienen que ser texto, no {value!r}"
+    ),
 }
 
 GL = {
@@ -189,13 +358,39 @@ GL = {
     "Settings": "Axustes",
     "Press back again to exit": "Preme atrás outra vez para saír",
     "That event no longer exists": "Ese evento xa non existe",
+    "timtapper could not open its database: {error}": "timtapper non puido abrir a súa base de datos: {error}",
     # event types
     "Testing": "Testeo",
+    "Pirates Party": "Pirates Party",
     "Locals": "Locais",
+    "Release event": "Evento de lanzamento",
+    "Sealed": "Selado",
+    "Heroines Battle": "Heroines Battle",
+    "Team battle": "Por equipos",
+    "Store Championship": "Store Championship",
+    "Treasure Cup": "Treasure Cup",
+    "Flagship Battle": "Flagship Battle",
+    "Extra Grand Battle": "Extra Grand Battle",
     "Regional": "Rexional",
     "National": "Nacional",
-    "Online": "En liña",
+    "World Championship": "Mundial",
     "Other": "Outro",
+    # new event names, numbered per type
+    "Testing #{n}": "Testeo #{n}",
+    "Pirates Party #{n}": "Pirates Party #{n}",
+    "Local #{n}": "Local #{n}",
+    "Release #{n}": "Lanzamento #{n}",
+    "Sealed #{n}": "Selado #{n}",
+    "Heroines Battle #{n}": "Heroines Battle #{n}",
+    "Team battle #{n}": "Equipos #{n}",
+    "Store Championship #{n}": "Store Championship #{n}",
+    "Treasure Cup #{n}": "Treasure Cup #{n}",
+    "Flagship #{n}": "Flagship #{n}",
+    "Extra Battle #{n}": "Extra Battle #{n}",
+    "Regional #{n}": "Rexional #{n}",
+    "National #{n}": "Nacional #{n}",
+    "Worlds #{n}": "Mundial #{n}",
+    "Event #{n}": "Evento #{n}",
     # events list
     "New event": "Novo evento",
     "No events yet": "Aínda non hai eventos",
@@ -245,6 +440,11 @@ GL = {
     "Delete round": "Borrar rolda",
     "Delete round {n}?": "Borrar a rolda {n}?",
     "This round and its notes will be removed.": "Eliminaranse esta rolda e as súas notas.",
+    "Remove noted games?": "Quitar partidas anotadas?",
+    "Round {n}: the games this change drops hold results or turn orders, which will be removed.": (
+        "Rolda {n}: as partidas que este cambio quita teñen resultados ou quendas anotadas, que se eliminarán."
+    ),
+    "Remove": "Quitar",
     "Delete": "Borrar",
     "Cancel": "Cancelar",
     "Delete event": "Borrar evento",
@@ -266,6 +466,7 @@ GL = {
     "Black": "Negro",
     "Yellow": "Amarelo",
     "No leader matches": "Ningún líder coincide",
+    "{shown} of {total} leaders — search to find the rest": "{shown} de {total} líderes; busca para ver o resto",
     # stats
     "All leaders": "Todos os líderes",
     "Playing {leader}": "Xogando {leader}",
@@ -301,7 +502,7 @@ GL = {
     "W-L": "V-D",
     "Win %": "% Vit.",
     "Tracked with timtapper · One Piece TCG": "Rexistrado con timtapper · One Piece TCG",
-    "Could not create the image ({error})": "Non se puido crear a imaxe ({error})",
+    "Could not create the file ({error})": "Non se puido crear o ficheiro ({error})",
     "Could not share or save the file ({error})": "Non se puido compartir nin gardar o ficheiro ({error})",
     "Saved": "Gardado",
     # settings
@@ -338,6 +539,8 @@ GL = {
     "Could not open the file picker ({error})": "Non se puido abrir o selector de ficheiros ({error})",
     "Could not read that file": "Non se puido ler ese ficheiro",
     "Not a valid backup: {error}": "Non é unha copia válida: {error}",
+    "Could not restore the backup ({error})": "Non se puido restaurar a copia ({error})",
+    "Could not update leaders ({error})": "Non se puideron actualizar os líderes ({error})",
     "Events restored: {n}": "Eventos restaurados: {n}",
     "Restore this backup?": "Restaurar esta copia?",
     "All your current events will be replaced by the ones in the backup.": (
@@ -349,6 +552,139 @@ GL = {
     "Leader data from optcgapi.com.": (
         "Tracker feito por fans. Sen relación nin apoio de Bandai, Eiichiro Oda ou Shueisha. "
         "Datos de líderes de optcgapi.com."
+    ),
+    # rejected edits (events.repository.EventError), shown after "Could not save:"
+    "event name is required": "o evento precisa un nome",
+    "event name is longer than {max} characters": "o nome do evento pasa de {max} caracteres",
+    "placement must be a whole number from 1 to {max}": "o posto ten que ser un número enteiro de 1 a {max}",
+    "players must be a whole number from 1 to {max}": "os xogadores teñen que ser un número enteiro de 1 a {max}",
+    "placement {placement} is past the {players} players": "o posto {placement} supera os {players} xogadores",
+    "notes must be text": "as notas teñen que ser texto",
+    "date must be a date": "a data ten que ser unha data",
+    "unknown event type {key!r}": "tipo de evento descoñecido {key!r}",
+    "unknown leader id {leader_id}": "líder descoñecido (id {leader_id})",
+    "unknown event fields: {fields}": "campos de evento descoñecidos: {fields}",
+    "unknown round fields: {fields}": "campos de rolda descoñecidos: {fields}",
+    "result must be one of {results} or None": "o resultado ten que ser un de {results} ou ningún",
+    "went_first must be true, false or None": "a quenda ten que ser si, non ou descoñecida",
+    "event {event_id} not found": "non se atopou o evento {event_id}",
+    "round {round_id} not found": "non se atopou a rolda {round_id}",
+    # rounds: Swiss, top cut, byes; event standings and sets
+    "1st place": "1.º posto",
+    "2nd place": "2.º posto",
+    "Top {n}": "Top {n}",
+    "Outside the top {n}": "Fóra do top {n}",
+    "Dropped": "Abandonado",
+    "Not noted": "Sen anotar",
+    "Swiss": "Suíza",
+    "Bye": "Bye",
+    "Byes": "Byes",
+    "Automatic win": "Vitoria automática",
+    "Add a bye": "Engadir un bye",
+    "a bye has no games": "un bye non ten partidas",
+    "a bye has no opponent": "un bye non ten rival",
+    "a played round needs an opponent": "unha rolda xogada precisa un rival",
+    "dropped must be true or false": "abandonado ten que ser si ou non",
+    "kind must be one of {kinds}": "o tipo de rolda ten que ser un de {kinds}",
+    "unknown set {code!r}": "colección descoñecida {code!r}",
+    "event {event}, round {round}: a bye has no opponent, not {value!r}": (
+        "evento {event}, rolda {round}: un bye non ten rival, non {value!r}"
+    ),
+    "event {event}, round {round}: unknown kind of round {value!r}": (
+        "evento {event}, rolda {round}: tipo de rolda descoñecido {value!r}"
+    ),
+    "event {event}: dropped must be true/false/null, not {value!r}": (
+        "evento {event}: abandonado ten que ser true/false/null, non {value!r}"
+    ),
+    "event {event}: the set must be a set code, not {value!r}": (
+        "evento {event}: a colección ten que ser un código de colección, non {value!r}"
+    ),
+    # best of 3: games and who chose the turn order
+    "Best of 1": "Ao mellor de 1",
+    "Best of 3": "Ao mellor de 3",
+    "Game {n}": "Partida {n}",
+    "Games": "Partidas",
+    "You": "Ti",
+    "Opp": "Rival",
+    "You chose turn": "Escolliches quenda",
+    "They chose turn": "Escolleu o rival",
+    "Who chose the turn order — tap to change": "Quen escolleu a quenda — toca para cambialo",
+    "Who chose the turn order: the previous game's loser — tap to change": (
+        "Quen escolleu a quenda: quen perdeu a partida anterior — toca para cambialo"
+    ),
+    "games {record}": "partidas {record}",
+    "best_of must be 1 or 3": "ao mellor de ten que ser 1 ou 3",
+    "chose_turn must be true, false or None": "quen escolleu a quenda ten que ser si, non ou descoñecido",
+    "game {game_no} is not part of a best of {best_of}": (
+        "a partida {game_no} non forma parte dun ao mellor de {best_of}"
+    ),
+    "unknown game fields: {fields}": "campos de partida descoñecidos: {fields}",
+    "event {event}, round {round}: best of must be 1 or 3, not {value!r}": (
+        "evento {event}, rolda {round}: ao mellor de ten que ser 1 ou 3, non {value!r}"
+    ),
+    "event {event}, round {round}: the games are not a list": (
+        "evento {event}, rolda {round}: as partidas non son unha lista"
+    ),
+    "event {event}, round {round}: more games than a best of {best_of}": (
+        "evento {event}, rolda {round}: máis partidas que un ao mellor de {best_of}"
+    ),
+    "event {event}, round {round}, game {game}: expected an object": (
+        "evento {event}, rolda {round}, partida {game}: agardábase un obxecto"
+    ),
+    "event {event}, round {round}, game {game}: invalid result {value!r}": (
+        "evento {event}, rolda {round}, partida {game}: resultado non válido {value!r}"
+    ),
+    "event {event}, round {round}, game {game}: the turn order must be true/false/null, not {value!r}": (
+        "evento {event}, rolda {round}, partida {game}: a quenda ten que ser true/false/null, non {value!r}"
+    ),
+    "event {event}, round {round}, game {game}: who chose the turn order must be true/false/null, not {value!r}": (
+        "evento {event}, rolda {round}, partida {game}: quen escolleu a quenda ten que ser true/false/null, non "
+        "{value!r}"
+    ),
+    # invalid backup files (backup.json_backup.BackupError), shown after "Not a valid backup:"
+    "not a JSON file: {error}": "non é un ficheiro JSON: {error}",
+    "not a timtapper backup": "non é unha copia de timtapper",
+    "unsupported backup version {version!r}": "versión de copia non compatible {version!r}",
+    "the events are not a list": "os eventos non son unha lista",
+    "event {event}: expected an object": "evento {event}: agardábase un obxecto",
+    "event {event}: unknown event type {value!r}": "evento {event}: tipo de evento descoñecido {value!r}",
+    "event {event}: invalid date {value!r}": "evento {event}: data non válida {value!r}",
+    "event {event}: the rounds are not a list": "evento {event}: as roldas non son unha lista",
+    "event {event}: the placement must be a whole number from 1 to {max}, not {value!r}": (
+        "evento {event}: o posto ten que ser un número enteiro de 1 a {max}, non {value!r}"
+    ),
+    "event {event}: the players must be a whole number from 1 to {max}, not {value!r}": (
+        "evento {event}: os xogadores teñen que ser un número enteiro de 1 a {max}, non {value!r}"
+    ),
+    "event {event}: placement {placement} is past the {players} players": (
+        "evento {event}: o posto {placement} supera os {players} xogadores"
+    ),
+    "event {event}: the name must be text, not {value!r}": "evento {event}: o nome ten que ser texto, non {value!r}",
+    "event {event}: the name is longer than {max} characters": "evento {event}: o nome pasa de {max} caracteres",
+    "event {event}: the leader must be a leader code, not {value!r}": (
+        "evento {event}: o líder ten que ser un código de líder, non {value!r}"
+    ),
+    "event {event}: the notes must be text, not {value!r}": (
+        "evento {event}: as notas teñen que ser texto, non {value!r}"
+    ),
+    "event {event}, round {round}: expected an object": "evento {event}, rolda {round}: agardábase un obxecto",
+    "event {event}, round {round}: invalid result {value!r}": (
+        "evento {event}, rolda {round}: resultado non válido {value!r}"
+    ),
+    "event {event}, round {round}: the opponent must be a leader code, not {value!r}": (
+        "evento {event}, rolda {round}: o rival ten que ser un código de líder, non {value!r}"
+    ),
+    "event {event}, round {round}: the turn order must be true/false/null, not {value!r}": (
+        "evento {event}, rolda {round}: a quenda ten que ser true/false/null, non {value!r}"
+    ),
+    "event {event}, round {round}: the die roll must be true/false/null, not {value!r}": (
+        "evento {event}, rolda {round}: a tirada de dado ten que ser true/false/null, non {value!r}"
+    ),
+    "event {event}, round {round}: the top cut flag must be true/false/null, not {value!r}": (
+        "evento {event}, rolda {round}: o top cut ten que ser true/false/null, non {value!r}"
+    ),
+    "event {event}, round {round}: the notes must be text, not {value!r}": (
+        "evento {event}, rolda {round}: as notas teñen que ser texto, non {value!r}"
     ),
 }
 

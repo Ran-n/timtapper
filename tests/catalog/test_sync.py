@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:12.113794
-Revised: 2026/10/11 17:20:12.113794
+Revised: 2026/10/12 22:20:11.922861
 """
 
 import datetime as dt
@@ -80,3 +80,12 @@ NOW = dt.datetime(2026, 10, 11, 12, tzinfo=dt.UTC)
 )
 def test_is_due(last, due):
     assert is_due(last, NOW) is due
+
+
+@pytest.mark.live
+def test_live_full_sync_into_a_real_database(leaders):
+    """What "Update leaders" does, end to end: every leader stored, every new one's picture downloaded."""
+    result = sync_leaders(leaders)
+    assert result.sources is not None and "OP-01" in result.sources
+    assert result.failed_portraits == 0
+    assert leaders.count() >= 100

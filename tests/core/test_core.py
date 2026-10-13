@@ -2,10 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.176823
-Revised: 2026/10/12 19:13:15.548013
+Revised: 2026/10/12 21:53:37.425119
 """
 
 import logging
+import os
+import time
+
+import pytest
 
 from core import paths
 from core.logging import APP_LOGGER, LogTail, get_logger, setup_logging
@@ -69,3 +73,36 @@ def test_log_tail_leaves_a_more_verbose_logger_alone():
         assert lib.level == logging.DEBUG
         lib.debug("kept")
     assert list(tail.lines) == ["DEBUG tail-test.verbose: kept"]
+
+
+def test_temp_file_drops_this_apps_stale_files_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLET_APP_STORAGE_TEMP", str(tmp_path / "t"))
+    folder = paths.temp_dir()
+    stale, fresh, foreign = folder / "timtapper-old.png", folder / "timtapper-new.png", folder / "other.png"
+    for f in (stale, fresh, foreign):
+        f.write_bytes(b"x")
+    old = time.time() - paths.TEMP_MAX_AGE - 60
+    os.utime(stale, (old, old))
+    os.utime(foreign, (old, old))
+    assert paths.temp_file("timtapper-next.png") == folder / "timtapper-next.png"
+    assert not stale.exists() and fresh.exists() and foreign.exists()
+
+
+def test_temp_file_names_must_carry_the_prefix():
+    with pytest.raises(ValueError, match="start with"):
+        paths.temp_file("card.png")
+
+
+def test_temp_file_logs_a_file_it_cannot_delete(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("FLET_APP_STORAGE_TEMP", str(tmp_path / "t"))
+    stale = paths.temp_dir() / "timtapper-old.png"
+    stale.write_bytes(b"x")
+    old = time.time() - paths.TEMP_MAX_AGE - 60
+    os.utime(stale, (old, old))
+
+    def busy(self, missing_ok=False):
+        raise PermissionError("in use")
+
+    monkeypatch.setattr(paths.Path, "unlink", busy)
+    paths.temp_file("timtapper-next.png")
+    assert "could not delete old temp file timtapper-old.png" in caplog.text

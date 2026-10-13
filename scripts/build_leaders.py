@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.795206
-Revised: 2026/10/12 01:50:30.946780
+Revised: 2026/10/13 07:39:23.876145
 
 Refresh the leader list bundled with the app (src/timtapper/assets/data/leaders.json)
 and the leader portraits (src/timtapper/assets/leaders/*.webp) from optcgapi.com.
@@ -20,12 +20,10 @@ import json
 import sys
 from pathlib import Path
 
-import httpx
-
 APP_DIR = Path(__file__).resolve().parent.parent / "src" / "timtapper"
 sys.path.insert(0, str(APP_DIR))
 
-from catalog.optcgapi import CatalogError, fetch_leaders, fetch_sources  # noqa: E402
+from catalog.optcgapi import IMAGE_TIMEOUT, CatalogError, client_session, fetch_leaders, fetch_sources  # noqa: E402
 from catalog.portraits import (  # noqa: E402
     BUNDLED_DIR,
     DEFAULT_FACE,
@@ -93,7 +91,7 @@ def main() -> int:
         if r.code not in external and (args.force or not (BUNDLED_DIR / filename(r.code)).is_file())
     ]
     failed = []
-    with httpx.Client(timeout=30, follow_redirects=True) as client:
+    with client_session(timeout=IMAGE_TIMEOUT) as client:
         for code in todo:
             try:
                 (BUNDLED_DIR / filename(code)).write_bytes(

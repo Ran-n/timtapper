@@ -1,0 +1,101 @@
+{
+ "format": "timtapper-backup",
+ "version": 3,
+ "events": [
+  {
+   "name": "Sunday locals",
+   "event_type": "locals",
+   "date": "2026-10-05",
+   "leader": "OP01-001",
+   "notes": "Swiss, 3 rounds + top 4 ✓",
+   "placement": 3,
+   "players": 32,
+   "dropped": false,
+   "set": "OP16",
+   "rounds": [
+    {
+     "kind": "swiss",
+     "opponent": "OP01-060",
+     "best_of": 1,
+     "notes": "tempo",
+     "games": [
+      {
+       "result": "W",
+       "went_first": true,
+       "chose_turn": true
+      }
+     ]
+    },
+    {
+     "kind": "swiss",
+     "opponent": "ST01-001",
+     "best_of": 1,
+     "notes": "",
+     "games": [
+      {
+       "result": "L",
+       "went_first": false,
+       "chose_turn": null
+      }
+     ]
+    },
+    {
+     "kind": "top_cut",
+     "opponent": "OP01-060",
+     "best_of": 1,
+     "notes": "",
+     "games": [
+      {
+       "result": null,
+       "went_first": null,
+       "chose_turn": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "Heroines practice",
+   "event_type": "heroines_battle",
+   "date": "2026-10-06",
+   "leader": null,
+   "notes": "",
+   "placement": null,
+   "players": null,
+   "dropped": true,
+   "set": null,
+   "rounds": [
+    {
+     "kind": "top_cut",
+     "opponent": "ST01-001",
+     "best_of": 3,
+     "notes": "",
+     "games": [
+      {
+       "result": "L",
+       "went_first": true,
+       "chose_turn": true
+      },
+      {
+       "result": "W",
+       "went_first": null,
+       "chose_turn": null
+      },
+      {
+       "result": "W",
+       "went_first": false,
+       "chose_turn": false
+      }
+     ]
+    },
+    {
+     "kind": "bye",
+     "opponent": null,
+     "best_of": 1,
+     "notes": "",
+     "games": []
+    }
+   ]
+  }
+ ]
+}
