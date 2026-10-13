@@ -34,6 +34,7 @@ dev = [
     "pytest-cov>=5",
     "resvg-py>=0.5.0",
     "ruff==0.17.*",
+    "playwright>=1.50",
 ]
 
 [tool.flet]
@@ -43,6 +44,12 @@ description = "One Piece TCG match tracker"
 
 [tool.flet.app]
 path = "src/timtapper"
+
+# the web build (scripts/build_web.py) is served from <user>.github.io/timtapper/ and <user>.codeberg.page/timtapper/;
+# hash routes (#/event/1) so a reload on any screen asks a static host only for index.html
+[tool.flet.web]
+base_url = "timtapper"
+route_url_strategy = "hash"
 
 [build-system]
 requires = ["hatchling"]
@@ -61,8 +68,9 @@ markers = [
     "regression: pins a fixed bug; the docstring or a comment says what used to go wrong",
     "live: hits the real optcgapi.com and Limitless TCG (network) — kept out of the default run",
     "desktop: drives the real app window (Windows; takes over the mouse and screen) — kept out of the default run",
+    "web: drives the built web app (build/web) in headless Chrome — kept out of the default run",
 ]
-addopts = "-m \"not live and not desktop\""
+addopts = "-m \"not live and not desktop and not web\""
 
 [tool.coverage.run]
 source = ["src/timtapper"]

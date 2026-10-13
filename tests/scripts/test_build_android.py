@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 11:04:05.049410
-Revised: 2026/10/13 16:36:23.152207
+Revised: 2026/10/13 22:03:52.285749
 
 Release Android builds: version codes, signing environment, flet command, dist names and the
 upload-key certificate check (against real keytool/jarsigner signatures for bundles and real
@@ -155,12 +155,20 @@ def test_flet_command_for_apks_splits_per_abi():
     assert command[-1] == "--split-per-abi"
 
 
+def test_flet_command_for_the_universal_apk_does_not_split():
+    command = build_android.flet_command("universal", "1.1.0")
+    assert command[:3] == ["flet", "build", "apk"]
+    assert "--split-per-abi" not in command
+    assert command[command.index("--build-number") + 1] == "101000000"
+
+
 @pytest.mark.parametrize(
     ("built", "dist"),
     [
         ("timtapper.aab", "timtapper-1.1.0.aab"),
         ("timtapper-arm64-v8a.apk", "timtapper-1.1.0-arm64-v8a.apk"),
         ("timtapper-x86_64.apk", "timtapper-1.1.0-x86_64.apk"),
+        ("timtapper.apk", "timtapper-1.1.0-universal.apk"),
     ],
 )
 def test_versioned_name(built, dist):
@@ -332,3 +340,12 @@ def test_main_reports_a_failed_build_and_exits_1(monkeypatch):
     monkeypatch.setattr("sys.argv", ["build_android.py"])
     assert build_android.main() == 1
     assert errors == ["build failed: no upload key store at x"]
+
+
+@pytest.mark.parametrize("target", ["aab", "apk", "universal"])
+def test_main_builds_the_target_it_is_given(monkeypatch, target):
+    built = []
+    monkeypatch.setattr(build_android, "build", built.append)
+    monkeypatch.setattr("sys.argv", ["build_android.py", target])
+    assert build_android.main() == 0
+    assert built == [target]

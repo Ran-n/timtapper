@@ -2,19 +2,23 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/13 08:59:21.057270
+Revised: 2026/10/13 22:03:52.028962
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
 tab, then checks in the background for leaders from newly released sets.
-Everything stays on the device: there is no server.
+Everything stays on the device: there is no server. In a browser (the web
+build) the data folder is loaded from and saved to the browser's storage.
 """
+
+from collections.abc import Callable
 
 import flet as ft
 
 from catalog.repository import LeaderRepository, install_bundled
 from core.logging import APP_LOGGER, LogTail, get_logger, setup_logging
-from core.paths import ASSETS_DIR, db_path
+from core.paths import ASSETS_DIR, data_dir, db_path
+from core.web import IS_WEB, BrowserStore
 from db import Database
 from db.database import MIGRATIONS_DIR
 from db.diagnostics import startup_report
@@ -40,11 +44,17 @@ def shape_window(page: ft.Page) -> None:
     page.update()
 
 
-def open_database() -> Database:
-    db = Database(db_path())
+def open_database(on_commit: Callable[[], None] | None = None) -> Database:
+    db = Database(db_path(), on_commit=on_commit)
     db.migrate()
     install_bundled(LeaderRepository(db))
     return db
+
+
+async def open_browser_store() -> BrowserStore:
+    store = BrowserStore(data_dir())
+    await store.open()
+    return store
 
 
 def show_startup_failure(page: ft.Page, exc: Exception, tail: LogTail) -> None:
@@ -75,7 +85,8 @@ async def main(page: ft.Page) -> None:
     tail = LogTail()
     try:
         with tail.attached("alembic", APP_LOGGER):
-            db = open_database()
+            store = await open_browser_store() if IS_WEB else None
+            db = open_database(store.changed if store else None)
     except Exception as exc:
         _log.exception("could not open the database")
         set_lang(page, await saved_language())

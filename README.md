@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/13 16:20:43.134089 )
+[//]: # (+ Revised: 	2026/10/13 22:03:51.502334 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -10,7 +10,7 @@
 
 <p align="center">
   <b>Match tracker for the One Piece Trading Card Game.</b><br>
-  Log every round, see your matchups, share your results. Android and desktop, fully offline.
+  Log every round, see your matchups, share your results. Android, Windows and the browser, fully offline.
 </p>
 
 <p align="center">
@@ -22,14 +22,19 @@
 
 <p align="center">
   <a href="https://github.com/Ran-n/timtapper/releases/latest"><img src="https://img.shields.io/badge/Download-Android%20APK%20%C2%B7%20Windows-ea6c1a?style=for-the-badge&logo=github" alt="Download the latest release" height="40"></a>
+  <a href="https://ran-n.github.io/timtapper/"><img src="https://img.shields.io/badge/Open%20in%20browser-iPhone%20%C2%B7%20any%20device-2185d0?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Open timtapper in your browser" height="40"></a>
 </p>
 
 <p align="center"><sub>
-  Mirror:
+  Mirrors:
+  <a href="https://codeberg.org/ran-n/timtapper/releases/latest"><img src="https://img.shields.io/badge/Codeberg-2185D0?logo=codeberg&logoColor=white" alt="Codeberg" align="center"></a>
   <a href="https://gitlab.com/Ran-n/timtapper/-/releases/permalink/latest"><img src="https://img.shields.io/badge/GitLab-FC6D26?logo=gitlab&logoColor=white" alt="GitLab" align="center"></a>
+  · browser:
+  <a href="https://ran-n.codeberg.page/timtapper/"><img src="https://img.shields.io/badge/Codeberg%20Pages-2185D0?logo=codeberg&logoColor=white" alt="timtapper on Codeberg Pages" align="center"></a>
 </sub></p>
 
 No accounts, no server, no sync: your events live on your device, and a JSON backup moves them to another install.
+In the browser they stay in that browser's storage; export a backup now and then.
 
 ## Features
 

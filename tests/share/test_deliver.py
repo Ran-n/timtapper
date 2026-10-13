@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.402251
-Revised: 2026/10/13 07:39:27.454209
+Revised: 2026/10/13 22:03:52.366506
 """
 
 from pathlib import Path
@@ -104,3 +104,24 @@ async def test_save_io_error_propagates(monkeypatch, png, tmp_path):
     monkeypatch.setattr(deliver_mod.ft, "FilePicker", FakePicker(str(tmp_path / "missing-dir" / "x.png")))
     with pytest.raises(OSError):
         await save_as(png)
+
+
+async def test_web_shares_the_bytes_not_the_path(monkeypatch, png):
+    """In a browser the path is in the app's in-memory file system, which the share sheet can't open."""
+    share = FakeShare(ft.ShareResultStatus.SUCCESS)
+    monkeypatch.setattr(deliver_mod.ft, "Share", share)
+    assert await deliver(png, title="t", mime_type="image/png", web=True) is Delivery.SHARED
+    shared = share.calls[0][0][0]
+    assert shared.path is None
+    assert (shared.data, shared.name, shared.mime_type) == (png.read_bytes(), "card.png", "image/png")
+
+
+@pytest.mark.regression
+async def test_web_falls_back_to_a_download(monkeypatch, png, tmp_path):
+    """The web build's share used to hand the browser a path it couldn't fetch (a 404) and nothing was saved."""
+    monkeypatch.setattr(deliver_mod.ft, "Share", FakeShare(exc=RuntimeError("no Web Share API")))
+    picker = FakePicker(None)  # the browser downloads src_bytes and reports no path
+    monkeypatch.setattr(deliver_mod.ft, "FilePicker", picker)
+    assert await deliver(png, title="t", mime_type="image/png", web=True) is Delivery.SAVED
+    assert picker.calls[0] == {"file_name": "card.png", "src_bytes": png.read_bytes()}
+    assert list(tmp_path.iterdir()) == [png]  # nothing written beside it

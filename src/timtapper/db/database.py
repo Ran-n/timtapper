@@ -2,14 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.803606
-Revised: 2026/10/13 11:44:58.355093
+Revised: 2026/10/13 22:03:51.911860
 
 The on-device database: one SQLite file, schema owned by Alembic (migrations
 ship inside the app and run on every start, so an app update never wipes or
 breaks existing history).
 """
 
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -45,11 +45,15 @@ def alembic_config(engine: Engine | None = None, migrations_dir: Path | None = N
 
 
 class Database:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, on_commit: Callable[[], None] | None = None) -> None:
+        """`on_commit` runs after every committed transaction, migrations included (the web build saves the file
+        to the browser's storage then)."""
         self.path = path
         self.url = f"sqlite:///{path.as_posix()}"
         self.engine: Engine = create_engine(self.url)
         event.listen(self.engine, "connect", _enable_foreign_keys)
+        if on_commit is not None:
+            event.listen(self.engine, "commit", lambda _conn: on_commit())
         self._sessions = sessionmaker(self.engine, expire_on_commit=False)
 
     def migrate(self) -> None:

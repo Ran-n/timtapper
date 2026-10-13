@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.068656 )
-[//]: # (+ Revised: 	2026/10/13 16:19:34.068656 )
+[//]: # (+ Revised: 	2026/10/13 22:03:51.670642 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Features in detail
@@ -85,6 +85,20 @@ next start. *Settings → Update leaders* forces a refresh.
 
 Leaders downloaded this way get a default upper-middle crop until a release ships their hand-framed portraits (see
 [DEVELOPMENT.md](DEVELOPMENT.md#leader-catalogue-and-portraits)).
+
+## In the browser
+
+The same app runs in any modern browser at [ran-n.github.io/timtapper](https://ran-n.github.io/timtapper/) (mirror:
+[ran-n.codeberg.page/timtapper](https://ran-n.codeberg.page/timtapper/)), iPhones included. Nothing is sent anywhere:
+the app's Python runs in the page itself.
+
+- **Your data stays in that browser.** Events are saved to the browser's storage after every change and come back on
+  the next visit. Clearing the site's data, or a private window, deletes them: export a backup now and then.
+- **Sharing** opens the device's share sheet where the browser supports it, and downloads the image otherwise.
+  Backups download the same way, and *Import backup* opens the browser's file picker.
+- **New sets**: the daily check works as in the app, but Limitless TCG doesn't let other sites read its pages, so a
+  new set's release date only arrives with the next release of timtapper.
+- **First visit** downloads about 20 MB (the app and Python); after that the browser keeps it.
 
 ## Backup
 

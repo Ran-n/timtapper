@@ -2,13 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 11:01:44.904139
-Revised: 2026/10/13 16:36:23.073937
+Revised: 2026/10/13 22:03:51.747750
 
-Build a release-signed Android bundle (for Google Play) or per-ABI APKs (for sideloading)
+Build a release-signed Android bundle (for Google Play), per-ABI APKs or one universal APK (for sideloading)
 and copy them into dist/ with the version in the name:
 
-    uv run python scripts/build_android.py          # dist/timtapper-<version>.aab
-    uv run python scripts/build_android.py apk      # dist/timtapper-<version>-<abi>.apk
+    uv run python scripts/build_android.py              # dist/timtapper-<version>.aab
+    uv run python scripts/build_android.py apk          # dist/timtapper-<version>-<abi>.apk
+    uv run python scripts/build_android.py universal    # dist/timtapper-<version>-universal.apk (every ABI)
 
 Signs with the upload key. flet build reads it from the FLET_ANDROID_SIGNING_* variables; any that are unset
 are filled in from ../secrets/timtapper-upload.jks (alias "upload") and the password in
@@ -50,6 +51,10 @@ ALIAS_ENV = "FLET_ANDROID_SIGNING_KEY_ALIAS"
 # leaves the last four digits free: every APK of a release then sorts above every APK of the one before.
 _ABI_ROOM = 10_000
 _MAX_VERSION_CODE = 2_100_000_000  # Google Play's ceiling
+
+# script target -> (flet build target, extra flags). A universal APK is flet's plain apk build, holding every
+# ABI; --split-per-abi is never left off the per-ABI build, or stale per-ABI APKs from an earlier build stay behind.
+TARGETS = {"aab": ("aab", []), "apk": ("apk", ["--split-per-abi"]), "universal": ("apk", [])}
 
 _log = get_logger("scripts.build_android")
 
@@ -95,15 +100,17 @@ def signing_env(
 
 
 def flet_command(target: str, version: str) -> list[str]:
-    command = ["flet", "build", target, "--build-version", version, "--build-number", str(version_code(version))]
-    if target == "apk":
-        command.append("--split-per-abi")  # without it, stale per-ABI APKs from an earlier build stay behind
-    return command
+    flet_target, flags = TARGETS[target]
+    build_number = str(version_code(version))
+    return ["flet", "build", flet_target, "--build-version", version, "--build-number", build_number, *flags]
 
 
 def versioned_name(artifact: Path, version: str) -> str:
-    """timtapper-arm64-v8a.apk -> timtapper-1.1.0-arm64-v8a.apk; timtapper.aab -> timtapper-1.1.0.aab."""
+    """timtapper-arm64-v8a.apk -> timtapper-1.1.0-arm64-v8a.apk; timtapper.aab -> timtapper-1.1.0.aab;
+    timtapper.apk (no ABI, so every ABI) -> timtapper-1.1.0-universal.apk."""
     name, sep, rest = artifact.stem.partition("-")
+    if not sep and artifact.suffix == ".apk":
+        sep, rest = "-", "universal"
     return f"{name}-{version}{sep}{rest}{artifact.suffix}"
 
 
@@ -173,13 +180,14 @@ def build(target: str) -> list[Path]:
     version = project_version()
     # flet's progress output has emoji; on Windows, redirected to a file or pipe, cp1252 can't encode them
     env = signing_env(os.environ) | {"PYTHONUTF8": "1"}
-    out_dir = ROOT / "build" / target
+    flet_target, _ = TARGETS[target]
+    out_dir = ROOT / "build" / flet_target
     shutil.rmtree(out_dir, ignore_errors=True)
     _log.info("building %s %s (version code %d)", target, version, version_code(version))
     subprocess.run(["uv", "run", *flet_command(target, version)], cwd=ROOT, env=env, check=True)
-    artifacts = sorted(out_dir.glob(f"*.{target}"))
+    artifacts = sorted(out_dir.glob(f"*.{flet_target}"))
     if not artifacts:
-        raise BuildError(f"flet build left no .{target} in {out_dir}")
+        raise BuildError(f"flet build left no .{flet_target} in {out_dir}")
     DIST.mkdir(exist_ok=True)
     copies = []
     for artifact in artifacts:
@@ -193,7 +201,7 @@ def build(target: str) -> list[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[1])
-    parser.add_argument("target", nargs="?", choices=("aab", "apk"), default="aab")
+    parser.add_argument("target", nargs="?", choices=tuple(TARGETS), default="aab")
     args = parser.parse_args()
     setup_logging()
     try:

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.379720
-Revised: 2026/10/13 13:15:07.289924
+Revised: 2026/10/13 22:03:52.205430
 
 Pillow-rendered share cards (1080x1350, the 4:5 portrait every social app
 displays uncropped). Fixed dark "open sea" palette independent of the app
@@ -364,7 +364,8 @@ def _record_block(card: Card, x_right: int, y: int, rec: Record, games: Record, 
     line = _("{rate} win rate").format(rate=percent(rec.win_rate))
     if games != rec:
         line += " · " + _("games {record}").format(record=games.label())
-    card.text((x_right, y + 168), line, 32, fill=DIM, anchor="ra")
+    # on the leader code's baseline (the panel's last line), so it keeps the panel's padding below it
+    card.text((x_right, y + 183), line, 32, fill=DIM, anchor="rs")
 
 
 def _split_text(rec: Record) -> str:

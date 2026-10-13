@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/13 16:46:53.648476 )
+[//]: # (+ Revised: 	2026/10/13 22:03:51.423962 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -11,6 +11,16 @@ All notable changes to this project will be documented in this file.
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+- Added a web version that runs in any browser, iPhones included, at ran-n.github.io/timtapper (mirror: ran-n.codeberg.page/timtapper): events are kept in the browser's storage, sharing opens the share sheet or downloads the image, and backups download and import through the browser
+- Added a universal Android APK (every chip type in one file) to the release downloads, built with `scripts/build_android.py universal`
+- Added an "Open in browser" button to the README
+
+### Changed
+
+- Moved the win rate on the event share card up onto the leader code's line, so it no longer sits against the bottom of its box
 
 ## [1.2.1] — 2026-10-13
 

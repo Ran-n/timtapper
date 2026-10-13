@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/13 08:59:21.514521
+Revised: 2026/10/13 22:03:52.452619
 """
 
 import datetime as dt
@@ -353,7 +353,7 @@ async def test_main_reports_database_failure(page, monkeypatch):
     added = []
     page.add = added.append
 
-    def broken():
+    def broken(on_commit=None):
         raise OSError("disk full")
 
     monkeypatch.setattr(main, "open_database", broken)
@@ -371,7 +371,7 @@ async def test_database_failure_speaks_the_saved_language(page, prefs, monkeypat
     page.add = added.append
     prefs[PREF_LANG] = "es"
 
-    def broken():
+    def broken(on_commit=None):
         raise OSError("disk full")
 
     monkeypatch.setattr(main, "open_database", broken)
@@ -396,7 +396,7 @@ async def test_startup_failure_report_carries_the_migration_log(page, monkeypatc
     added = []
     page.add = added.append
 
-    def broken():
+    def broken(on_commit=None):
         db = Database(main.db_path())
         db.migrate()
         db.dispose()
@@ -415,8 +415,8 @@ async def test_every_quit_path_closes_the_database(page, monkeypatch, handler):
     opened = []
     real_open = main.open_database
 
-    def tracking_open():
-        db = real_open()
+    def tracking_open(on_commit=None):
+        db = real_open(on_commit)
         opened.append(db)
         return db
 
@@ -464,7 +464,7 @@ async def test_quitting_closes_the_database_even_when_dropping_the_draft_fails(p
     """A database error while dropping the draft skipped db.dispose() and left the file open."""
     opened = []
     real_open = main.open_database
-    monkeypatch.setattr(main, "open_database", lambda: opened.append(real_open()) or opened[-1])
+    monkeypatch.setattr(main, "open_database", lambda on_commit=None: opened.append(real_open(on_commit)) or opened[-1])
 
     class Prefs:
         async def get(self, key):
@@ -551,3 +551,46 @@ def test_redated_back_the_set_follows_again(ctx, events):
 def test_a_new_event_without_any_set_known_has_none(ctx, monkeypatch):
     monkeypatch.setattr(type(ctx), "leaders", property(lambda self: []))
     assert make_draft(ctx).set_code is None
+
+
+async def test_web_start_loads_browser_storage_and_saves_every_commit(page, monkeypatch):
+    """In a browser the data folder is in memory: it's loaded before the database opens, and saved on commit."""
+
+    class Prefs:
+        async def get(self, key):
+            return None
+
+    class Store:
+        def __init__(self):
+            self.changes = 0
+
+        def changed(self):
+            self.changes += 1
+
+    store = Store()
+
+    async def open_store():
+        assert not main.db_path().exists()  # loaded before the database is opened
+        return store
+
+    monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
+    monkeypatch.setattr(main, "IS_WEB", True)
+    monkeypatch.setattr(main, "open_browser_store", open_store)
+    await main.main(page)
+    assert store.changes > 0  # migrations and the bundled leaders
+    page.on_disconnect(None)
+
+
+async def test_open_browser_store_opens_the_data_folder(monkeypatch, tmp_path):
+    opened = []
+
+    class Store:
+        def __init__(self, folder):
+            self.folder = folder
+
+        async def open(self):
+            opened.append(self.folder)
+
+    monkeypatch.setattr(main, "BrowserStore", Store)
+    store = await main.open_browser_store()
+    assert opened == [tmp_path / "data"] and store.folder == tmp_path / "data"
