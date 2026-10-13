@@ -7,4 +7,4 @@ Revised: 2026/10/13 22:03:51.825165
 App version shown in Settings (kept equal to pyproject.toml by tests/test_version.py).
 """
 
-VERSION = "1.2.1"
+VERSION = "1.3.0"

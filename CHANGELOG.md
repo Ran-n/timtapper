@@ -12,6 +12,8 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-13
+
 ### Added
 
 - Added a web version that runs in any browser, iPhones included, at ran-n.github.io/timtapper (mirror: ran-n.codeberg.page/timtapper): events are kept in the browser's storage, sharing opens the share sheet or downloads the image, and backups download and import through the browser
