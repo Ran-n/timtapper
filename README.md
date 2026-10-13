@@ -124,14 +124,27 @@ uv run flet run
 
 `uv run timtapper` also works; it stores data in `~/.timtapper/`.
 
-## Build the Android APK
+## Build for Android
 
 ```sh
-uv run flet build apk --split-per-abi
+uv run python scripts/build_android.py        # Google Play bundle: dist/timtapper-<version>.aab
+uv run python scripts/build_android.py apk    # sideloading: dist/timtapper-<version>-<abi>.apk
 ```
 
-Always pass `--split-per-abi`. Without it, `flet build` leaves stale per-ABI APKs in `build/apk/`. If in doubt, delete
-the whole `build/` folder first.
+Both are signed with the upload key. It is kept outside the repository, at `../secrets/timtapper-upload.jks` (alias
+`upload`), with its password in `../secrets/timtapper-upload.pass`. To use a key somewhere else, set the
+`FLET_ANDROID_SIGNING_KEY_STORE`, `FLET_ANDROID_SIGNING_KEY_ALIAS` and `FLET_ANDROID_SIGNING_KEY_STORE_PASSWORD`
+variables. Without a key the script stops instead of falling back to the debug key, which Google Play rejects. After
+the build it checks that each file carries the upload key's certificate. Losing the key store blocks every future
+update to the Play listing until Google resets the upload key, so keep a copy off this machine.
+
+The version code comes from the version: 1.1.0 becomes 101000000. The last four digits leave room for the offset that
+`--split-per-abi` adds to each APK, so every APK of a release sorts above those of the release before. The script
+deletes `build/aab/` or `build/apk/` before building, so no stale per-ABI APK is left behind. Don't call
+`flet build` directly for a release: it signs with the debug key.
+
+APKs up to 1.1.0 were signed with the debug key. Android won't update them in place to a build signed with the upload
+key: export a backup, uninstall, install the new APK, then restore.
 
 ## Update the README screenshots
 
@@ -223,7 +236,7 @@ src/timtapper/          Flet app root (flet build packages this folder)
   assets/               fonts, icon (png/ico), logo_mark, bundled leaders.json + leaders/*.webp portraits
 scripts/                build_leaders.py, fetch_davyback_portraits.py, make_icon.py (icons, logo_mark +
                         docs/logo.png), make_screenshots.py (docs/screenshots/), app_driver.py + app_window.py
-                        (run, capture and click the real app)
+                        (run, capture and click the real app), build_android.py (signed .aab / .apk into dist/)
 docs/                   logo.png wordmark and screenshots/ for the README
 tests/                  mirrors src/timtapper; rendered/ drives the real app (marker `desktop`)
 ```
