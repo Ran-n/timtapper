@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.944166
-Revised: 2026/10/13 07:39:27.073612
+Revised: 2026/10/13 11:42:03.595072
 """
 
 import contextlib
@@ -383,3 +383,43 @@ def test_a_set_this_install_doesnt_know_is_added(events, caplog):
     import_backup(events.db, data)
     assert events.list()[0].set_code == "OP99"
     assert "unknown set OP99" in caplog.text
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize(
+    ("event", "message"),
+    [
+        (valid_event(leader="../../evil"), "leader must be a leader code"),
+        (valid_event(leader="OP01-001\n"), "leader must be a leader code"),
+        (valid_event(leader="X" * 10_000), "leader must be a leader code"),
+        (valid_event(rounds=[{"opponent": "..\\OP01-001"}]), "opponent must be a leader code"),
+        (valid_event(rounds=[{"opponent": ""}]), "opponent must be a leader code"),
+        (valid_event(set="../OP16"), "the set must be a set code"),
+        (valid_event(set="op16"), "the set must be a set code"),
+    ],
+)
+def test_parse_rejects_codes_that_are_no_codes(event, message):
+    """Leader and set codes were only checked for being text: "../../evil" became a leader whose portrait was looked
+    up outside the portrait folders, and any length went into the database."""
+    data = json.dumps({"format": FORMAT, "version": VERSION, "events": [event]}).encode()
+    with pytest.raises(BackupError, match=message):
+        parse_backup(data)
+
+
+def test_parse_reads_empty_codes_as_absent():
+    """A hand-edited file with "" for an optional code still restores, as before codes were checked."""
+    data = json.dumps({"format": FORMAT, "version": VERSION, "events": [valid_event(leader="", set="")]}).encode()
+    (ev,) = parse_backup(data)
+    assert ev["leader"] is None and ev["set"] is None
+
+
+@pytest.mark.property
+@given(st.from_regex(r"[A-Z]{1,3}\d{0,2}-\d{3}", fullmatch=True), st.from_regex(r"[A-Z]{2,3}\d{1,2}", fullmatch=True))
+def test_property_well_formed_codes_always_parse(leader, set_code):
+    data = json.dumps({
+        "format": FORMAT,
+        "version": VERSION,
+        "events": [valid_event(leader=leader, set=set_code, rounds=[{"opponent": leader}])],
+    }).encode()
+    (ev,) = parse_backup(data)
+    assert (ev["leader"], ev["set"], ev["rounds"][0]["opponent"]) == (leader, set_code, leader)

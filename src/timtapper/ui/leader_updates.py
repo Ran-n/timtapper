@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:11.971755
-Revised: 2026/10/13 08:59:20.833201
+Revised: 2026/10/13 11:42:03.522264
 
 Keeps the leader catalogue current. The Settings button calls run(); at
 startup run_if_due() checks in the background, at most once a day, whether
@@ -62,6 +62,9 @@ class LeaderUpdater:
             remote = await asyncio.to_thread(fetch_sources)
         except CatalogError as exc:
             _log.warning("background leader check skipped: %s", exc)
+            return
+        except Exception:  # a background task has no caller to raise to: log it, the next start retries
+            _log.exception("background leader check failed")
             return
         fresh = new_sources({*stored, *load_bundled_sources()}, remote)
         if not fresh:

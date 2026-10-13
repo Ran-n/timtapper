@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.379720
-Revised: 2026/10/13 07:39:24.638424
+Revised: 2026/10/13 11:42:03.376608
 
 Pillow-rendered share cards (1080x1350, the 4:5 portrait every social app
 displays uncropped). Fixed dark "open sea" palette independent of the app
@@ -110,13 +110,9 @@ class Card:
         self.img.paste(_stripes(side, side, leader.colors), (x, y), _rounded_mask(side, side, radius))
         border = max(3, side // 16)
         inner = side - 2 * border
-        path = portraits.local_file(leader.code)
-        if path is None:
-            face = Image.new("RGB", (inner, inner), PANEL_HI)
-        else:
-            with Image.open(path) as src:
-                face = src.convert("RGB").resize((inner, inner), Image.Resampling.LANCZOS)
-        self.img.paste(face, (x + border, y + border), _rounded_mask(inner, inner, radius - border))
+        self.img.paste(
+            _face(leader.code, inner), (x + border, y + border), _rounded_mask(inner, inner, radius - border)
+        )
 
     def bye_portrait(self, x: int, y: int, side: int) -> None:
         """A bye's stand-in for a portrait, the same as the app's: the joker's hat in a gold frame."""
@@ -240,6 +236,19 @@ def _stripes(w: int, h: int, colors: tuple[str, ...]) -> Image.Image:
     for i, band in enumerate(palette):
         draw.rectangle((0, h * i // len(palette), w, h * (i + 1) // len(palette)), fill=band)
     return img
+
+
+def _face(code: str, side: int) -> Image.Image:
+    """`code`'s portrait as a side x side square; an empty one when there is no picture, or it can't be read (a
+    damaged download shouldn't stop the whole card from being shared)."""
+    path = portraits.local_file(code)
+    if path is not None:
+        try:
+            with Image.open(path) as src:
+                return src.convert("RGB").resize((side, side), Image.Resampling.LANCZOS)
+        except OSError as exc:  # UnidentifiedImageError is one too
+            _log.warning("portrait %s unreadable, drawn empty: %s", path.name, exc)
+    return Image.new("RGB", (side, side), PANEL_HI)
 
 
 def _word_lines(s: str, f: ImageFont.FreeTypeFont, max_w: int) -> list[str]:

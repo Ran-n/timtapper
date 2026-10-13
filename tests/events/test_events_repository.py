@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.326929
-Revised: 2026/10/13 07:39:26.896473
+Revised: 2026/10/13 11:42:03.981305
 """
 
 import datetime as dt
@@ -338,3 +338,11 @@ def test_a_round_without_stored_games_gets_one_on_its_first_edit(events, sample_
         s.execute(delete(GameRow).where(GameRow.match_id == rid))
     assert events.get(sample_event.id).rounds[3].games == ()
     assert events.update_game(rid, 1, result="W").result == "W"
+
+
+@pytest.mark.regression
+def test_saving_the_same_kind_keeps_the_best_of(events, sample_event):
+    """Saving a round's kind unchanged switched it to that stage's usual best-of: a Swiss best of 3 sent kind="swiss"
+    became a best of 1."""
+    r = events.update_round(sample_event.rounds[3].id, best_of=3)
+    assert events.update_round(r.id, kind="swiss").best_of == 3

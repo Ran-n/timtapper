@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.098982
-Revised: 2026/10/12 22:20:11.739860
+Revised: 2026/10/13 11:42:03.759229
 """
 
 import httpx
@@ -18,6 +18,8 @@ from catalog.optcgapi import (
     clean_name,
     fetch_leaders,
     fetch_sources,
+    is_card_code,
+    is_set_code,
     parse_leaders,
     set_code_of,
 )
@@ -329,3 +331,40 @@ def test_live_optcgapi_names_come_out_clean():
     """Real names, through clean_name: no card-code tails or "(Parallel)" left over."""
     dirty = [r.name for r in fetch_leaders() if "(" in r.name or " - " in r.name or r.name != r.name.strip()]
     assert not dirty, dirty
+
+
+@pytest.mark.regression
+def test_set_code_of_rejects_a_trailing_newline():
+    """re.match's $ also matches before a final newline, so "OP01-001\\n" passed as a card code."""
+    with pytest.raises(ValueError):
+        set_code_of("OP01-001\n")
+
+
+@pytest.mark.parametrize("code", ["OP01-001", "ST10-002", "PRB01-001", "P-001"])
+def test_is_card_code(code):
+    assert is_card_code(code)
+
+
+@pytest.mark.parametrize("bad", ["", "OP01", "op01-001", "../OP01-001", "OP01-001\n", "OP01-001.webp", None, 7])
+def test_is_card_code_rejects(bad):
+    assert not is_card_code(bad)
+
+
+@pytest.mark.parametrize(
+    ("value", "ok"),
+    [("OP16", True), ("PRB01", True), ("P", True), ("op16", False), ("OP-16", False), ("../OP16", False), ("", False)],
+)
+def test_is_set_code(value, ok):
+    assert is_set_code(value) is ok
+
+
+def test_is_set_code_rejects_a_number():
+    assert not is_set_code(16)
+
+
+@pytest.mark.property
+@given(st.text(max_size=30))
+def test_property_a_card_code_is_its_set_code_a_dash_and_digits(text):
+    if is_card_code(text):
+        prefix, _, number = text.rpartition("-")
+        assert is_set_code(prefix) and number.isdigit() and set_code_of(text) == prefix

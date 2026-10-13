@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/13 12:44:57.549436 )
+[//]: # (+ Revised: 	2026/10/13 12:45:19.405443 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -21,6 +21,15 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Fixed
 
 - Fixed the portraits of OP03-022, OP10-099 and ST13-001 to frame their faces
+- Fixed a portrait download cut off mid-write counting as downloaded and never being fetched again
+- Fixed a damaged downloaded portrait stopping every share card showing that leader from rendering
+- Fixed saving a round's kind unchanged switching a best of 3 to that stage's usual best-of
+- Fixed an unexpected error in the daily background set check escaping instead of being logged
+- Fixed card codes with a trailing newline passing as card codes
+
+### Security
+
+- Fixed backup restore accepting any text as a leader or set code: a crafted file could point portrait lookups outside the portrait folders
 
 ## [1.1.0] — 2026-10-13
 

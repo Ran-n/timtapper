@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:30.268389
-Revised: 2026/10/13 01:17:16.552703
+Revised: 2026/10/13 11:42:03.666869
 
 Leader portrait cropping, lookup (bundled asset / downloaded cache / none) and download.
 """
@@ -409,3 +409,45 @@ def test_download_missing_leaves_a_callers_client_open():
     with httpx.Client() as client:
         assert portraits.download_missing(["OP99-001"], client) == (1, 0)
         assert not client.is_closed  # the caller made it, the caller closes it
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("code", ["../../evil", "..\\OP01-001", "OP01-001\n", "", "OP01-001/x"])
+def test_codes_that_are_no_card_codes_name_no_file(code):
+    """A leader code restored from a backup named the portrait file as-is, so "../../evil" pointed outside the
+    portrait folders."""
+    with pytest.raises(ValueError, match="not a card code"):
+        portraits.filename(code)
+    assert portraits.local_file(code) is None
+
+
+@respx.mock
+def test_download_missing_never_writes_for_a_code_that_is_no_card_code(caplog):
+    route = respx.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=card_jpeg()))
+    assert portraits.download_missing(["../evil"]) == (0, 1)
+    assert not route.called
+    assert "portrait for ../evil not saved" in caplog.text
+
+
+@pytest.mark.regression
+@respx.mock
+def test_a_download_cut_off_mid_write_leaves_no_portrait(monkeypatch):
+    """The portrait was written straight to its file: an app killed mid-write left half a picture, which then counted
+    as downloaded and was never fetched again."""
+    respx.get(IMAGE_URL.format(code="OP99-001")).mock(return_value=httpx.Response(200, content=card_jpeg()))
+    real_write = Path.write_bytes
+
+    def killed(self, data):
+        real_write(self, data[: len(data) // 2])
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(portraits.Path, "write_bytes", killed)
+    assert portraits.download_missing(["OP99-001"]) == (0, 1)
+    assert portraits.local_file("OP99-001") is None
+
+
+@respx.mock
+def test_a_finished_download_leaves_no_partial_file_behind():
+    respx.get(IMAGE_URL.format(code="OP99-001")).mock(return_value=httpx.Response(200, content=card_jpeg()))
+    assert portraits.download_missing(["OP99-001"]) == (1, 0)
+    assert [p.name for p in portraits.cache_dir().iterdir()] == ["OP99-001.webp"]

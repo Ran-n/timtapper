@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:12.217340
-Revised: 2026/10/13 08:59:21.441659
+Revised: 2026/10/13 11:42:03.907353
 """
 
 import asyncio
@@ -246,3 +246,16 @@ async def test_live_background_check_on_first_start(ctx, prefs, page):
     assert PREF_CHECKED in prefs
     assert not [d for d in page.dialogs if getattr(d, "data", None) == "error"]
     assert not ctx.leader_updates.busy
+
+
+@pytest.mark.regression
+async def test_an_unexpected_failure_of_the_set_check_is_logged_not_raised(ctx, api, prefs, page, monkeypatch, caplog):
+    """Only CatalogError was caught around the set list check, so anything else escaped the background task."""
+
+    def broken():
+        raise RuntimeError("certificate store missing")
+
+    monkeypatch.setattr(updates_mod, "fetch_sources", broken)
+    await ctx.leader_updates.run_if_due()
+    assert "background leader check failed" in caplog.text and "certificate store missing" in caplog.text
+    assert prefs == {} and page.dialogs == []

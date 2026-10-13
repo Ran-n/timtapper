@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:40.999702
-Revised: 2026/10/13 07:39:22.967686
+Revised: 2026/10/13 11:42:03.303659
 
 Backup: all events and rounds as one JSON file. Leaders are referenced by
 card code (not local DB id), so a backup restores on any install. Restoring
@@ -15,6 +15,7 @@ import json
 
 from sqlalchemy import delete, select
 
+from catalog.optcgapi import is_card_code, is_set_code
 from catalog.repository import Leader, LeaderRepository
 from core.errors import TranslatableError
 from core.logging import get_logger
@@ -99,6 +100,16 @@ def _str(value, *, msg: str, required: bool = False, **where: int) -> str:
     if value is None and not required:
         return ""
     if not isinstance(value, str) or (required and not value.strip()):
+        raise BackupError(msg, value=value, **where)
+    return value
+
+
+def _code(value, valid, *, msg: str, required: bool = False, **where: int) -> str | None:
+    """A leader or set code, checked for its shape (`valid`): it becomes a database key and a portrait's file name,
+    so "../x" or a megabyte of text is turned down here. None when absent (or empty) and not `required`."""
+    if value in (None, "") and not required:
+        return None
+    if not valid(value):
         raise BackupError(msg, value=value, **where)
     return value
 
@@ -190,8 +201,9 @@ def _parse_round(r, i: int, j: int, version: int) -> dict:
                 ),
             }
         ]
-    opponent = _str(
+    opponent = _code(
         r.get("opponent"),
+        is_card_code,
         msg="event {event}, round {round}: the opponent must be a leader code, not {value!r}",
         required=kind != BYE,
         event=i,
@@ -203,7 +215,7 @@ def _parse_round(r, i: int, j: int, version: int) -> dict:
         )
     return {
         "kind": kind,
-        "opponent": opponent or None,
+        "opponent": opponent,
         "best_of": best_of,
         "games": games,
         "notes": _str(
@@ -251,19 +263,23 @@ def _parse_event(ev, i: int, version: int) -> dict:
     ).strip()
     if len(name) > EVENT_NAME_MAX:
         raise BackupError("event {event}: the name is longer than {max} characters", event=i, max=EVENT_NAME_MAX)
-    leader = _str(ev.get("leader"), msg="event {event}: the leader must be a leader code, not {value!r}", event=i)
+    leader = _code(
+        ev.get("leader"), is_card_code, msg="event {event}: the leader must be a leader code, not {value!r}", event=i
+    )
     return {
         "name": name,
         "event_type": event_type,
         "date": date,
-        "leader": leader or None,
+        "leader": leader,
         "notes": _str(ev.get("notes"), msg="event {event}: the notes must be text, not {value!r}", event=i),
         "placement": placement,
         "players": players,
         "dropped": bool(
             _opt_bool(ev.get("dropped"), msg="event {event}: dropped must be true/false/null, not {value!r}", event=i)
         ),
-        "set": _str(ev.get("set"), msg="event {event}: the set must be a set code, not {value!r}", event=i) or None,
+        "set": _code(
+            ev.get("set"), is_set_code, msg="event {event}: the set must be a set code, not {value!r}", event=i
+        ),
         "rounds": parsed_rounds,
     }
 

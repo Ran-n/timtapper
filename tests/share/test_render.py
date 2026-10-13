@@ -493,3 +493,17 @@ def test_rounds_that_fit_are_all_drawn_without_a_more_line(monkeypatch):
     rs = [Round.single_game(1, 1, 2, "W"), bo3_round(2, "W", "W"), Round.single_game(3, 3, 2, "L")]
     assert_card(render.event_card(event(rs), LEADERS, identity, "Locals"))
     assert not [t for t in texts_ if t.startswith("+")] and {"R1", "R2", "R3"} <= set(texts_)
+
+
+@pytest.mark.regression
+def test_an_unreadable_downloaded_portrait_draws_an_empty_tile(caplog):
+    """A damaged portrait in the download cache raised out of the renderer, so no card with that leader could be
+    shared at all."""
+    from catalog import portraits
+
+    (portraits.cache_dir() / "OP99-003.webp").write_bytes(b"not a picture")
+    card = render.Card()
+    card.portrait(0, 0, 64, Leader(9, "OP99-003", "Damaged", "OP99", ("Green",)))
+    assert card.img.getpixel((32, 32)) == render.PANEL_HI
+    assert card.img.getpixel((32, 1)) == render.CARD_COLORS["Green"]  # still framed in its colour
+    assert "portrait OP99-003.webp unreadable" in caplog.text

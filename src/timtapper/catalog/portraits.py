@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:19.051520
-Revised: 2026/10/13 07:39:23.702794
+Revised: 2026/10/13 11:42:03.229450
 
 Leader portraits: a small square crop of each leader card's art (the face sits
 in the upper middle of every card; a two-character card gets one strip per face,
@@ -20,7 +20,7 @@ from pathlib import Path
 import httpx
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, UnidentifiedImageError
 
-from catalog.optcgapi import IMAGE_TIMEOUT, IMAGE_URL, client_session
+from catalog.optcgapi import IMAGE_TIMEOUT, IMAGE_URL, client_session, is_card_code
 from core.logging import get_logger
 from core.paths import ASSETS_DIR, data_dir
 
@@ -67,6 +67,10 @@ class PortraitError(Exception):
 
 
 def filename(code: str) -> str:
+    """The portrait's file name. Raises ValueError for anything not shaped like a card code: a code restored from a
+    backup is the user's input, and "../x" would name a file outside the portrait folders."""
+    if not is_card_code(code):
+        raise ValueError(f"not a card code: {code!r}")
     return f"{code}.webp"
 
 
@@ -142,9 +146,10 @@ def download_missing(codes: list[str], client: httpx.Client | None = None) -> tu
         with client_session(client, IMAGE_TIMEOUT) as c:
             for code in missing:
                 try:
-                    (cache_dir() / filename(code)).write_bytes(download(code, c))
+                    _write_whole(cache_dir() / filename(code), download(code, c))
                     saved += 1
-                except (PortraitError, OSError) as exc:  # OSError: the cache folder is full or not writable
+                # OSError: the cache folder is full or not writable; ValueError: not a card code
+                except (PortraitError, OSError, ValueError) as exc:
                     _log.warning("portrait for %s not saved: %s", code, exc)
                     failed += 1
     finally:
@@ -154,8 +159,19 @@ def download_missing(codes: list[str], client: httpx.Client | None = None) -> tu
     return saved, failed
 
 
+def _write_whole(path: Path, data: bytes) -> None:
+    """Write `data` to a temporary file beside `path`, then move it into place: an app killed mid-write leaves no
+    half portrait, which would count as downloaded and never be fetched again."""
+    partial = path.with_name(path.name + ".part")
+    partial.write_bytes(data)
+    partial.replace(path)
+
+
 def local_file(code: str) -> Path | None:
-    """`code`'s portrait on disk: the bundled one, else one downloaded later, else None."""
+    """`code`'s portrait on disk: the bundled one, else one downloaded later, else None (also for a code that is no
+    card code)."""
+    if not is_card_code(code):
+        return None
     for folder in (BUNDLED_DIR, cache_dir()):
         path = folder / filename(code)
         if path.is_file():

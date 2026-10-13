@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.014644
-Revised: 2026/10/13 07:40:24.352297
+Revised: 2026/10/13 11:42:03.450624
 
 Events and their rounds: CRUD over the local DB, exposed as plain values.
 """
@@ -266,7 +266,7 @@ class EventRepository:
                 valid.pop("best_of", None)
             elif valid.get("opponent_leader_id", row.opponent_leader_id) is None:
                 raise EventError("a played round needs an opponent")
-            elif "kind" in valid and "best_of" not in valid and row.kind != BYE:
+            elif kind != row.kind and "best_of" not in valid and row.kind != BYE:
                 usual = default_best_of(kind)
                 if not _to_round(row).noted_beyond(usual):
                     valid["best_of"] = usual

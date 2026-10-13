@@ -33,7 +33,8 @@ _COLORS = {"Red", "Green", "Blue", "Purple", "Black", "Yellow"}
 # "Monkey.D.Luffy (003)", "Sanji (PRB01-001)", "Trafalgar Law - OP14-001",
 # "... (Parallel)", "... (Alternate Art)" -> the bare character name
 _NAME_SUFFIX = re.compile(r"(\s*\([^)]*\)|\s+-\s+[A-Z]+\d*-\d+)+$")
-_CODE = re.compile(r"^([A-Z]+\d*)-\d+$")
+_CODE = re.compile(r"([A-Z]+\d*)-\d+")  # a card code, e.g. OP01-001: its set code, a dash, its number
+_SET_CODE = re.compile(r"[A-Z]+\d*")
 
 
 class CatalogError(Exception):
@@ -66,8 +67,18 @@ def clean_name(raw: str) -> str:
     return _NAME_SUFFIX.sub("", raw.strip()).strip()
 
 
+def is_card_code(value: object) -> bool:
+    """`value` is shaped like a card code ("OP01-001"): safe to put in a file name or a URL."""
+    return isinstance(value, str) and _CODE.fullmatch(value) is not None
+
+
+def is_set_code(value: object) -> bool:
+    """`value` is shaped like a set code ("OP16", "PRB01")."""
+    return isinstance(value, str) and _SET_CODE.fullmatch(value) is not None
+
+
 def set_code_of(card_code: str) -> str:
-    match = _CODE.match(card_code)
+    match = _CODE.fullmatch(card_code)
     if not match:
         raise ValueError(f"not a card code: {card_code!r}")
     return match.group(1)
