@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.780273
-Revised: 2026/10/13 08:59:21.588014
+Revised: 2026/10/13 14:54:42.508742
 """
 
 import datetime as dt
@@ -400,6 +400,19 @@ async def test_change_opponent_through_picker(screen, page, events, sample_event
     await fire(btn.on_click, btn)
     await pick_leader(page.dialogs[-1], leader_ids[5], ctx.leaders_by_id[leader_ids[5]].code)
     assert round_of(events, sample_event, 1).opponent_leader_id == leader_ids[5]
+
+
+@pytest.mark.regression
+async def test_changing_an_opponent_reorders_the_picker(screen, page, sample_event, leader_ids, ctx):
+    """The picker lists the most-played opponents first. Changing a round's opponent used to leave that order as it
+    was until some other change refreshed it."""
+    assert ctx.leaders[0].id != leader_ids[5]  # never played yet
+    for n in (1, 2, 3):
+        tile = by_data(screen.body, f"round-{n}")
+        btn = next(c for c in walk(tile) if isinstance(c, ft.TextButton) and c.content == "Change opponent")
+        await fire(btn.on_click, btn)
+        await pick_leader(page.dialogs[-1], leader_ids[5], ctx.leaders_by_id[leader_ids[5]].code)
+    assert ctx.leaders[0].id == leader_ids[5]
 
 
 async def test_clearing_the_result_segment_keeps_the_row_open(screen, events, sample_event):

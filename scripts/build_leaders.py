@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.795206
-Revised: 2026/10/13 08:59:21.130828
+Revised: 2026/10/13 14:42:56.089178
 
 Refresh the leader list bundled with the app (src/timtapper/assets/data/leaders.json)
 and the leader portraits (src/timtapper/assets/leaders/*.webp) from optcgapi.com,
@@ -12,7 +12,6 @@ installs start current and skip that first download:
 
     uv run python scripts/build_leaders.py            # only portraits that are missing
     uv run python scripts/build_leaders.py --force    # re-crop every portrait
-    uv run python scripts/fetch_davyback_portraits.py # then swap in davyback.gg's icons
 """
 
 import argparse
@@ -20,6 +19,8 @@ import datetime as dt
 import json
 import sys
 from pathlib import Path
+
+from PIL import Image
 
 APP_DIR = Path(__file__).resolve().parent.parent / "src" / "timtapper"
 sys.path.insert(0, str(APP_DIR))
@@ -29,10 +30,13 @@ from catalog.optcgapi import IMAGE_TIMEOUT, CatalogError, client_session, fetch_
 from catalog.portraits import (  # noqa: E402
     BUNDLED_DIR,
     DEFAULT_FACE,
+    OPAQUE,
+    WATERMARK_ALPHA,
     Face,
     Faces,
     Overlay,
     PortraitError,
+    Word,
     download,
     filename,
 )  # noqa: E402
@@ -40,10 +44,10 @@ from core.logging import get_logger, setup_logging  # noqa: E402
 
 OUT = APP_DIR / "assets" / "data" / "leaders.json"
 FACES = Path(__file__).resolve().parent / "portrait_crops.json"
-# "SAMPLE" watermark pieces to lift off before cropping, for faces the watermark crosses
+# "SAMPLE" watermark to lift off before cropping, for faces the watermark crosses
 OVERLAYS = Path(__file__).resolve().parent / "portrait_overlays.json"
-# portraits taken from davyback.gg by fetch_davyback_portraits.py — never re-cropped here
-EXTERNAL = Path(__file__).resolve().parent / "davyback_portraits.json"
+# the watermark's letters, white on black, cut from a card where it lies on dark art (OP05-060)
+GLYPHS = Path(__file__).resolve().parent / "watermark.png"
 
 
 def load_faces(path: Path = FACES) -> dict[str, Faces]:
@@ -54,10 +58,20 @@ def load_faces(path: Path = FACES) -> dict[str, Faces]:
     }
 
 
-def load_overlays(path: Path = OVERLAYS) -> dict[str, Overlay]:
-    """Each code maps to its watermark letter boxes [[x0, y0, x1, y1], ...], fractions of the card width."""
+def load_overlays(path: Path = OVERLAYS, glyphs: Path = GLYPHS) -> dict[str, Overlay]:
+    """Each code maps to its watermark letter boxes [[x0, y0, x1, y1], ...], or to {"word": [x, y, width]}: where
+    the whole word sits, drawn with the glyph mask, plus "opaque": true for a solid watermark to paint over rather than
+    lift. All fractions of the card width."""
     raw = json.loads(path.read_text(encoding="utf-8"))
-    return {code: Overlay(tuple(tuple(b) for b in boxes)) for code, boxes in raw.items()}
+    letters = Image.open(glyphs).convert("L") if any(isinstance(v, dict) for v in raw.values()) else None
+    return {
+        code: Overlay(
+            word=Word(*entry["word"]), glyphs=letters, alpha=OPAQUE if entry.get("opaque") else WATERMARK_ALPHA
+        )
+        if isinstance(entry, dict)
+        else Overlay(tuple(tuple(b) for b in entry))
+        for code, entry in raw.items()
+    }
 
 
 def main() -> int:
@@ -89,12 +103,7 @@ def main() -> int:
     if unplaced:
         log.warning("no face placed for %s — default crop used; add them to %s", ", ".join(unplaced), FACES.name)
     BUNDLED_DIR.mkdir(parents=True, exist_ok=True)
-    external = set(json.loads(EXTERNAL.read_text(encoding="utf-8"))) if EXTERNAL.is_file() else set()
-    todo = [
-        r.code
-        for r in leaders
-        if r.code not in external and (args.force or not (BUNDLED_DIR / filename(r.code)).is_file())
-    ]
+    todo = [r.code for r in leaders if args.force or not (BUNDLED_DIR / filename(r.code)).is_file()]
     failed = []
     with client_session(timeout=IMAGE_TIMEOUT) as client:
         for code in todo:

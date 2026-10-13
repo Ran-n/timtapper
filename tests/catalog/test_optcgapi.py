@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.098982
-Revised: 2026/10/13 11:42:03.759229
+Revised: 2026/10/13 14:57:24.952539
 """
 
 import httpx
@@ -88,6 +88,15 @@ def test_parse_leaders_collapses_alt_arts_and_skips_non_leaders():
     assert [r.code for r in leaders] == ["OP01-001", "OP01-002"]
     assert leaders[0] == LeaderRecord("OP01-001", "Roronoa Zoro", "OP01", "Romance Dawn", ("Red",))
     assert leaders[1].colors == ("Green", "Red")
+
+
+def test_parse_leaders_keeps_the_base_print_over_a_later_alt_art():
+    """An alt art listed after its base print never overwrites it (the test above only has it listed before)."""
+    cards = [
+        card("OP01-001", "Roronoa Zoro (001)"),
+        card("OP01-001", "Roronoa Zoro (Parallel)", "Green", image_id="OP01-001_p1", set_name="Promo"),
+    ]
+    assert parse_leaders(cards) == [LeaderRecord("OP01-001", "Roronoa Zoro", "OP01", "Romance Dawn", ("Red",))]
 
 
 def test_parse_leaders_skips_malformed_and_colorless(caplog):

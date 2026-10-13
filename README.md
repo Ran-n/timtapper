@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/13 11:08:40.510011 )
+[//]: # (+ Revised: 	2026/10/13 14:42:55.824572 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -38,7 +38,7 @@ device, and a JSON backup moves them to another install.
   and promo packs join the format before them), follows a type change while you haven't renamed it, and is discarded
   if you go back without changing anything. Changing the date moves the set with it, unless you picked the set
   yourself.
-- **Rounds**, the way [davyback.gg](https://davyback.gg) logs them, and then some: each is **Swiss**, **top cut** or a
+- **Rounds**: each is **Swiss**, **top cut** or a
   **bye** (no opponent, an automatic win, shown with a jester where a leader would be). A Swiss row reads die roll,
   turn order and result; tap any of them to cycle it (the die shows a green six when you won it, a red one when you
   lost it). Top cut is played as a **best of 3**: the row keeps its round number, shows the score and lists each game
@@ -168,19 +168,17 @@ adds a portrait to `assets/leaders/` for every leader that lacks one (`--force` 
 uv run python scripts/build_leaders.py
 ```
 
-75 of the portraits are davyback.gg's hand-made leader icons, fetched once by
-`uv run python scripts/fetch_davyback_portraits.py` (run it after `build_leaders.py`; the codes are listed in
-`scripts/davyback_portraits.json` and `build_leaders.py --force` leaves them alone). davyback.gg's terms forbid
-reusing its content without written permission; this is a known, accepted risk.
-
-Every other portrait is cropped around the face position set for that card in `scripts/portrait_crops.json`
+Every portrait is cropped around the face position set for that card in `scripts/portrait_crops.json`
 (`{"OP01-001": [cx, cy, side]}`, as fractions of the card width). Automatic face detection was tried and found only 6
 of 138 faces in One Piece card art, so positions are set by eye. A card with two characters (ST22-001 Ace &
 Newgate) takes a list of boxes instead, `[[cx, cy, side], [cx, cy, side]]`, and each face fills one vertical strip of
-the portrait. Where the card image's semi-transparent "SAMPLE" watermark crosses a face, its letter boxes are listed in
-`scripts/portrait_overlays.json` (`{"ST22-001": [[x0, y0, x1, y1], …]}`, same units) and lifted off before cropping;
-the watermark sits in a different place on each card, so the boxes are measured per card. A new leader with no entry gets the default
-upper-middle crop and the script warns about it. Add an entry and rerun with `--force`. Leaders an installed app
+the portrait. Where the card image's "SAMPLE" watermark crosses a face, `scripts/portrait_overlays.json` says where
+it is and it's removed before cropping: either as letter boxes (`{"ST22-001": [[x0, y0, x1, y1], …]}`, same units) or as
+the whole word (`{"OP09-001": {"word": [x, y, width]}}`, its top-left corner and width), drawn with the letter shapes in
+`scripts/watermark.png`. The watermark's place and size differ from card to card, so each entry is measured per card.
+On most cards it's see-through and the art under it is recovered exactly; on a few (OP02-049, OP04-019, OP05-041,
+OP05-060) it's solid white, nothing survives under it, and `"opaque": true` paints the letters over from the art around
+them instead. A new leader with no face entry gets the default upper-middle crop and the script warns about it. Add an entry and rerun with `--force`. Leaders an installed app
 downloads on its own always get the default crop until the next release ships their bundled portraits.
 
 ## Tests
@@ -188,7 +186,7 @@ downloads on its own always get the default crop until the next release ships th
 ```sh
 uv run pytest                 # unit, DB, migrations, UI widget-tree, property, regression tests
 uv run pytest --cov           # the same, failing below 99% branch coverage (fail_under in pyproject.toml)
-uv run pytest -m "live and not desktop"  # against the real optcgapi.com, davyback.gg and Limitless TCG (network, ~40 s)
+uv run pytest -m "live and not desktop"  # against the real optcgapi.com and Limitless TCG (network, ~40 s)
 uv run pytest -m desktop      # the real app, rendered (Windows; takes over the mouse and screen for ~2 min)
 uv run pytest -m "desktop or live"       # both, including a real click on Update leaders in the real app
 uv run ruff format src scripts tests && uv run ruff check src scripts tests
@@ -200,9 +198,9 @@ enabled in the repository settings): a locked `uv sync`, `ruff format --check`, 
 `live` and `desktop` tests stay local.
 
 The `live` tests check what mocks can't: that the card lists still parse and still hold every bundled leader and
-set, that card images still download and crop, that a full sync fills a real database, that the davyback.gg icon
-scraper still matches the site, and that Settings → Update leaders and the startup check work end to end, in the
-widget tree and (with `desktop`) with a real click in the real window.
+set, that card images still download and crop, that a full sync fills a real database, and that Settings → Update
+leaders and the startup check work end to end, in the widget tree and (with `desktop`) with a real click in the real
+window.
 
 Every bug fix comes with a test marked `regression` that says what used to go wrong. The backup format is pinned by
 `tests/backup/golden/`: the current shape is checked in (`v3.json`), so a change to it fails until `VERSION` is bumped,
@@ -234,7 +232,7 @@ src/timtapper/          Flet app root (flet build packages this folder)
   i18n/                 en/es/gl tables keyed by English source strings
   ui/                   screens (events, event, stats, settings), picker, widgets
   assets/               fonts, icon (png/ico), logo_mark, bundled leaders.json + leaders/*.webp portraits
-scripts/                build_leaders.py, fetch_davyback_portraits.py, make_icon.py (icons, logo_mark +
+scripts/                build_leaders.py, make_icon.py (icons, logo_mark +
                         docs/logo.png), make_screenshots.py (docs/screenshots/), app_driver.py + app_window.py
                         (run, capture and click the real app), build_android.py (signed .aab / .apk into dist/)
 docs/                   logo.png wordmark and screenshots/ for the README

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:30.268389
-Revised: 2026/10/13 11:42:03.666869
+Revised: 2026/10/13 14:54:42.431928
 
 Leader portrait cropping, lookup (bundled asset / downloaded cache / none) and download.
 """
@@ -89,7 +89,16 @@ def test_every_bundled_leader_has_a_placed_face():
 @pytest.mark.parametrize(
     ("code", "face"),
     [
-        ("OP09-001", portraits.Face(0.45, 0.44, 0.3)),  # red Shanks: the old box showed only his hair
+        (
+            "OP09-001",
+            portraits.Face(0.464, 0.314, 0.509),
+        ),  # red Shanks: the old box showed only his hair, then no hairline
+        ("OP02-002", portraits.Face(0.625, 0.388, 0.233)),  # Garp: the old box was beside his face, on his coat
+        ("OP03-021", portraits.Face(0.344, 0.271, 0.28)),  # Kuro: the old box showed his hand and the background
+        ("OP17-020", portraits.Face(0.72, 0.53, 0.29)),  # green Shanks: the old box showed only his sleeve
+        # two-character cards: one strip per face (the old single boxes showed one face, or none)
+        ("ST12-001", (portraits.Face(0.17, 0.472, 0.408), portraits.Face(0.62, 0.11, 0.31))),
+        ("ST30-001", (portraits.Face(0.2, 0.25, 0.387), portraits.Face(0.78, 0.22, 0.34))),
         ("OP05-002", portraits.Face(0.57, 0.41, 0.3)),  # Belo Betty: the old box showed one eye and her forehead
         # Ace & Newgate: one strip per face (the old box showed half of Ace's face and no Newgate)
         ("ST22-001", (portraits.Face(0.41, 0.23, 0.3), portraits.Face(0.81, 0.5, 0.34))),
@@ -159,7 +168,7 @@ def test_overlays_file_is_valid():
     overlays = build_leaders().load_overlays()
     assert "ST22-001" in overlays  # Newgate's moustache sits under the watermark
     for code, overlay in overlays.items():
-        assert overlay.boxes, code
+        assert overlay.boxes or overlay.word, code
         for x0, y0, x1, y1 in overlay.boxes:
             assert 0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1.4, code
 
@@ -172,6 +181,14 @@ def test_crop_custom_size():
 def test_crop_rejects_non_images(junk):
     with pytest.raises(portraits.PortraitError):
         portraits.crop(junk)
+
+
+@pytest.mark.regression
+def test_crop_rejects_a_decompression_bomb(monkeypatch):
+    """Pillow's DecompressionBombError is no OSError: it used to escape crop() and abort the whole leader sync."""
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)  # the 600x838 card is now far past twice the limit
+    with pytest.raises(portraits.PortraitError, match="not an image"):
+        portraits.crop(CARD)
 
 
 def test_every_bundled_leader_has_a_portrait():
@@ -317,6 +334,73 @@ def test_overlay_defaults_to_the_measured_watermark_opacity():
     assert 0.6 < portraits.WATERMARK_ALPHA < 0.8
 
 
+# ---- whole-word watermark: lifted where see-through, painted over where solid ------------
+def glyph_mask() -> Image.Image:
+    """Two 'letters': white bars on black, 200 x 50, each as thick as a real letter stroke once drawn."""
+    mask = Image.new("L", (200, 50), 0)
+    mask.paste(255, (20, 5, 35, 45))
+    mask.paste(255, (120, 5, 135, 45))
+    return mask
+
+
+WORD = portraits.Word(100 / 600, 400 / 600, 400 / 600)  # the mask drawn at 400 px wide: bars at x 140-170, 340-370
+BARS = [(140, 410, 170, 490), (340, 410, 370, 490)]
+
+
+def test_word_overlay_lifts_only_the_letters():
+    art = Image.new("RGB", (600, 838), (40, 120, 200))
+    a = portraits.WATERMARK_ALPHA
+    marked = art.copy()
+    for bar in BARS:
+        marked.paste(marked.crop(bar).point(lambda v: round(255 * a + (1 - a) * v)), bar)
+    lifted = portraits.lift_overlay(marked, portraits.Overlay(word=WORD, glyphs=glyph_mask()))
+    for xy in [(155, 450), (355, 450)]:  # inside a letter: the art again
+        assert max(abs(p - q) for p, q in zip(lifted.getpixel(xy), (40, 120, 200), strict=True)) <= 3, xy
+    for xy in [(255, 450), (50, 450), (155, 300)]:  # between and around the letters: untouched
+        assert lifted.getpixel(xy) == art.getpixel(xy), xy
+
+
+def test_opaque_word_is_painted_from_the_art_around_it():
+    art = Image.new("RGB", (600, 838), (40, 120, 200))
+    marked = art.copy()
+    for bar in BARS:
+        marked.paste((255, 255, 255), bar)  # a solid watermark: no art left under it
+    filled = portraits.lift_overlay(marked, portraits.Overlay(word=WORD, glyphs=glyph_mask(), alpha=portraits.OPAQUE))
+    for xy in [(155, 450), (355, 450)]:  # the letters take the colour around them
+        assert max(abs(p - q) for p, q in zip(filled.getpixel(xy), (40, 120, 200), strict=True)) <= 6, xy
+    assert filled.getpixel((50, 100)) == art.getpixel((50, 100))  # far away: untouched
+
+
+def test_word_overlay_needs_its_glyphs():
+    with pytest.raises(ValueError, match="glyph"):
+        portraits.Overlay(word=WORD)
+
+
+@pytest.mark.parametrize("alpha", [0, -0.1, 1.01])
+def test_overlay_rejects_an_impossible_opacity(alpha):
+    with pytest.raises(ValueError, match="opacity"):
+        portraits.Overlay(((0, 0, 1, 1),), alpha=alpha)
+
+
+def test_load_overlays_reads_words(tmp_path):
+    path, glyphs = tmp_path / "overlays.json", tmp_path / "glyphs.png"
+    glyph_mask().save(glyphs)
+    path.write_text(
+        '{"A": {"word": [0.1, 0.6, 0.8]}, "B": {"word": [0.2, 0.7, 0.6], "opaque": true}}', encoding="utf-8"
+    )
+    loaded = build_leaders().load_overlays(path, glyphs)
+    assert (loaded["A"].word, loaded["A"].alpha) == (portraits.Word(0.1, 0.6, 0.8), portraits.WATERMARK_ALPHA)
+    assert (loaded["B"].word, loaded["B"].alpha) == (portraits.Word(0.2, 0.7, 0.6), portraits.OPAQUE)
+    assert loaded["A"].glyphs.size == (200, 50)
+
+
+def test_bundled_overlays_load_with_the_glyph_mask():
+    overlays = build_leaders().load_overlays()
+    words = [o for o in overlays.values() if o.word is not None]
+    assert words and all(o.glyphs is not None for o in words)
+    assert all(0 < o.word.width <= 1 for o in words)
+
+
 @respx.mock
 def test_download_lifts_the_overlay():
     a = portraits.WATERMARK_ALPHA
@@ -356,16 +440,12 @@ def test_build_leaders_passes_faces_and_overlays(tmp_path, monkeypatch):
     records = [
         LeaderRecord("ST22-001", "Ace & Newgate", "ST22", None, ("Blue",)),
         LeaderRecord("OP99-001", "Someone New", "OP99", None, ("Red",)),
-        LeaderRecord("EXT-001", "From davyback", "EXT", None, ("Red",)),
     ]
     calls = {}
     monkeypatch.setattr(module, "fetch_leaders", lambda: records)
     monkeypatch.setattr(module, "fetch_sources", lambda: ("OP-99",))
     monkeypatch.setattr(module, "OUT", tmp_path / "leaders.json")
     monkeypatch.setattr(module, "BUNDLED_DIR", tmp_path / "portraits")
-    external = tmp_path / "external.json"
-    external.write_text('["EXT-001"]', encoding="utf-8")
-    monkeypatch.setattr(module, "EXTERNAL", external)
     monkeypatch.setattr(
         module, "download", lambda code, _client, face, overlay: calls.setdefault(code, (face, overlay)) and b"webp"
     )
@@ -375,7 +455,6 @@ def test_build_leaders_passes_faces_and_overlays(tmp_path, monkeypatch):
     faces, overlays = module.load_faces(), module.load_overlays()
     assert calls["ST22-001"] == (faces["ST22-001"], overlays["ST22-001"])  # split faces + watermark lift
     assert calls["OP99-001"] == (portraits.DEFAULT_FACE, None)  # unplaced: default crop, no overlay
-    assert "EXT-001" not in calls  # davyback portraits are never re-cropped
     assert (tmp_path / "portraits" / "ST22-001.webp").read_bytes() == b"webp"
 
 

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.420418
-Revised: 2026/10/13 07:39:24.438355
+Revised: 2026/10/13 13:15:07.212552
 
 Small building blocks reused across screens.
 """
@@ -265,7 +265,7 @@ EVENT_TYPE_ICONS: dict[str, str] = {
 }
 
 
-# Each type's tier, colour-coded as davyback.gg does it but in the theme's own accents, so every theme reads them:
+# Each type's tier, colour-coded in the theme's own accents, so every theme reads them:
 # the championship ladder, premier store events, store events, and casual play
 EVENT_TYPE_TIERS: dict[str, str] = {
     "regional": "championship",
@@ -358,7 +358,7 @@ def result_badge(result: str | None, scheme: Scheme, size: int = 36) -> ft.Contr
     )
 
 
-TURN_ICONS = {True: ft.Icons.LOOKS_ONE, False: ft.Icons.LOOKS_TWO}  # keycaps, like davyback.gg's 1️⃣ / 2️⃣
+TURN_ICONS = {True: ft.Icons.LOOKS_ONE, False: ft.Icons.LOOKS_TWO}  # keycaps: 1️⃣ / 2️⃣
 
 
 def turn_badge(went_first: bool | None, scheme: Scheme, first: str, second: str, size: int = 36) -> ft.Control:

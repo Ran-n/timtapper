@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.379720
-Revised: 2026/10/13 11:42:03.376608
+Revised: 2026/10/13 13:15:07.289924
 
 Pillow-rendered share cards (1080x1350, the 4:5 portrait every social app
 displays uncropped). Fixed dark "open sea" palette independent of the app
@@ -290,7 +290,7 @@ def _standing_band(card: Card, y: int, event: Event, _: Translate) -> int:
 
 
 def _game_badges(card: Card, r: Round, game_no: int, cy: int, h: int, _: Translate, *, pill: int = 30) -> None:
-    """One game in the app's columns, as davyback.gg reads a round: who chose the turn order (the die in Swiss game 1,
+    """One game in the app's columns, read left to right: who chose the turn order (the die in Swiss game 1,
     else You / Opp), 1st/2nd, W/L. A best of 1's row and each game line of a best of 3 share these columns."""
     game = r.game(game_no)
     chose = r.chose_turn(game_no)

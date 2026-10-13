@@ -2,9 +2,9 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 23:54:26.174204
-Revised: 2026/10/12 23:54:26.174204
+Revised: 2026/10/13 13:15:07.473556
 
-rounds as davyback.gg has them, and more: a round is Swiss, top cut or a bye (no opponent, won without playing),
+rounds: a round is Swiss, top cut or a bye (no opponent, won without playing),
 played as a best of 1 or 3 whose games each keep their result, turn order and who chose it; events note the set
 they were played in and whether you dropped. Every existing round becomes a best of 1 (Swiss or top cut, as it
 was flagged) whose only game keeps the round's result, turn order and die roll (the die winner chose the turn

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 23:54:27.137495
-Revised: 2026/10/13 01:20:20.464539
+Revised: 2026/10/13 13:15:07.373772
 
 The event screen in the real app: real taps and real typing, checked on screen and in what the app stored.
 Every test that changes data puts the demo data back (`app.reset()`), since the app is shared by the session.
@@ -25,7 +25,7 @@ from pixels import count, find, holes
 pytestmark = pytest.mark.desktop
 
 NARROW = 360
-# a round's badges read die, turn, result (davyback.gg's Dice, Order, Result): dp from the die to the others
+# a round's badges read die, turn, result: dp from the die to the others
 TURN_OFFSET, RESULT_OFFSET = 43, 83
 
 

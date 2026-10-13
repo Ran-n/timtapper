@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.952473
-Revised: 2026/10/13 08:59:20.982995
+Revised: 2026/10/13 14:54:42.284134
 
 Event screen: everything edited in place — name, type, date, standing, set,
 own leader and notes in the header; each round as an expandable tile: Swiss,
@@ -110,7 +110,10 @@ class EventScreen:
         self._save_event(**fields)
 
     def _save_round(self, round_id: int, **fields) -> None:
-        self._guard(lambda: self.ctx.events.update_round(round_id, **fields))
+        saved = self._guard(lambda: self.ctx.events.update_round(round_id, **fields))
+        # a new opponent (or none, as a bye) changes the play counts the leader picker is ordered by
+        if saved and ("opponent_leader_id" in fields or fields.get("kind") == BYE):
+            self.ctx.invalidate_leaders()
         self.refresh()
 
     def _cut_round(self, r: Round, keep: int, **fields) -> None:
@@ -307,7 +310,7 @@ class EventScreen:
         )
 
     def _format_row(self, ranked: bool) -> ft.Row:
-        """The set the event was played in (davyback.gg's "Set": its format, the newest legal set) and, where there
+        """The set the event was played in (its format: the newest legal set) and, where there
         are standings, whether you dropped."""
         _ = self.ctx._
         ev = self.event
@@ -367,7 +370,7 @@ class EventScreen:
         )
 
     def _game_badges(self, r: Round, game_no: int, *, tag: str = "") -> list[ft.Control]:
-        """Game `game_no` as davyback.gg reads a round, left to right: who chose the turn order (the die in Swiss
+        """Game `game_no`, read left to right: who chose the turn order (the die in Swiss
         game 1), the turn order, the result. Each badge cycles its value on tap."""
         _ = self.ctx._
         scheme = self.ctx.scheme
@@ -638,7 +641,7 @@ class EventScreen:
         return ft.ExpansionTile(
             # R-number, opponent, then the badges; a best of 3 adds a line per game under it (its score up top)
             title=ft.Column([top_line, *self._game_lines(r)], spacing=6, data="round-head") if played_bo3 else top_line,
-            # the round's notes stay on the row, as davyback.gg shows them, wrapped rather than cut
+            # the round's notes stay on the row, wrapped rather than cut
             subtitle=ft.Text(r.notes, size=11, color=ft.Colors.ON_SURFACE_VARIANT, data="row-notes")
             if r.notes
             else None,
