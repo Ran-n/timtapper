@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 22:20:02.105367
-Revised: 2026/10/12 22:20:11.533492
+Revised: 2026/10/13 09:33:41.285939
 
 The real app against the real optcgapi.com: a real click on Settings → Update leaders, then what the app
 stored, said and showed. Needs both the screen (desktop) and the network (live): `uv run pytest -m "desktop or
@@ -21,9 +21,11 @@ UPDATE_TIMEOUT = 180  # seconds: every card list, then the portraits of leaders 
 
 
 def update_button(img, s):
-    """The "Update leaders" button: the first filled tonal button down the settings screen."""
+    """The "Update leaders" button: the first filled tonal button down the settings screen. The theme mode's selected
+    segment is filled in the same tint and is about as tall (29 dp at 125% scaling, 30 at 100%), so width tells them
+    apart: a segment is a third of the row (at most ~120 dp on a phone), the button ~175 dp."""
     tonal = s.tint(s.secondary, 0.28)
-    found = [b for b in find(img, tonal, tol=6, min_area=1500) if b.w >= 100 and 30 <= b.h <= 60]
+    found = [b for b in find(img, tonal, tol=6, min_area=1500) if b.w >= 140 and 28 <= b.h <= 60]
     assert found, "no filled tonal button on the settings screen"
     return min(found, key=lambda b: b.y0)
 
