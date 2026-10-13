@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.341252
-Revised: 2026/10/13 07:39:24.248297
+Revised: 2026/10/13 11:08:23.479422
 
 App themes and the color vocabulary shared by every screen.
 
@@ -238,6 +238,40 @@ THEMES: dict[str, AppTheme] = {
             ),
         ),
         AppTheme(
+            "dracula",
+            lambda _: "Dracula",
+            light=Scheme(  # Alucard, Dracula's official light variant
+                dark=False,
+                bg="#fffbeb",
+                surface="#f6f2de",
+                surface_high="#ece8d4",
+                surface_highest="#dedac8",
+                fg="#1f1f1f",
+                fg_muted="#6c664b",
+                outline="#a8a389",
+                primary="#644ac9",
+                secondary="#036a96",
+                tertiary="#a34d14",
+                error="#cb3a2a",
+                success="#14710a",
+            ),
+            dark=Scheme(
+                dark=True,
+                bg="#282a36",
+                surface="#2f3140",
+                surface_high="#383a4a",
+                surface_highest="#44475a",
+                fg="#f8f8f2",
+                fg_muted="#a3abcc",
+                outline="#6272a4",
+                primary="#bd93f9",
+                secondary="#8be9fd",
+                tertiary="#ffb86c",
+                error="#ff5555",
+                success="#50fa7b",
+            ),
+        ),
+        AppTheme(
             "nord",
             lambda _: "Nord",
             light=Scheme(
@@ -269,6 +303,40 @@ THEMES: dict[str, AppTheme] = {
                 tertiary="#ebcb8b",
                 error="#bf616a",
                 success="#a3be8c",
+            ),
+        ),
+        AppTheme(
+            "rosepine",
+            lambda _: "Rosé Pine",
+            light=Scheme(  # Dawn
+                dark=False,
+                bg="#faf4ed",
+                surface="#fffaf3",
+                surface_high="#f2e9e1",
+                surface_highest="#dfdad9",
+                fg="#575279",
+                fg_muted="#797593",
+                outline="#9893a5",
+                primary="#b4637a",
+                secondary="#907aa9",
+                tertiary="#c97d1a",  # gold, darkened for text contrast
+                error="#b4373f",  # no red in Dawn: love, deepened so it differs from the rose primary
+                success="#286983",
+            ),
+            dark=Scheme(  # Main
+                dark=True,
+                bg="#191724",
+                surface="#1f1d2e",
+                surface_high="#26233a",
+                surface_highest="#403d52",
+                fg="#e0def4",
+                fg_muted="#908caa",
+                outline="#6e6a86",
+                primary="#ebbcba",
+                secondary="#c4a7e7",
+                tertiary="#f6c177",
+                error="#eb6f92",
+                success="#9ccfd8",  # Rosé Pine has no green: foam
             ),
         ),
         AppTheme(

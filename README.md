@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/13 09:02:09.738213 )
+[//]: # (+ Revised: 	2026/10/13 11:08:40.510011 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -70,8 +70,8 @@ device, and a JSON backup moves them to another install.
 
 ### Make it yours
 
-- **Themes**: Gruvbox (default), Catppuccin, Nord, Solarized, Tokyo Night and Classic, each with a light and a dark
-  palette. Follow the system or force light or dark. Typeset in Poppins.
+- **Themes**: Gruvbox (default), Catppuccin, Dracula, Nord, Rosé Pine, Solarized, Tokyo Night and Classic, each with
+  a light and a dark palette. Follow the system or force light or dark. Typeset in Poppins.
 - **Languages**: English, Español, Galego.
 - **Desktop**: the window opens phone-shaped (412 × 892), so the layout is the same as on a phone; resize it freely
   down to 360 × 640.

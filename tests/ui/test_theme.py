@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:57:38.978707
-Revised: 2026/10/12 16:55:02.048064
+Revised: 2026/10/13 11:08:23.558628
 
 Themes: every palette is complete and readable, preferences round-trip, and
 appearance changes rebuild the screen.
@@ -83,6 +83,8 @@ def test_theme_labels_translate_only_generic_names():
         return text.upper()
 
     assert THEMES["gruvbox"].label(shout) == "Gruvbox"
+    assert THEMES["dracula"].label(shout) == "Dracula"
+    assert THEMES["rosepine"].label(shout) == "Rosé Pine"
     assert THEMES["classic"].label(shout) == "CLASSIC"
 
 

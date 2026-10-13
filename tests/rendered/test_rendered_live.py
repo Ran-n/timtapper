@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 22:20:02.105367
-Revised: 2026/10/13 09:33:41.285939
+Revised: 2026/10/13 11:08:23.685269
 
 The real app against the real optcgapi.com: a real click on Settings → Update leaders, then what the app
 stored, said and showed. Needs both the screen (desktop) and the network (live): `uv run pytest -m "desktop or
@@ -32,7 +32,9 @@ def update_button(img, s):
 
 def test_live_update_leaders_click_downloads_and_reports(app, scheme):
     s = scheme()
-    img = app.show("/settings", "dark")
+    shown = app.show("/settings", "dark")
+    # the theme grid can push the button below the fold: scroll the settings to their end first
+    img = app.scroll(shown.width / 2, shown.height / 2, 10)
     button = update_button(img, s)
     before = app.send("leaders")
     # a bare click, not app.click(): the busy spinner keeps the screen moving, so it never settles for a capture
