@@ -5,5 +5,8 @@ check:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
+  before_script:
+    # the slim image lacks fribidi, which Pillow needs for the raqm text layout the share-card goldens use
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends libfribidi0
   script:
     - bash scripts/ci.sh

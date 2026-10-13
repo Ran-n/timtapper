@@ -2,11 +2,11 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 00:30:07.042312
-Revised: 2026/10/13 00:41:29.628562
+Revised: 2026/10/13 08:13:33.986576
 
 The share cards, pinned: each card rendered from fixed data is compared with a checked-in image (golden/*.png),
 so a change to how a card looks fails here until the new image is looked at and approved. Pillow draws them the
-same everywhere, so these run in the default suite. After an intended change, rerun with
+same everywhere it has raqm text layout, so these run in the default suite. After an intended change, rerun with
 TIMTAPPER_UPDATE_BASELINES=1, open every rewritten image, and commit it.
 """
 
@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 
 import pytest
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, features
 
 from catalog.repository import Leader
 from events.repository import Event, Game, Round
@@ -75,6 +75,10 @@ OTHER = Event(
 
 
 def check(name: str, path: Path, tmp_path: Path) -> None:
+    # the goldens are laid out by raqm (kerning, shaping); Pillow's basic layout moves every glyph, so without it
+    # every card "changes" — say why instead. Pillow's wheels bundle raqm but load fribidi from the system.
+    if not features.check("raqm"):
+        pytest.fail("Pillow has no raqm text layout: install the system's fribidi (Debian: libfribidi0)")
     actual = Image.open(path).convert("RGB")
     golden = GOLDEN / f"{name}.png"
     if UPDATE:

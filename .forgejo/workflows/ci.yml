@@ -14,4 +14,10 @@ jobs:
       - uses: https://github.com/astral-sh/setup-uv@v6
         with:
           python-version: "3.14"
+      # Pillow needs the system's fribidi for the raqm text layout the share-card goldens use
+      - run: |
+          if ! ldconfig -p | grep -q libfribidi; then
+            SUDO=$(command -v sudo || true)
+            $SUDO apt-get update -qq && $SUDO apt-get install -y -qq --no-install-recommends libfribidi0
+          fi
       - run: bash scripts/ci.sh
