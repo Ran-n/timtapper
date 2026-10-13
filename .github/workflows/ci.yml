@@ -12,5 +12,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
+          version: "0.10.9"  # pinned: an unpinned uv asks the GitHub API, rate-limited on shared runners
           python-version: "3.14"
       - run: bash scripts/ci.sh

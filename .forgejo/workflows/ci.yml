@@ -13,6 +13,7 @@ jobs:
       - uses: https://code.forgejo.org/actions/checkout@v4
       - uses: https://github.com/astral-sh/setup-uv@v6
         with:
+          version: "0.10.9"  # pinned: an unpinned uv asks the GitHub API, rate-limited on shared runners
           python-version: "3.14"
       # Pillow needs the system's fribidi for the raqm text layout the share-card goldens use
       - run: |
