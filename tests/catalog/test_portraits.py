@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:30.268389
-Revised: 2026/10/13 14:54:42.431928
+Revised: 2026/10/14 07:43:51.470511
 
 Leader portrait cropping, lookup (bundled asset / downloaded cache / none) and download.
 """
@@ -523,6 +523,35 @@ def test_a_download_cut_off_mid_write_leaves_no_portrait(monkeypatch):
     monkeypatch.setattr(portraits.Path, "write_bytes", killed)
     assert portraits.download_missing(["OP99-001"]) == (0, 1)
     assert portraits.local_file("OP99-001") is None
+
+
+@pytest.mark.regression
+@respx.mock
+def test_a_failed_write_removes_its_partial_file(monkeypatch):
+    """A write that failed (a full disk) left its .part file in the portrait cache for good."""
+    respx.get(IMAGE_URL.format(code="OP99-001")).mock(return_value=httpx.Response(200, content=card_jpeg()))
+    real_write = Path.write_bytes
+
+    def disk_full(self, data):
+        real_write(self, data[: len(data) // 2])
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(portraits.Path, "write_bytes", disk_full)
+    assert portraits.download_missing(["OP99-001"]) == (0, 1)
+    assert list(portraits.cache_dir().iterdir()) == []
+
+
+@respx.mock
+def test_a_partial_file_that_cannot_be_removed_is_logged(monkeypatch, caplog):
+    respx.get(IMAGE_URL.format(code="OP99-001")).mock(return_value=httpx.Response(200, content=card_jpeg()))
+
+    def fail(self, *args, **kwargs):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(portraits.Path, "replace", fail)
+    monkeypatch.setattr(portraits.Path, "unlink", fail)
+    assert portraits.download_missing(["OP99-001"]) == (0, 1)
+    assert "could not remove OP99-001.webp.part" in caplog.text
 
 
 @respx.mock

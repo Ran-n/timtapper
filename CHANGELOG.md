@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/13 22:03:51.423962 )
+[//]: # (+ Revised: 	2026/10/14 10:50:14.741984 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -10,8 +10,6 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
 ## [1.3.0] — 2026-10-13
 
 ### Added
@@ -19,10 +17,31 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Added a web version that runs in any browser, iPhones included, at ran-n.github.io/timtapper (mirror: ran-n.codeberg.page/timtapper): events are kept in the browser's storage, sharing opens the share sheet or downloads the image, and backups download and import through the browser
 - Added a universal Android APK (every chip type in one file) to the release downloads, built with `scripts/build_android.py universal`
 - Added an "Open in browser" button to the README
+- Added the rendered UI tests on every platform the app ships to: the same flows and snapshot baselines now run on desktop (`-m desktop`), in a browser (`-m web`) and on an Android emulator (`-m android`), against driven builds made with `scripts/build_driven.py`
+- Added `scripts/demo_driver.py` (the demo data and driver commands shared by every target), `scripts/driven_main.py` (the entry point of the driven web and Android builds) and `scripts/serve_site.py` (a local stand-in for the static hosts, with the channel the driven builds poll)
+- Added platform checks for the desktop and Android builds, matching the web ones: events survive the app being killed, sharing reaches the system's share sheet or save dialog, and a backup restores through the system's own file picker (`scripts/android_phone.py` drives the emulator through adb, booting the generic `generic_phone_api34` AVD when none runs)
+- Added a test that the database migrations build exactly the schema the models describe, so a model change without its migration fails before release
+- Added a Windows installer (`timtapper-<version>-windows-x64-setup.exe`) next to the portable zip: it installs without an admin prompt, adds a Start-menu entry, an optional desktop shortcut and an uninstaller, and upgrades in place. `scripts/build_windows.py` builds both and leaves out the ~9 MB of debug Python modules flet bundles
 
 ### Changed
 
 - Moved the win rate on the event share card up onto the leader code's line, so it no longer sits against the bottom of its box
+- Moved the desktop snapshot baselines to `tests/rendered/baselines/desktop/`; web and Android have their own folders beside it
+- Raised the test coverage gate to 100% branch coverage
+
+### Fixed
+
+- Fixed the leader picker's search hint being cut off on narrow screens (in English on 360 dp phones, in Spanish on any 360 dp screen): it now reads "Name, code or color", beside the search icon
+- Fixed the app failing to start when `LOG_LEVEL` names no log level (e.g. `verbose`): it now warns and logs at INFO
+- Fixed the web version losing changes without a word when the browser refuses to save them: it now says so and suggests exporting a backup
+- Fixed an edit on the event screen that the database fails to write going unreported: it now says the change could not be saved
+- Fixed a portrait download that fails mid-write (a full disk) leaving its half-written file in the app's storage
+- Fixed restoring a backup looking each leader and set up again for every round and event: a large backup now restores in far fewer queries
+- Fixed every start reading the bundled leader list twice
+- Fixed Settings showing no brightness mode picked when the saved one isn't System, Light or Dark: it now falls back to System
+- Fixed the browser tests (`-m web`) erroring when the rendered web tests ran before them: the whole run now shares one Playwright
+- Fixed Android snapshot tests (`-m android`) failing by a few pixels after a display resize or a cold boot: every capture now re-reads the status and navigation bars it is cropped by
+- Fixed two leader-update tests failing in `-m live` after the rendered web target: tests that use Playwright now run last, after every asyncio test
 
 ## [1.2.1] — 2026-10-13
 

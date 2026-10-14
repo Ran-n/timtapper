@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.019766
-Revised: 2026/10/13 08:59:21.280432
+Revised: 2026/10/14 07:43:51.549755
 """
 
 import datetime as dt
@@ -88,10 +88,9 @@ def test_all_orders_most_played_opponents_first(events, leaders, leader_ids):
     assert ordered[:2] == [leader_ids[5], leader_ids[4]]
 
 
-def test_leader_label_and_image():
+def test_leader_label():
     leader = Leader(1, "OP01-001", "Zoro", "OP01", ("Red",))
     assert leader.label == "Zoro · OP01-001"
-    assert leader.image_url.endswith("/OP01-001.jpg")
 
 
 def test_search():
@@ -188,6 +187,21 @@ def test_install_bundled_stores_leaders_and_release_dates(db):
     install_bundled(repo)
     assert repo.count() == len(load_bundled())
     assert repo.release_dates() == load_bundled_releases()
+
+
+def test_install_bundled_reads_the_list_once(db, monkeypatch):
+    """It runs on every start: the list used to be read and parsed twice, once for the leaders and once for the
+    release dates."""
+    reads = []
+    real_read = type(BUNDLED_LEADERS).read_text
+
+    def counted(self, *args, **kwargs):
+        reads.append(self)
+        return real_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(type(BUNDLED_LEADERS), "read_text", counted)
+    install_bundled(LeaderRepository(db))
+    assert reads == [BUNDLED_LEADERS]
 
 
 def test_set_releases_adds_updates_and_keeps(db):

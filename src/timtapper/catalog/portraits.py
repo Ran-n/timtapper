@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:19.051520
-Revised: 2026/10/13 14:54:42.358296
+Revised: 2026/10/14 07:43:51.078673
 
 Leader portraits: a small square crop of each leader card's art (the face sits
 in the upper middle of every card; a two-character card gets one strip per face,
@@ -214,8 +214,16 @@ def _write_whole(path: Path, data: bytes) -> None:
     """Write `data` to a temporary file beside `path`, then move it into place: an app killed mid-write leaves no
     half portrait, which would count as downloaded and never be fetched again."""
     partial = path.with_name(path.name + ".part")
-    partial.write_bytes(data)
-    partial.replace(path)
+    try:
+        partial.write_bytes(data)
+        partial.replace(path)
+    except OSError:
+        # a full or read-only folder: drop the half-written file rather than leave it behind for good
+        try:
+            partial.unlink(missing_ok=True)
+        except OSError as exc:
+            _log.warning("could not remove %s: %s", partial.name, exc)
+        raise
 
 
 def local_file(code: str) -> Path | None:

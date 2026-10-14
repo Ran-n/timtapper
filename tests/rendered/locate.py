@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 23:54:26.643279
-Revised: 2026/10/13 00:30:08.136661
+Revised: 2026/10/14 01:08:29.749712
 
 Where things are in a capture of the real app, found by the theme colours they're drawn in (all in dp).
 Shared by the rendered test modules; pixels.py has the colour-blob primitives these build on.
@@ -79,6 +79,28 @@ def overflow_menu(img) -> tuple[float, float]:
 def first_popup_item(img) -> tuple[float, float]:
     """The first item of the menu ⋮ opens (it drops from the bar's right end)."""
     return img.width - 100, 40
+
+
+def scroll_until(app, check, *, x: float = 200, y: float = 400, limit: int = 12):
+    """Scroll a notch at a time over (x, y) until `check(capture)` returns something truthy; (capture, that value).
+    For whatever a screen may hold below the fold: how much fits differs per platform (phones lay controls out
+    roomier than desktops and browsers)."""
+    shot = app.capture()
+    for _ in range(limit):
+        if found := check(shot):
+            return shot, found
+        shot = app.scroll(x, y, 1)
+    if found := check(shot):
+        return shot, found
+    raise AssertionError(f"not on screen after scrolling {limit} notches")
+
+
+def scroll_to_end(app):
+    """The screen scrolled to its end."""
+    img = app.capture()
+    for _ in range(4):
+        img = app.scroll(img.width / 2, img.height / 2, 10)
+    return img
 
 
 def confirm_button(img, s) -> Blob:

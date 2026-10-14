@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.944166
-Revised: 2026/10/13 11:42:03.595072
+Revised: 2026/10/14 07:43:51.630080
 """
 
 import contextlib
@@ -383,6 +383,29 @@ def test_a_set_this_install_doesnt_know_is_added(events, caplog):
     import_backup(events.db, data)
     assert events.list()[0].set_code == "OP99"
     assert "unknown set OP99" in caplog.text
+
+
+def test_a_restore_looks_each_leader_and_set_up_once(events, leaders, monkeypatch):
+    """One query per round's opponent and per event's set made a big restore wait on hundreds of lookups."""
+    looked_up = []
+    real_ensure = type(leaders).ensure
+
+    def counted(self, s, code):
+        looked_up.append(code)
+        return real_ensure(self, s, code)
+
+    monkeypatch.setattr(type(leaders), "ensure", counted)
+    rounds = [{"kind": "swiss", "opponent": code, "games": [{"result": "W"}]} for code in ["OP99-002", "OP99-003"] * 5]
+    data = json.dumps({
+        "format": FORMAT,
+        "version": VERSION,
+        "events": [valid_event(leader="OP99-001", set="OP99", rounds=rounds)] * 3,
+    }).encode()
+    assert import_backup(events.db, data) == 3
+    assert sorted(looked_up) == ["OP99-001", "OP99-002", "OP99-003"]
+    restored = events.list()
+    assert {ev.set_code for ev in restored} == {"OP99"}
+    assert all(len(ev.rounds) == 10 for ev in restored)
 
 
 @pytest.mark.regression

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 23:25:31.706887
-Revised: 2026/10/13 07:39:26.293636
+Revised: 2026/10/14 01:17:20.602835
 
 Leader picker: text search, color dots (every selected color) and the set dropdown combine.
 """
@@ -46,6 +46,12 @@ async def type_query(sheet, query: str) -> None:
 
 def make(ctx, picked=None):
     return build_picker(ctx, "Pick", (picked if picked is not None else []).append)
+
+
+@pytest.mark.regression
+def test_search_hint_is_short_enough_for_a_narrow_phone(ctx):
+    """ "Search name, code or color" was cut off at 360 dp on a phone ("...code or col…"), in Spanish on any screen."""
+    assert by_data(make(ctx), "leader-search").hint_text == "Name, code or color"
 
 
 def test_shows_six_color_dots_on_one_line(ctx):

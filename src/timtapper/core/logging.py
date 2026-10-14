@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.370391
-Revised: 2026/10/13 11:44:58.044316
+Revised: 2026/10/13 22:54:37.921364
 
 Logging setup for the whole app: one named logger tree (`timtapper.*`),
 isolated from third-party noise, level configurable via `LOG_LEVEL`.
@@ -18,6 +18,7 @@ from contextlib import contextmanager
 APP_LOGGER = "timtapper"
 _FORMAT = "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s"
 _DATEFMT = "%Y-%m-%d %H:%M:%S"
+DEFAULT_LEVEL = "INFO"
 
 
 def get_logger(module: str) -> logging.Logger:
@@ -28,12 +29,17 @@ def get_logger(module: str) -> logging.Logger:
 def setup_logging(level: str | None = None) -> logging.Logger:
     """Configure the app logger once; safe to call again (no duplicate handlers)."""
     root = logging.getLogger(APP_LOGGER)
-    root.setLevel((level or os.environ.get("LOG_LEVEL") or "INFO").upper())
+    wanted = (level or os.environ.get("LOG_LEVEL") or DEFAULT_LEVEL).upper()
+    # a misspelt LOG_LEVEL ("verbose") would make setLevel raise and stop the app before it opens
+    known = wanted in logging.getLevelNamesMapping()
+    root.setLevel(wanted if known else DEFAULT_LEVEL)
     root.propagate = False
     if not root.handlers:
         handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter(_FORMAT, datefmt=_DATEFMT))
         root.addHandler(handler)
+    if not known:
+        root.warning("unknown log level %r — using %s", wanted, DEFAULT_LEVEL)
     return root
 
 

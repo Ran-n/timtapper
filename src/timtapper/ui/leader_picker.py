@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.041772
-Revised: 2026/10/13 07:39:24.995450
+Revised: 2026/10/14 01:17:20.519557
 
 Searchable leader picker in a bottom sheet (most-played opponents first),
 narrowed by color dots (a leader must have every selected color) and a set
@@ -127,7 +127,9 @@ def build_picker(ctx: AppContext, title: str, on_pick: Callable[[Leader], Awaita
 
     render()
     field = ft.TextField(
-        hint_text=_("Search name, code or color"),
+        # short enough for a 360 dp phone in every language (the icon says "search"): "Search name, code or color"
+        # was cut off there, its Spanish on any 360 dp screen
+        hint_text=_("Name, code or color"),
         prefix_icon=ft.Icons.SEARCH,
         autofocus=True,
         dense=True,

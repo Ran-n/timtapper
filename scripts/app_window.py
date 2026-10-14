@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:02.424894
-Revised: 2026/10/12 23:54:36.718014
+Revised: 2026/10/14 01:08:28.738846
 
 Find, capture and click the running timtapper desktop window (Windows only).
 
@@ -74,6 +74,49 @@ def _user32():
     return user32
 
 
+# Flet's desktop client, which owns the app's window: named after the app when started from the project (it reads
+# pyproject.toml), flet.exe otherwise
+CLIENT_EXES = ("timtapper.exe", "flet.exe")
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_EnumWindowsProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+
+def _exe_name(user32, hwnd: int) -> str:
+    """The file name of the program that owns window `hwnd`, lowercase ("" if it can't be read)."""
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+    if not handle:
+        return ""
+    try:
+        size = wintypes.DWORD(1024)
+        buffer = ctypes.create_unicode_buffer(size.value)
+        if not kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+            return ""
+        return buffer.value.rsplit("\\", 1)[-1].lower()
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def find_window(title: str, exes: tuple[str, ...] = CLIENT_EXES) -> int:
+    """The top-level window titled exactly `title` that one of `exes` owns, or 0: an editor whose workspace has the
+    same name (VS Code titles its window after the folder) must never be taken for the app."""
+    user32 = _user32()
+    found = []
+    buffer = ctypes.create_unicode_buffer(512)
+
+    def check(hwnd, _lparam):
+        user32.GetWindowTextW(hwnd, buffer, len(buffer))
+        if buffer.value == title and _exe_name(user32, hwnd) in exes:
+            found.append(hwnd)
+            return False
+        return True
+
+    user32.EnumWindows(_EnumWindowsProc(check), 0)
+    return found[0] if found else 0
+
+
 class AppWindow:
     def __init__(self, title: str = WINDOW_TITLE) -> None:
         self.title = title
@@ -81,7 +124,7 @@ class AppWindow:
 
     @property
     def hwnd(self) -> int:
-        hwnd = self.user32.FindWindowW(None, self.title)
+        hwnd = find_window(self.title)
         if not hwnd:
             raise WindowError(f"window {self.title!r} not found")
         return hwnd
@@ -93,7 +136,7 @@ class AppWindow:
 
     def wait_open(self, timeout: float = 60) -> None:
         deadline = time.monotonic() + timeout
-        while not self.user32.FindWindowW(None, self.title):
+        while not find_window(self.title):
             if time.monotonic() > deadline:
                 raise WindowError(f"window {self.title!r} did not open within {timeout:.0f}s")
             time.sleep(0.2)
@@ -144,16 +187,20 @@ class AppWindow:
             raise WindowError(f"SendInput delivered {sent} of {len(events)} key events")
         time.sleep(0.05)
 
-    def type_text(self, text: str) -> None:
-        """Type `text` into the focused field, character by character (any Unicode, as a keyboard would)."""
-        self.focus()
+    def type_text(self, text: str, focus: bool = True) -> None:
+        """Type `text` into the focused field, character by character (any Unicode, as a keyboard would).
+        focus=False types into whatever has the focus now, e.g. a system dialog the app opened."""
+        if focus:
+            self.focus()
         for ch in text:
             code = ord(ch)
             self._send_keys((0, code, _KEYEVENTF_UNICODE), (0, code, _KEYEVENTF_UNICODE | _KEYEVENTF_KEYUP))
 
-    def press(self, *keys: str) -> None:
-        """Press `keys` together and release them in reverse (press("ctrl", "a") selects all)."""
-        self.focus()
+    def press(self, *keys: str, focus: bool = True) -> None:
+        """Press `keys` together and release them in reverse (press("ctrl", "a") selects all); focus=False as in
+        type_text."""
+        if focus:
+            self.focus()
         # with the scan code too: Flutter reads the physical key, and a bare virtual key reaches it as no key at all
         codes = [(KEYS[k], self.user32.MapVirtualKeyW(KEYS[k], _MAPVK_VK_TO_VSC)) for k in keys]
         self._send_keys(

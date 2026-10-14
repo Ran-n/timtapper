@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 11:01:44.904139
-Revised: 2026/10/13 22:03:51.747750
+Revised: 2026/10/14 01:08:28.841271
 
 Build a release-signed Android bundle (for Google Play), per-ABI APKs or one universal APK (for sideloading)
 and copy them into dist/ with the version in the name:
@@ -129,12 +129,26 @@ def _pem_digest(command: list[str], env: Mapping[str, str] | None = None) -> str
     return hashlib.sha256(base64.b64decode("".join(pem.group(1).split()))).hexdigest()
 
 
-def find_apksigner(environ: Mapping[str, str] = os.environ) -> Path:
-    """apksigner from the newest build-tools of the Android SDK flet builds with."""
+def sdk_homes(environ: Mapping[str, str] = os.environ) -> list[Path]:
+    """Where an Android SDK may be, in the order flet looks: the variables first, then the usual install folders."""
     homes = [environ.get("ANDROID_HOME"), environ.get("ANDROID_SDK_ROOT")]
     homes += [Path.home() / "Android" / "sdk", Path(environ.get("LOCALAPPDATA", "")) / "Android" / "Sdk"]
+    return [Path(home) for home in homes if home]
+
+
+def sdk_tool(relative: str, environ: Mapping[str, str] = os.environ) -> Path:
+    """A tool of the first SDK that has it, e.g. "platform-tools/adb" or "emulator/emulator" (.exe on Windows)."""
+    name = f"{relative}.exe" if os.name == "nt" else relative
+    for home in sdk_homes(environ):
+        if (home / name).is_file():
+            return home / name
+    raise BuildError(f"no {name} in any Android SDK (set ANDROID_HOME)")
+
+
+def find_apksigner(environ: Mapping[str, str] = os.environ) -> Path:
+    """apksigner from the newest build-tools of the Android SDK flet builds with."""
     name = "apksigner.bat" if os.name == "nt" else "apksigner"
-    for home in filter(None, homes):
+    for home in sdk_homes(environ):
         found = sorted(
             Path(home).glob(f"build-tools/*/{name}"), key=lambda p: [int(n) for n in re.findall(r"\d+", p.parent.name)]
         )

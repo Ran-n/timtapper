@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.159067
-Revised: 2026/10/13 07:39:22.789856
+Revised: 2026/10/14 01:17:20.437936
 
 Translation tables, keyed by the English source string exactly as written
 in the code. English (EN) is built from the ES key set so it stays a
@@ -115,8 +115,9 @@ ES = {
     ),
     "Event deleted": "Evento borrado",
     "Could not save: {error}": "No se pudo guardar: {error}",
+    "Could not save the change ({error})": "No se pudo guardar el cambio ({error})",
     # leader picker
-    "Search name, code or color": "Busca por nombre, código o color",
+    "Name, code or color": "Nombre, código o color",
     "Set": "Set",
     "All sets": "Todos los sets",
     "Red": "Rojo",
@@ -175,6 +176,9 @@ ES = {
     "Classic": "Clásico",
     "Could not save this setting — it applies until the app restarts": (
         "No se pudo guardar este ajuste — se aplicará hasta que reinicies la app"
+    ),
+    "Could not save to this browser's storage — export a backup before closing the page": (
+        "No se pudo guardar en el almacenamiento del navegador — exporta una copia antes de cerrar la página"
     ),
     "Leaders": "Líderes",
     "{n} leaders in the catalogue. New sets are added automatically.": (
@@ -455,8 +459,9 @@ GL = {
     ),
     "Event deleted": "Evento borrado",
     "Could not save: {error}": "Non se puido gardar: {error}",
+    "Could not save the change ({error})": "Non se puido gardar o cambio ({error})",
     # leader picker
-    "Search name, code or color": "Busca por nome, código ou cor",
+    "Name, code or color": "Nome, código ou cor",
     "Set": "Set",
     "All sets": "Todos os sets",
     "Red": "Vermello",
@@ -515,6 +520,9 @@ GL = {
     "Classic": "Clásico",
     "Could not save this setting — it applies until the app restarts": (
         "Non se puido gardar este axuste — aplicarase ata que reinicies a app"
+    ),
+    "Could not save to this browser's storage — export a backup before closing the page": (
+        "Non se puido gardar no almacenamento do navegador — exporta unha copia antes de pechar a páxina"
     ),
     "Leaders": "Líderes",
     "{n} leaders in the catalogue. New sets are added automatically.": (

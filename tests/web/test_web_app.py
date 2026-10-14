@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.346234
-Revised: 2026/10/13 22:03:51.346234
+Revised: 2026/10/14 08:10:02.410702
 
 The built web app (scripts/build_web.py -> build/web), served under /timtapper/ as GitHub Pages and Codeberg Pages
 serve it, driven in headless Chrome: what only a real browser shows, i.e. that the data folder survives a reload,
@@ -12,10 +12,8 @@ Marker `web`, kept out of the default run: it needs a build (a few minutes) and 
 viewport's coordinates (412 x 892), and each step waits for the app's own log line rather than a fixed time.
 """
 
-import functools
-import http.server
 import json
-import threading
+import sys
 import time
 import zipfile
 from pathlib import Path
@@ -25,7 +23,9 @@ from PIL import Image
 
 pytestmark = pytest.mark.web
 
-SITE = Path(__file__).resolve().parents[2] / "build" / "web"
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+SITE = ROOT / "build" / "web"
 VIEWPORT = {"width": 412, "height": 892}
 BOOT_TIMEOUT = 90  # seconds: Pyodide and the app's packages load on the first visit
 STEP_TIMEOUT = 20
@@ -52,19 +52,11 @@ def _site_built() -> bool:
 def base_url():
     if not _site_built():
         pytest.skip("no web build: run `uv run python scripts/build_web.py` first")
+    from serve_site import SiteServer
 
-    class Handler(http.server.SimpleHTTPRequestHandler):
-        def translate_path(self, path):
-            prefix = "/timtapper"
-            return super().translate_path(path[len(prefix) :] if path.startswith(prefix) else "/__missing__")
-
-        def log_message(self, *args):
-            pass
-
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(SITE)))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{server.server_port}/timtapper/"
-    server.shutdown()
+    server = SiteServer(SITE).start()
+    yield server.url
+    server.stop()
 
 
 class WebApp:
@@ -129,13 +121,6 @@ class WebApp:
 
     def close(self) -> None:
         self.context.close()
-
-
-@pytest.fixture
-def playwright():
-    sync_api = pytest.importorskip("playwright.sync_api")
-    with sync_api.sync_playwright() as p:
-        yield p
 
 
 @pytest.mark.regression

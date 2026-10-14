@@ -2,12 +2,12 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 01:04:16.610782
-Revised: 2026/10/12 13:16:04.305497
+Revised: 2026/10/14 01:08:28.931444
 
 Take the README screenshots (docs/screenshots/*.png) from the real app.
 
 Opens timtapper in a phone-shaped desktop window on a throwaway database
-seeded with a fixed set of demo events (scripts/app_driver.py), walks the
+seeded with a fixed set of demo events (scripts/demo_driver.py), walks the
 screens and grabs each one from the window (Windows only: Flet 1.0's
 page.take_screenshot returns nothing on desktop, so Pillow captures the
 window's client area instead; scripts/app_window.py). Also renders an event
@@ -23,7 +23,7 @@ import shutil
 
 import flet as ft
 
-from app_driver import ROOT, Demo, run
+from app_driver import ROOT, DesktopDemo, run
 from app_window import AppWindow
 from core.logging import get_logger
 from i18n import event_type_label
@@ -42,7 +42,7 @@ async def capture(window: AppWindow, name: str) -> None:
 
 
 async def shoot(page: ft.Page) -> None:
-    demo = Demo(page, dt.date.today())
+    demo = DesktopDemo(page, dt.date.today())
     window = AppWindow()
     try:
         OUT_DIR.mkdir(parents=True, exist_ok=True)

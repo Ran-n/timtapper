@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.516994
-Revised: 2026/10/12 23:54:35.694365
+Revised: 2026/10/14 07:43:51.310608
 
 Derived statistics. Pure functions over Event values — nothing here touches
 the DB or Flet, so the stats screen and the share cards compute the exact
@@ -19,7 +19,7 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 
-from events.repository import Event
+from events.domain import Event
 
 RECENT_FORM = 10
 MIN_MATCHUP_GAMES = 3  # matches against one leader before it can be a best or worst matchup
@@ -204,11 +204,12 @@ def best_and_worst(ms: list[Matchup], min_games: int = MIN_MATCHUP_GAMES) -> tup
 
 
 def summarize(events: list[Event], filters: Filters | None = None) -> Summary:
-    ms, gs = matches(events, filters), games(events, filters)
+    shown = filter_events(events, filters or Filters())  # filtered once: every part below counts the same events
+    ms, gs = matches(shown), games(shown)
     first, second = _turn_order(gs)
     die_won, die_lost = _tally([g for g in gs if g.die_decided], lambda g: g.chose_turn)
     chose, opp_chose = _tally(gs, lambda g: g.chose_turn)
-    best, worst = best_and_worst(matchups(events, filters))
+    best, worst = best_and_worst(matchups(shown))
     return Summary(
         _record(m.result for m in ms),
         _record(g.result for g in gs),
@@ -220,7 +221,7 @@ def summarize(events: list[Event], filters: Filters | None = None) -> Summary:
         opp_chose,
         tuple(m.result for m in ms[-RECENT_FORM:]),
         len({m.event_id for m in ms}),
-        sum(r.bye for ev in filter_events(events, filters or Filters()) for r in ev.rounds),
+        sum(r.bye for ev in shown for r in ev.rounds),
         best,
         worst,
     )

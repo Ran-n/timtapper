@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:45.015285
-Revised: 2026/10/13 08:59:21.204679
+Revised: 2026/10/14 10:32:27.275289
 
 Shared fixtures. Every DB test runs against a real, freshly migrated SQLite
 file (never mocks), seeded with the bundled leader catalogue.
@@ -27,6 +27,31 @@ def _storage(tmp_path, monkeypatch):
     portraits.source.cache_clear()  # its cache would otherwise leak one test's data dir into the next
     yield
     portraits.source.cache_clear()
+
+
+def uses_playwright(item) -> bool:
+    """Whether a test pulls in the shared sync Playwright: directly, or as the rendered `app` fixture's web target."""
+    callspec = getattr(item, "callspec", None)
+    return "playwright" in getattr(item, "fixturenames", ()) or (
+        callspec is not None and callspec.params.get("app") == "web"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Run every test that uses the shared sync Playwright last: its event loop keeps running in this thread until
+    the session ends, so an asyncio test after it failed ("Runner.run() cannot be called from a running event loop")
+    whenever `-m live` or a mixed run reached the web target first."""
+    items.sort(key=uses_playwright)  # stable: keeps the collected order within each group
+
+
+@pytest.fixture(scope="session")
+def playwright():
+    """One sync Playwright for the whole run, shared by the rendered web target and tests/web: a second
+    sync_playwright() in this thread while the first still runs fails ("Sync API inside the asyncio loop"), so
+    tests/web errored whenever the rendered web tests had run before it."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    with sync_api.sync_playwright() as p:
+        yield p
 
 
 @pytest.fixture

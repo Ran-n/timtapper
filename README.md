@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/13 22:03:51.502334 )
+[//]: # (+ Revised: 	2026/10/14 10:10:16.952417 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -35,6 +35,9 @@
 
 No accounts, no server, no sync: your events live on your device, and a JSON backup moves them to another install.
 In the browser they stay in that browser's storage; export a backup now and then.
+
+On Windows, pick the `-setup.exe` installer (no admin prompt, Start-menu entry, upgrades in place and keeps your data)
+or the portable `.zip`.
 
 ## Features
 

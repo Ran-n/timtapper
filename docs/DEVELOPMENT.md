@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.144622 )
-[//]: # (+ Revised: 	2026/10/13 22:03:51.585120 )
+[//]: # (+ Revised: 	2026/10/14 10:06:55.174462 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Development
@@ -23,6 +23,8 @@ Building, testing and maintaining timtapper. See [CONTRIBUTING.md](../CONTRIBUTI
 - Python ≥ 3.14
 - [uv](https://docs.astral.sh/uv/)
 - For Android builds: the Flutter/Android toolchain that `flet build` uses
+- For Windows builds: Visual Studio's C++ desktop workload (what `flet build windows` needs) and
+  [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`) for the installer
 
 ## Run on desktop
 
@@ -33,6 +35,14 @@ uv run flet run
 
 Run it from the repository root, so dev data goes to `.flet/storage/` (git-ignored) and not into the folder that gets
 packaged. `uv run timtapper` also works and stores data in `~/.timtapper/`.
+
+Environment variables:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | Log level of the `timtapper.*` loggers (`DEBUG`, `INFO`, `WARNING`, `ERROR`); an unknown one falls back to `INFO` with a warning |
+| `FLET_APP_STORAGE_DATA` | `~/.timtapper` | Where the database and downloaded portraits live; `flet run` and packaged builds set it |
+| `FLET_APP_STORAGE_TEMP` | system temp + `/timtapper` | Where share cards and backup exports are written before the share sheet takes them |
 
 ## Build for Android
 
@@ -62,6 +72,22 @@ takes the plain code, below that release's per-ABI ones but above every APK of t
 APKs up to 1.1.0 were signed with the debug key. Android won't update them in place: export a backup, uninstall,
 install the new APK, then restore.
 
+## Build for Windows
+
+```sh
+uv run python scripts/build_windows.py    # build/windows + dist/timtapper-<version>-windows-x64.zip and -setup.exe
+```
+
+`flet build windows` makes a folder, not a single file: `timtapper.exe` is a small launcher that needs the Flutter
+engine, the plugin DLLs and the bundled Python beside it. The script packs that folder twice: as the portable zip, and
+as an installer compiled by Inno Setup from `scripts/timtapper.iss`. The installer installs for the current user by
+default (no admin prompt), adds a Start-menu entry, an optional desktop shortcut and an uninstaller, and on an upgrade
+replaces the bundled Python and app code whole. The app's data lives elsewhere, so upgrading or uninstalling keeps it.
+Never change the `AppId` in the `.iss`: Windows matches upgrades on it.
+
+Before packaging, the script deletes the debug build of each Python extension module that flet ships next to the
+release one (`DLLs/<name>_d.pyd`, about 9 MB). Attach both files to every release.
+
 ## Build for the web
 
 ```sh
@@ -87,18 +113,19 @@ falls back to a download.
 
 ```sh
 uv run pytest                            # unit, DB, migrations, widget tree, property, regression
-uv run pytest --cov                      # same, failing below 99% branch coverage
-uv run pytest -m "live and not desktop"  # against the real optcgapi.com and Limitless TCG (~40 s)
-uv run pytest -m desktop                 # the real app, rendered (Windows; takes over mouse and screen ~2 min)
-uv run pytest -m "desktop or live"       # both, including a real click on Update leaders
-uv run pytest -m web                     # the built web app in headless Chrome (needs build_web.py first, ~1.5 min)
+uv run pytest --cov                      # same, failing below 100% branch coverage
+uv run pytest -m "live and not desktop and not web and not android"   # the real optcgapi.com and Limitless (~40 s)
+uv run pytest -m desktop                 # every UI test on Windows (takes over mouse and screen ~8 min)
+uv run pytest -m web                     # every UI test in headless Chrome (~5 min)
+uv run pytest -m android                 # every UI test on the Android emulator (~12 min)
+uv run pytest -m live                    # the live tests, a real click on Update leaders on every target included
 uv run ruff format src scripts tests && uv run ruff check src scripts tests
 ```
 
 **CI.** `scripts/ci.sh` runs what CI runs on every push to `main` and every pull/merge request on GitHub
 (`.github/workflows/ci.yml`), GitLab (`.gitlab-ci.yml`) and Codeberg (`.forgejo/workflows/ci.yml`, once Actions is
-enabled): a locked `uv sync`, `ruff format --check`, `ruff check` and `pytest --cov`. The `live`, `desktop` and
-`web` tests stay local.
+enabled): a locked `uv sync`, `ruff format --check`, `ruff check` and `pytest --cov`. The `live`, `desktop`, `web`
+and `android` tests stay local; all of them pass before a version bump.
 
 **Live tests** check what mocks can't: that the card lists still parse and still hold every bundled leader and set,
 that card images still download and crop, that a full sync fills a real database, and that Update leaders and the
@@ -111,16 +138,52 @@ startup check work end to end.
   older file (`v1.json`, `v2.json`) must still restore.
 - Share cards: each is rendered from fixed data and compared with an approved image in `tests/share/golden/`.
 
-**Rendered tests** (`tests/rendered/`, marker `desktop`) start the real app on demo data, click it with the real
-mouse and check the captured pixels: badges side by side, die pips, the picker's dots on one line at 360 dp, portrait
-frame bands, theme swatches, tap-cycling, picker filters and theme switching. Captures are shrunk to dp and clicks
-scaled back up, so they pass at any Windows display scaling. Whole screens are compared with baselines, including
-settings in Spanish at 360 dp (the longest labels), one set per scaling: `tests/rendered/baselines/` at 100%,
-`baselines/scale-125/` at 125%. Keep the window uncovered while they run.
+**Every UI target gets the same tests.** The app ships to Windows, the browser and Android, and each one runs the
+same rendered suite plus its own platform checks; a target with fewer tests than the others is a gap.
 
-**Web tests** (`tests/web/`, marker `web`) serve `build/web` under `/timtapper/` and drive it in headless Chrome:
-events survive a reload on an inner screen, sharing downloads the card where the browser has no Web Share API, and a
-backup exported in one browser restores in another and survives its reload.
+**Rendered tests** (`tests/rendered/`) start the real app on demo data (`scripts/demo_driver.py`), tap it for real
+and check the captured pixels and what the app stored: badges side by side, die pips, the picker's dots on one line
+at 360 dp, portrait frame bands, theme swatches, tap-cycling, the round editors, typing in the header, dialogs, picker
+filters and theme switching. Each test runs once per target (`tests/rendered/targets.py`):
+
+| Target | Marker | The app | Input |
+|---|---|---|---|
+| desktop | `desktop` | `scripts/app_driver.py` in a Windows window | real mouse and keyboard (`scripts/app_window.py`) |
+| web | `web` | the driven web build in headless Chrome | Playwright touches, keys and wheel |
+| android | `android` | the driven APK on an emulator | adb touches, keys and drags (`scripts/android_phone.py`) |
+
+The web and Android targets run driven builds: the real app built by `flet build` with the demo driver inside,
+started from `scripts/driven_main.py`, polling the test harness for commands (`scripts/serve_site.py`). Build them
+first, and again after changing the app:
+
+```sh
+uv run python scripts/build_driven.py           # build/driven/web and build/driven/timtapper-<version>-driven-x86_64.apk
+```
+
+Captures are shrunk to dp and taps scaled back up, so the tests pass at any pixel density; the browser and the phone
+get the desktop window's client area (396 x 853 dp, 344 dp wide at the 360 dp minimum). Phones lay controls out
+roomier than desktops, so a test that needs something below the fold scrolls until it's there (`locate.scroll_until`)
+instead of assuming how much fits. Whole screens are compared with baselines, one set per target in
+`tests/rendered/baselines/<target>/` (desktop: one per display scaling, `desktop/scale-125/` at 125%), including
+every screen in Spanish and Galician at 360 dp (the longest labels). Keep the desktop window uncovered while it runs.
+
+The Android target uses the running emulator or device, or boots the generic `generic_phone_api34` AVD (Pixel 7,
+API 34, x86_64; another with `TIMTAPPER_AVD`) headless and shuts it down afterwards. It installs the driven APK as its
+own app (`com.breren.timtapper.driven`), and puts back everything it changed: the app, the port mapping, the display
+size and the on-screen-keyboard setting. adb can only type ASCII, so the one test that types a non-ASCII name types
+an ASCII one there.
+
+**Platform checks** test what only that platform's own build shows, against the last release build of each:
+
+- `tests/desktop/` (marker `desktop`): `main.py` on a fresh data folder. Events survive the app being killed and
+  started again; Share reaches Windows' share or save dialog; a backup restores through Windows' Open dialog and
+  stays. The app keeps your saved theme, so close a running timtapper first.
+- `tests/web/` (marker `web`): `build/web` under `/timtapper/` in headless Chrome. Events survive a reload on an inner
+  screen; sharing downloads the card where the browser has no Web Share API; a backup exported in one browser
+  restores in another and survives its reload.
+- `tests/android/` (marker `android`): `dist/timtapper-<version>-x86_64.apk`, read through its log in logcat. Events
+  survive the process being killed; Share opens Android's share sheet; a backup restores through Android's own file
+  picker and survives a restart.
 
 After an intended visual change, rerun the share-card or rendered tests with `TIMTAPPER_UPDATE_BASELINES=1`, review
 every rewritten image and commit it.
@@ -131,7 +194,7 @@ every rewritten image and commit it.
 uv run python scripts/make_screenshots.py
 ```
 
-Opens the app on a throwaway database seeded with demo events (`scripts/app_driver.py`, shared with the rendered
+Opens the app on a throwaway database seeded with demo events (`scripts/demo_driver.py`, shared with the rendered
 tests), walks the screens and saves them to `docs/screenshots/`, plus an event share card. Your own data is never
 touched. Windows only (Flet's page capture returns nothing on desktop, so Pillow grabs the window); keep it uncovered
 while it runs.
@@ -181,11 +244,13 @@ src/timtapper/      Flet app root (flet build packages this folder)
   i18n/             en/es/gl tables keyed by English source strings
   ui/               screens (events, event, stats, settings), picker, widgets
   assets/           fonts, icons, logo_mark, bundled leaders.json + leaders/*.webp portraits
-scripts/            build_leaders, build_android, build_web, make_icon, make_screenshots, make_bye_joker,
-                    app_driver + app_window (run, capture and click the real app), ci.sh
+scripts/            build_leaders, build_android, build_windows (+ timtapper.iss), build_web, build_driven,
+                    make_icon, make_screenshots,
+                    make_bye_joker, demo_driver (the demo data and driver commands), app_driver + app_window
+                    (desktop), driven_main + serve_site (web, Android), android_phone (adb), ci.sh
 docs/               logo, screenshots, these docs
-tests/              mirrors src/timtapper; rendered/ drives the real app (marker `desktop`), web/ the web build
-                    (marker `web`)
+tests/              mirrors src/timtapper; rendered/ drives the real app on every target (markers `desktop`,
+                    `web`, `android`); desktop/, web/ and android/ check each platform's own build
 ```
 
 ## Third-party art

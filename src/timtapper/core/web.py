@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.106265
-Revised: 2026/10/13 22:03:51.106265
+Revised: 2026/10/13 22:53:34.407353
 
 Running in a browser: `flet build web` runs the app's Python on Pyodide (WebAssembly) in a web worker, where the
 file system lives in memory. BrowserStore keeps the data folder in the browser's IndexedDB instead, so events
@@ -45,6 +45,8 @@ class BrowserStore:
         self._once = once or (lambda fn: fn)
         self._dirty = False
         self._saving: asyncio.Task | None = None
+        # tells the user a save failed: called with no arguments, once per failed save (set once the UI exists)
+        self.on_save_failed: Callable[[], None] | None = None
 
     async def open(self) -> None:
         """Mount the folder on IndexedDB and load what an earlier visit saved there."""
@@ -71,6 +73,8 @@ class BrowserStore:
                 await self._sync(populate=False)
             except BrowserStoreError:
                 _log.exception("could not save %s to browser storage; the last changes are lost on reload", self.folder)
+                if self.on_save_failed is not None:
+                    self.on_save_failed()
                 return
 
     async def _sync(self, *, populate: bool) -> None:

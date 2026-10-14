@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.780273
-Revised: 2026/10/13 14:54:42.508742
+Revised: 2026/10/13 22:53:34.654570
 """
 
 import datetime as dt
@@ -264,6 +264,24 @@ async def test_cycle_rejected_edit_shows_error(screen, ctx, page, monkeypatch, e
     monkeypatch.setattr(ctx.events, "update_game", refuse)
     await tap(screen, 4, "result")
     assert isinstance(page.dialogs[-1], ft.SnackBar) and page.dialogs[-1].data == "error"
+    assert round_of(events, sample_event, 4).result is None
+
+
+@pytest.mark.regression
+async def test_cycle_failed_write_shows_error(screen, ctx, page, monkeypatch, events, sample_event, caplog):
+    """A database that fails to write (disk full, locked file) used to raise out of the tap unseen: the badge
+    simply didn't change. Now the user is told, and the failure is logged with its traceback."""
+    from sqlalchemy.exc import OperationalError
+
+    def broken(*_a, **_k):
+        raise OperationalError("UPDATE game", {}, Exception("database or disk is full"))
+
+    monkeypatch.setattr(ctx.events, "update_game", broken)
+    await tap(screen, 4, "result")
+    snack = page.dialogs[-1]
+    assert isinstance(snack, ft.SnackBar) and snack.data == "error"
+    assert snack.content.value == "Could not save the change (OperationalError)"
+    assert "edit failed" in caplog.text
     assert round_of(events, sample_event, 4).result is None
 
 

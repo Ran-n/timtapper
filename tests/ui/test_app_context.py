@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/13 22:03:52.452619
+Revised: 2026/10/14 07:43:51.793148
 """
 
 import datetime as dt
@@ -349,6 +349,35 @@ async def test_main_flushes_window_before_awaiting_prefs(page, monkeypatch):
     page.on_disconnect(None)
 
 
+async def test_main_in_a_browser_reports_failed_saves(page, monkeypatch):
+    """The web build saves to IndexedDB in the background: a failed save must reach the screen, not just the log."""
+
+    class Prefs:
+        async def get(self, key):
+            return None
+
+    class Store:
+        on_save_failed = None
+
+        def changed(self):
+            pass
+
+    store = Store()
+
+    async def open_store():
+        return store
+
+    monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
+    monkeypatch.setattr(main, "IS_WEB", True)
+    monkeypatch.setattr(main, "open_browser_store", open_store)
+    await main.main(page)
+    store.on_save_failed()
+    snack = page.dialogs[-1]
+    assert isinstance(snack, ft.SnackBar) and snack.data == "error"
+    assert "browser's storage" in snack.content.value
+    page.on_disconnect(None)
+
+
 async def test_main_reports_database_failure(page, monkeypatch):
     added = []
     page.add = added.append
@@ -443,6 +472,21 @@ def test_run_sets_up_logging_then_starts_flet(monkeypatch):
     monkeypatch.setattr(main.ft, "run", lambda target, **kw: calls.append(("run", target, kw)))
     main.run()
     assert calls == ["logging", ("run", main.main, {"assets_dir": "assets"})]
+
+
+def test_running_main_as_a_script_starts_the_app(monkeypatch):
+    """`python main.py` (and `flet run`, which runs it the same way) starts the app."""
+    import runpy
+
+    import flet
+
+    from core import logging as app_logging
+
+    started = []
+    monkeypatch.setattr(app_logging, "setup_logging", lambda: None)  # keep the test run's logging as it is
+    monkeypatch.setattr(flet, "run", lambda target, **kw: started.append(target.__name__))
+    runpy.run_path(main.__file__, run_name="__main__")
+    assert started == ["main"]
 
 
 def test_launcher_puts_the_app_root_on_the_path_and_runs_main(monkeypatch):

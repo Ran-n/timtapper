@@ -2,13 +2,12 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 23:54:27.137495
-Revised: 2026/10/13 13:15:07.373772
+Revised: 2026/10/14 01:08:29.954780
 
 The event screen in the real app: real taps and real typing, checked on screen and in what the app stored.
 Every test that changes data puts the demo data back (`app.reset()`), since the app is shared by the session.
 """
 
-import struct
 import time
 
 import pytest
@@ -18,11 +17,11 @@ from locate import (
     filled,
     first_popup_item,
     overflow_menu,
+    scroll_to_end,
+    scroll_until,
     snackbar,
 )
 from pixels import count, find, holes
-
-pytestmark = pytest.mark.desktop
 
 NARROW = 360
 # a round's badges read die, turn, result: dp from the die to the others
@@ -49,9 +48,20 @@ def die_badges(img, s) -> list:
     return sorted(faces, key=lambda f: f.y0)
 
 
+def event_fields(app, s) -> list:
+    """The event's outlined fields, top to bottom, without the date button: on a phone's roomier layout it is tall
+    enough to pass for a field, but it sits beside the type dropdown and is clearly shorter than it."""
+    found = app.fields(s)
+
+    def date_button(f) -> bool:
+        return any(g.x1 <= f.x0 and abs(g.cy - f.cy) <= 6 and g.h - f.h >= 6 for g in found)
+
+    return [f for f in found if not date_button(f)]
+
+
 def header(app, s) -> dict:
     """The header's fields by name: name, type, placement, players, set, notes."""
-    found = app.fields(s)
+    found = event_fields(app, s)
     assert len(found) >= 6, [f.box for f in found]
     name, type_, *row, set_, notes = found[:6]
     placement, players = sorted(row, key=lambda f: f.x0)
@@ -62,8 +72,7 @@ def retype(app, field, text: str) -> None:
     """Click into `field`, replace everything in it with `text` and press Enter."""
     app.tap(field.cx, field.cy)
     time.sleep(0.3)
-    app.press("ctrl", "a")
-    app.press("backspace")
+    app.clear_text()
     if text:
         app.type(text)
     app.press("enter")
@@ -95,25 +104,48 @@ def open_first_round(app, s):
 
 
 def segment_rows(app, s) -> list:
-    """The open round's segmented rows, top to bottom (kind, best of, die, turn, result): their outlines."""
-    return app.rings(s.outline, min_w=300, min_h=26, max_h=44)
+    """The open round's segmented rows, top to bottom (kind, best of, die, turn, result): their outlines, indented
+    inside the round's card (an event field cut off at the top of the screen can look as thin)."""
+    return [r for r in app.rings(s.outline, min_w=300, min_h=26, max_h=44) if 30 < r.x0 < 60]
+
+
+def round_notes(app, s):
+    """The open round's notes field, if on screen: the one full-width field indented inside the round's card (the
+    date button beside the type is indented too, but narrow; segmented rows are wide, but thinner)."""
+    inside = [f for f in app.fields(s) if 30 < f.x0 < 60 and f.w >= 300 and f.h > 44]
+    return inside[0] if inside else None
+
+
+def editors_end(app, s):
+    """Scroll until the open round's notes and the line under them (Change opponent, Delete round) are in view;
+    (capture, the notes field)."""
+    return scroll_until(app, lambda shot: (n := round_notes(app, s)) and n.y1 + 70 <= shot.height and n)
+
+
+def all_segments(app, s) -> list:
+    """Scroll until the open round's five segmented rows are all in view; them, top to bottom."""
+
+    def five(shot):  # the last one whole, not cut off at the bottom of the screen
+        rows = segment_rows(app, s)
+        return rows if len(rows) >= 5 and rows[4].y1 < shot.height - 8 else None
+
+    return scroll_until(app, five)[1]
 
 
 def test_tapping_a_round_opens_its_editors(event, scheme):
     s = scheme()
     open_first_round(event, s)
-    shot = event.scroll(200, 400, 3)  # the editors run past the bottom of the window
-    round_notes = [f for f in event.fields(s) if f.y0 > 300]
-    assert round_notes, "no round notes field under the opened round"
+    shot, notes = editors_end(event, s)  # the editors run past the bottom of the screen
     # Delete round is drawn in the error colour, Change opponent in the primary one, on the editors' last line
-    assert [b for b in find(shot, s.error, tol=10, min_area=20) if b.y0 > round_notes[0].y1]
-    assert [b for b in find(shot, s.primary, tol=10, min_area=20) if b.y0 > round_notes[0].y1]
+    # (marks of 8 px: a browser anti-aliases text more, leaving smaller cores of the exact colour)
+    assert [b for b in find(shot, s.error, tol=10, min_area=8) if b.y0 > notes.y1]
+    assert [b for b in find(shot, s.primary, tol=10, min_area=8) if b.y0 > notes.y1]
 
 
 def test_segments_switch_and_round_notes_save(event, scheme):
     s = scheme()
-    die, shot = open_first_round(event, s)
-    kind, _best_of, die_row, turn, result = segment_rows(event, s)[:5]
+    open_first_round(event, s)
+    kind, _best_of, die_row, turn, result = all_segments(event, s)[:5]
     event.click(280, die_row.cy)  # "Lost die roll"
     event.click(280, turn.cy)  # "Went 2nd"
     event.click(280, result.cy)  # "Loss"
@@ -123,8 +155,7 @@ def test_segments_switch_and_round_notes_save(event, scheme):
     first = event.send("event")["rounds"][0]
     # top cut made it a best of 3 (games 2 and 3 were empty): game 1 lost, the match still being played
     assert (first["top_cut"], first["best_of"], first["games"][0]["result"], first["result"]) == (True, 3, "L", None)
-    event.scroll(200, 400, 3)  # the round notes are below the bottom of the window
-    notes = [f for f in event.fields(s) if f.y0 > 300][0]
+    _shot, notes = editors_end(event, s)  # the round notes are below the bottom of the screen
     event.tap(notes.cx, notes.cy)
     time.sleep(0.3)
     event.type("aggro start")
@@ -150,8 +181,7 @@ def test_making_a_played_round_a_bye_asks_before_dropping_its_games(event, schem
 
 def editor_actions(app, s) -> tuple:
     """Scroll the open round's last line (Change opponent, Delete round) fully into view; their icons' boxes."""
-    shot = app.scroll(200, 400, 3)
-    notes = [f for f in app.fields(s) if f.y0 > 400][0]  # the round notes field, just above that line
+    shot, notes = editors_end(app, s)  # the round notes field, just above that line
 
     def first_mark(color: str):  # each action's icon is the leftmost mark of its colour on that line
         marks = [b for b in find(shot, color, tol=10, min_area=8) if b.y0 > notes.y1 and b.h <= 16]
@@ -195,9 +225,11 @@ def test_change_opponent_through_the_picker(event, scheme):
 
 # ---- header ------------------------------------------------------------------------
 def test_typing_a_new_name_saves_it(event, scheme):
-    retype(event, header(event, scheme())["name"], "Store championship — day 2")
-    assert event.send("event")["name"] == "Store championship — day 2"
-    assert event.send("field", data="name")["value"] == "Store championship — day 2"
+    # a dash past ASCII where the platform's input can type it (adb's can't)
+    name = "Store championship — day 2" if event.types_unicode else "Store championship - day 2"
+    retype(event, header(event, scheme())["name"], name)
+    assert event.send("event")["name"] == name
+    assert event.send("field", data="name")["value"] == name
 
 
 @pytest.mark.regression
@@ -270,13 +302,6 @@ def test_tapping_the_playing_card_picks_your_leader(event, scheme):
 
 
 # ---- rounds: add -------------------------------------------------------------------
-def scroll_to_end(app) -> object:
-    img = app.capture()
-    for _ in range(4):
-        img = app.scroll(img.width / 2, img.height / 2, 10)
-    return img
-
-
 def add_round_button(app, s):
     """The Add round button's outline (primary, full width), at the end of the event."""
     found = app.rings(s.primary, min_w=300, min_h=40, max_h=60)
@@ -324,20 +349,13 @@ def test_cancelling_the_delete_keeps_the_event(event, scheme):
 
 
 # ---- share -------------------------------------------------------------------------
-def png_size(path: str) -> tuple[int, int]:
-    with open(path, "rb") as f:
-        head = f.read(24)
-    assert head[:8] == b"\x89PNG\r\n\x1a\n", path
-    return struct.unpack(">II", head[16:24])
-
-
 def test_share_result_renders_the_event_card(event, scheme):
     s = scheme()
     share = [b for b in filled(event.capture(), s.primary, min_w=300) if b.h >= 40][0]
     event.click(share.cx, share.cy)
     shared = event.wait_until(lambda: event.send("shared"), what="the card being shared")
     assert shared[-1]["title"] == "Store championship" and shared[-1]["mime_type"] == "image/png"
-    assert png_size(shared[-1]["path"]) == (1080, 1350)
+    assert shared[-1]["pixels"] == [1080, 1350]
 
 
 # ---- states with their own look ------------------------------------------------------
@@ -345,7 +363,7 @@ def test_a_testing_session_has_no_standing_fields(app, scheme):
     s = scheme()
     testing = next(e for e in app.send("events") if e["name"] == "Testing with Dani")
     app.show(f"/event/{testing['id']}", "dark", NARROW)
-    found = app.fields(s)
+    found = event_fields(app, s)
     # name, type, set, notes: no placement and players row (two fields side by side)
     assert len(found) == 4, [f.box for f in found]
     assert all(abs(a.y0 - b.y0) > 10 for a, b in zip(found, found[1:], strict=False))

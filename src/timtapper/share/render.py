@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.379720
-Revised: 2026/10/13 22:03:52.205430
+Revised: 2026/10/14 07:43:51.391948
 
 Pillow-rendered share cards (1080x1350, the 4:5 portrait every social app
 displays uncropped). Fixed dark "open sea" palette independent of the app
@@ -30,7 +30,7 @@ from core.card_colors import rgb
 from core.die import CORNER_RADIUS, DIE_PIPS, LOST_PIPS, PIP_DIAMETER, WON_PIPS
 from core.logging import get_logger
 from core.paths import ASSETS_DIR, temp_file
-from events.repository import Event, Round
+from events.domain import Event, Round
 from i18n import bracket_label
 from stats.compute import Matchup, Record, Summary, games_record_of, percent, record_of
 
@@ -454,7 +454,7 @@ def matchups_card(
     return card.save("matchups")
 
 
-def _tile(card: Card, box, label: str, value: str, _: Translate) -> None:
+def _tile(card: Card, box, label: str, value: str) -> None:
     card.panel(box, radius=24)
     x0, y0, _x1, _y1 = box
     card.text((x0 + 32, y0 + 26), label, 26, fill=DIM)
@@ -501,8 +501,8 @@ def summary_card(
         ),
     ]
     for left, right in rows:
-        _tile(card, (PAD, y, PAD + half, y + 140), *left, _)
-        _tile(card, (W - PAD - half, y, W - PAD, y + 140), *right, _)
+        _tile(card, (PAD, y, PAD + half, y + 140), *left)
+        _tile(card, (W - PAD - half, y, W - PAD, y + 140), *right)
         y += 164
     # tall enough for the 72 px portrait with the record under the name
     _matchup_tile(card, (PAD, y, PAD + half, y + 200), _("Best matchup"), summary.best, leaders, _)

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.176823
-Revised: 2026/10/12 21:53:37.425119
+Revised: 2026/10/13 22:54:38.005095
 """
 
 import logging
@@ -49,6 +49,21 @@ def test_setup_logging_is_idempotent_and_isolated(monkeypatch):
     assert root.level == logging.DEBUG
     assert get_logger("x").name == f"{APP_LOGGER}.x"
     setup_logging("INFO")
+
+
+@pytest.mark.regression
+def test_unknown_log_level_falls_back_instead_of_crashing(monkeypatch):
+    """LOG_LEVEL=verbose used to make setLevel raise ValueError: the app died before its first screen."""
+    monkeypatch.setenv("LOG_LEVEL", "verbose")
+    root = setup_logging()
+    tail = LogTail()
+    try:
+        with tail.attached(APP_LOGGER, level=logging.WARNING):
+            setup_logging()
+        assert root.level == logging.INFO
+        assert any("unknown log level 'VERBOSE'" in line for line in tail.lines)
+    finally:
+        setup_logging("INFO")
 
 
 def test_log_tail_collects_while_attached_and_restores_levels():

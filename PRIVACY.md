@@ -1,12 +1,12 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 11:08:24.982110 )
-[//]: # (+ Revised: 	2026/10/13 11:08:32.105423 )
+[//]: # (+ Revised: 	2026/10/13 22:53:34.010306 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Privacy policy
 
-Effective 13 October 2026. Applies to the timtapper app on Android and desktop.
+Effective 13 October 2026. Applies to the timtapper app on Android and desktop, and to its web version.
 
 ## What timtapper collects
 
@@ -16,7 +16,8 @@ no data from the app.
 ## What stays on your device
 
 The events, rounds, leaders and settings you enter are stored only in the app's own storage on your device. Uninstalling
-the app deletes them.
+the app deletes them. In the web version they are stored in that browser's own storage on your device instead, and
+clearing the site's data deletes them.
 
 ## Network requests
 
@@ -24,6 +25,9 @@ The app downloads public card data. It sends nothing about you or your matches:
 
 - **optcgapi.com**: the list of leader cards and their card images, used to keep the leader list current.
 - **onepiece.limitlesstcg.com**: the release date of each set.
+
+The web version is itself downloaded from **GitHub Pages** (ran-n.github.io) or **Codeberg Pages**
+(ran-n.codeberg.page); after that it runs entirely in your browser and sends nothing back.
 
 These sites see the request itself, as any web server does (for example your IP address). Their own privacy policies
 cover how they handle that.

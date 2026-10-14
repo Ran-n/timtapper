@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.770833
-Revised: 2026/10/13 08:59:20.909037
+Revised: 2026/10/14 07:45:08.392050
 
 Per-session app context handed to every screen: repositories, the cached
 leader catalogue, translation, notifications, preferences and navigation.
@@ -24,7 +24,7 @@ from i18n import DEFAULT_LANG, Translate, event_name_template, get_lang, set_lan
 from share.deliver import Delivery, deliver
 from stats.compute import Filters
 from ui.leader_updates import LeaderUpdater
-from ui.theme import DEFAULT_MODE, AppTheme, Scheme, apply_theme, get_theme, is_dark
+from ui.theme import DEFAULT_MODE, THEME_MODES, AppTheme, Scheme, apply_theme, get_theme, is_dark
 from ui.widgets import make_notifier
 
 _log = get_logger("ui")
@@ -77,7 +77,9 @@ class AppContext:
         set_lang(self.page, await saved_language())
         try:
             prefs = ft.SharedPreferences()
-            self.theme_mode = await prefs.get(PREF_THEME) or DEFAULT_MODE
+            mode = await prefs.get(PREF_THEME)
+            # anything else stored there (an older value, a damaged file) would leave Settings with no mode picked
+            self.theme_mode = mode if mode in THEME_MODES else DEFAULT_MODE
             self.theme = get_theme(await prefs.get(PREF_PALETTE))
         except Exception:
             _log.warning("could not read saved preferences — using defaults", exc_info=True)

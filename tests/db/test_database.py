@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.253199
-Revised: 2026/10/13 08:59:21.660533
+Revised: 2026/10/14 07:45:08.555002
 """
 
 import compileall
@@ -372,3 +372,28 @@ def test_a_migration_that_breaks_foreign_keys_commits_nothing(tmp_path):
 def test_foreign_keys_are_back_on_after_migrating(db):
     with db.engine.connect() as conn:
         assert conn.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
+
+
+def test_migrations_run_from_the_alembic_cli_too(tmp_path):
+    """`alembic upgrade` during development passes no engine: env.py opens the configured URL itself."""
+    path = tmp_path / "cli.db"
+    cfg = alembic_config()
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{path.as_posix()}")
+    command.upgrade(cfg, "head")
+    opened = Database(path)
+    try:
+        assert {"event", "match", "game"} <= set(inspect(opened.engine).get_table_names())
+    finally:
+        opened.dispose()
+
+
+def test_the_migrations_build_exactly_the_models_schema(db):
+    """A column, table, index or key added to db/models.py without a migration (or the other way round) would only
+    show up on a phone, as a crash on the first query that touches it."""
+    from alembic.autogenerate import compare_metadata
+    from alembic.migration import MigrationContext
+
+    from db.models import Base
+
+    with db.engine.connect() as connection:
+        assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []

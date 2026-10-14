@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.562044
-Revised: 2026/10/12 23:54:37.361521
+Revised: 2026/10/14 07:43:51.710205
 """
 
 import dataclasses
@@ -282,3 +282,23 @@ def test_filters_by_set():
     a, b = dataclasses.replace(ev(1, []), set_code="OP16"), dataclasses.replace(ev(2, []), set_code="OP15")
     assert filter_events([a, b], Filters(set_code="OP16")) == [a]
     assert Filters(set_code="OP16").active
+
+
+@pytest.mark.property
+@given(
+    st.lists(
+        st.tuples(
+            st.integers(1, 3), st.sampled_from(["locals", "regional"]), st.lists(st.sampled_from("WL"), max_size=5)
+        ),
+        max_size=8,
+    ),
+    st.sampled_from([None, 1, 2]),
+    st.sampled_from([None, "locals", "regional"]),
+)
+def test_property_summarizing_with_filters_is_summarizing_the_filtered_events(specs, leader, etype):
+    events = [
+        ev(i, [rnd(no, 4 + no % 3, r) for no, r in enumerate(results, 1)], leader=own, etype=kind)
+        for i, (own, kind, results) in enumerate(specs, start=1)
+    ]
+    f = Filters(own_leader_id=leader, event_type=etype)
+    assert summarize(events, f) == summarize(filter_events(events, f))

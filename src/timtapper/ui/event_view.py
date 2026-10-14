@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.952473
-Revised: 2026/10/13 14:54:42.284134
+Revised: 2026/10/13 22:53:34.326194
 
 Event screen: everything edited in place — name, type, date, standing, set,
 own leader and notes in the header; each round as an expandable tile: Swiss,
@@ -86,13 +86,18 @@ class EventScreen:
 
     # ---- persistence helpers -------------------------------------------
     def _guard(self, action: Callable[[], object]) -> bool:
-        """Run a repository call; report rejected input instead of crashing."""
+        """Run a repository call; report rejected input, or a database that failed to write, instead of crashing
+        (the transaction rolled back: nothing of the edit was stored)."""
+        _ = self.ctx._
         try:
             action()
         except EventError as exc:
             _log.warning("event %d: rejected edit: %s", self.event_id, exc)
-            _ = self.ctx._
             self.ctx.notify(_("Could not save: {error}").format(error=exc.translated(_)), error=True)
+            return False
+        except Exception as exc:
+            _log.exception("event %d: edit failed", self.event_id)
+            self.ctx.notify(_("Could not save the change ({error})").format(error=type(exc).__name__), error=True)
             return False
         return True
 

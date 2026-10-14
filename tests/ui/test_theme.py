@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:57:38.978707
-Revised: 2026/10/13 11:08:23.558628
+Revised: 2026/10/14 07:45:08.472443
 
 Themes: every palette is complete and readable, preferences round-trip, and
 appearance changes rebuild the screen.
@@ -131,6 +131,19 @@ async def test_load_prefs_unknown_theme_falls_back_to_gruvbox(ctx, monkeypatch):
     monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
     await ctx.load_prefs()
     assert ctx.theme.key == "gruvbox"
+
+
+@pytest.mark.regression
+async def test_load_prefs_unknown_mode_falls_back_to_system(ctx, monkeypatch):
+    """An unknown stored mode was kept: the page followed the system, but Settings showed no mode picked."""
+
+    class Prefs:
+        async def get(self, key):
+            return {"timtapper.theme": "auto"}.get(key)
+
+    monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
+    await ctx.load_prefs()
+    assert ctx.theme_mode == "system"
 
 
 def test_notifications_use_the_active_palette(ctx, page):

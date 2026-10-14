@@ -2,11 +2,12 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 22:20:02.105367
-Revised: 2026/10/13 11:08:23.685269
+Revised: 2026/10/14 01:08:30.048146
 
 The real app against the real optcgapi.com: a real click on Settings → Update leaders, then what the app
-stored, said and showed. Needs both the screen (desktop) and the network (live): `uv run pytest -m "desktop or
-live"` runs it, `-m "live and not desktop"` leaves it out.
+stored, said and showed, on every target. Needs the network (live) as well as the target: `uv run pytest -m live`
+runs it everywhere, `-m "live and desktop"` on one target, and the other live runs leave it out with
+`-m "live and not desktop and not web and not android"`.
 """
 
 import time
@@ -15,7 +16,7 @@ import pytest
 
 from pixels import count, find
 
-pytestmark = [pytest.mark.desktop, pytest.mark.live]
+pytestmark = pytest.mark.live
 
 UPDATE_TIMEOUT = 180  # seconds: every card list, then the portraits of leaders newer than the bundled list
 
@@ -37,8 +38,8 @@ def test_live_update_leaders_click_downloads_and_reports(app, scheme):
     img = app.scroll(shown.width / 2, shown.height / 2, 10)
     button = update_button(img, s)
     before = app.send("leaders")
-    # a bare click, not app.click(): the busy spinner keeps the screen moving, so it never settles for a capture
-    app.window.click(button.cx * app.scale, button.cy * app.scale)
+    # a bare tap, not app.click(): the busy spinner keeps the screen moving, so it never settles for a capture
+    app.tap(button.cx, button.cy)
     deadline = time.monotonic() + UPDATE_TIMEOUT
     while True:
         state = app.send("leaders")

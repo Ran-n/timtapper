@@ -68,16 +68,17 @@ markers = [
     "regression: pins a fixed bug; the docstring or a comment says what used to go wrong",
     "live: hits the real optcgapi.com and Limitless TCG (network) — kept out of the default run",
     "desktop: drives the real app window (Windows; takes over the mouse and screen) — kept out of the default run",
-    "web: drives the built web app (build/web) in headless Chrome — kept out of the default run",
+    "web: drives a built web app (build/web, build/driven/web) in headless Chrome — kept out of the default run",
+    "android: drives the driven APK (build/driven/) on an Android emulator through adb — kept out of the default run",
 ]
-addopts = "-m \"not live and not desktop and not web\""
+addopts = "-m \"not live and not desktop and not web and not android\""
 
 [tool.coverage.run]
 source = ["src/timtapper"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 99  # `uv run pytest --cov` fails below this; raise it as coverage grows, never lower it
+fail_under = 100  # `uv run pytest --cov` fails below this; raise it as coverage grows, never lower it
 
 [tool.ruff]
 src = ["src", "src/timtapper"]

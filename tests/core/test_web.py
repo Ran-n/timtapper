@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.184243
-Revised: 2026/10/13 22:03:51.184243
+Revised: 2026/10/13 22:53:34.570438
 
 The web build's browser storage (core.web.BrowserStore), against a fake of Emscripten's FS that keeps an
 "IndexedDB" copy of the mounted folder and answers syncfs on the event loop, as the browser does.
@@ -116,6 +116,24 @@ async def test_failed_save_is_logged_not_swallowed(folders, caplog):
     store.changed()  # the next commit tries again
     await store.flush()
     assert fs.syncs.count(False) == 2
+
+
+async def test_failed_save_tells_the_user(folders):
+    """Logging alone would let a browser user close the page believing the change was kept."""
+    idb, folder = folders
+    fs = FakeFS(idb)
+    store = BrowserStore(folder, fs=fs)
+    told = []
+    store.on_save_failed = lambda: told.append(True)
+    await store.open()
+    fs.fail = "quota exceeded"
+    store.changed()
+    await store.flush()
+    assert told == [True]
+    fs.fail = None
+    store.changed()
+    await store.flush()
+    assert told == [True]  # a save that works says nothing
 
 
 async def test_once_wraps_the_callback(folders):

@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.068656 )
-[//]: # (+ Revised: 	2026/10/13 22:03:51.670642 )
+[//]: # (+ Revised: 	2026/10/13 22:53:42.838183 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Features in detail
@@ -93,7 +93,8 @@ The same app runs in any modern browser at [ran-n.github.io/timtapper](https://r
 the app's Python runs in the page itself.
 
 - **Your data stays in that browser.** Events are saved to the browser's storage after every change and come back on
-  the next visit. Clearing the site's data, or a private window, deletes them: export a backup now and then.
+  the next visit. Clearing the site's data, or a private window, deletes them: export a backup now and then. If the
+  browser refuses a save (its storage is full, say), the app tells you, so you can export a backup before leaving.
 - **Sharing** opens the device's share sheet where the browser supports it, and downloads the image otherwise.
   Backups download the same way, and *Import backup* opens the browser's file picker.
 - **New sets**: the daily check works as in the app, but Limitless TCG doesn't let other sites read its pages, so a

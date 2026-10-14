@@ -2,22 +2,22 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/12 13:16:03.377682
-Revised: 2026/10/13 07:39:25.924836
+Revised: 2026/10/14 03:57:14.519956
 
 The real app, rendered: what the pixels on screen show, and what real clicks do.
 
 Each test drives the app started by the session `app` fixture (conftest.py) on
-the demo data from scripts/app_driver.py, then finds controls in the capture by
-their exact theme colours (pixels.py). Taps are real mouse clicks.
+the demo data from scripts/demo_driver.py, once per target (desktop, web, Android),
+then finds controls in the capture by their exact theme colours (pixels.py).
+Taps are real input: mouse clicks on desktop, touches in the browser and on the phone.
 """
 
 import pytest
 
 from core.card_colors import CARD_COLORS
+from locate import scroll_until
 from pixels import Blob, count, find, holes
 from ui.theme import THEMES
-
-pytestmark = pytest.mark.desktop
 
 NARROW = 360  # PHONE_WINDOW min_width in main.py: everything must still fit
 COLOR_ORDER = ("Red", "Green", "Blue", "Purple", "Black", "Yellow")
@@ -101,9 +101,14 @@ def test_portraits_are_framed_in_the_leader_colours(app, mode):
 
 # ---- event screen: die badges ----------------------------------------------------
 def test_die_faces_show_six_for_won_and_one_for_lost(app, scheme):
-    img = app.show(f"/event/{app.newest}")
+    app.show(f"/event/{app.newest}")
     s = scheme()
-    won, lost = die_faces(img, s.success), die_faces(img, s.error)
+
+    def four_rounds(shot):  # round 4 can start below the fold
+        won, lost = die_faces(shot, s.success), die_faces(shot, s.error)
+        return (won, lost) if len(won) + len(lost) == 4 else None
+
+    img, (won, lost) = scroll_until(app, four_rounds)
     assert len(won) == 2 and len(lost) == 2  # demo: rounds 1 and 4 won the roll, 2 and 3 lost it
     assert all(len(holes(img, f, s.on_accent)) == 6 for f in won)
     assert all(len(holes(img, f, s.on_accent)) == 1 for f in lost)
@@ -137,7 +142,12 @@ def test_tapping_the_die_cycles_it_on_screen_and_in_the_database(app, scheme):
 def dots(img) -> dict[str, Blob]:
     found = {}
     for name in COLOR_ORDER:
-        round_ones = [b for b in find(img, CARD_COLORS[name], tol=6, min_area=150) if abs(b.w - b.h) <= 2]
+        # filled and round: a leader's portrait frame in the list below is as square, but hollow
+        round_ones = [
+            b
+            for b in find(img, CARD_COLORS[name], tol=6, min_area=150)
+            if abs(b.w - b.h) <= 2 and b.area >= 0.6 * b.w * b.h
+        ]
         assert len(round_ones) == 1, (name, [b.box for b in round_ones])
         found[name] = round_ones[0]
     return found
@@ -268,10 +278,14 @@ def test_tapping_the_filter_button_opens_the_dropdowns_in_place(app, scheme):
     assert icon, "no filter button at the right end of the search row"
     first_pill = min(pills(img, s.tint(s.primary, 0.22)), key=lambda b: b.y0)
     try:
-        shot = app.click(min(b.x0 for b in icon) + 10, sum(b.cy for b in icon) / len(icon))
+        app.click(min(b.x0 for b in icon) + 10, sum(b.cy for b in icon) / len(icon))
         assert app.send("event_filters")["open"] is True
-        moved = min(pills(shot, s.tint(s.primary, 0.22)), key=lambda b: b.y0)
-        assert moved.y0 - first_pill.y0 >= 90  # the two dropdowns opened above the list, inline
+
+        def list_moved():  # the dropdowns open above the list, inline; on a busy machine that can lag the tap
+            first = min(pills(app.capture(), s.tint(s.primary, 0.22)), key=lambda b: b.y0)
+            return first if first.y0 - first_pill.y0 >= 90 else None
+
+        moved = app.wait_until(list_moved, what="the list moving down under the dropdowns")
         assert moved.x0 == first_pill.x0
     finally:
         app.send("show", route="/events")

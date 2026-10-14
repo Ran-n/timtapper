@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/13 22:03:52.028962
+Revised: 2026/10/13 22:53:34.489023
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
@@ -95,6 +95,10 @@ async def main(page: ft.Page) -> None:
 
     ctx = AppContext(page, db)
     await ctx.load_prefs()
+    if store is not None:
+        store.on_save_failed = lambda: ctx.notify(
+            ctx._("Could not save to this browser's storage — export a backup before closing the page"), error=True
+        )
 
     def on_disconnect(_e) -> None:
         try:

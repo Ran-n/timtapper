@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.221073
-Revised: 2026/10/13 08:59:20.685159
+Revised: 2026/10/14 07:43:51.157735
 
 Leader catalogue persistence: upsert from LeaderRecords, read as plain Leader values; the sets' release dates,
 and from them the set an event on a given day was played in.
@@ -18,7 +18,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from catalog.optcgapi import IMAGE_URL, LeaderRecord
+from catalog.optcgapi import LeaderRecord
 from core.logging import get_logger
 from core.paths import ASSETS_DIR
 from db import Database
@@ -50,10 +50,6 @@ class Leader:
         """What players call the leader, for tight rows; the full name everywhere there's room."""
         return SHORT_NAMES.get(self.name, self.name)
 
-    @property
-    def image_url(self) -> str:
-        return IMAGE_URL.format(code=self.code)
-
 
 def to_leader(row: LeaderRow) -> Leader:
     return Leader(
@@ -61,21 +57,30 @@ def to_leader(row: LeaderRow) -> Leader:
     )
 
 
-def load_bundled(path: Path = BUNDLED_LEADERS) -> list[LeaderRecord]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
+def _read_bundled(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _leaders_of(raw: dict) -> list[LeaderRecord]:
     return [LeaderRecord.from_json(item) for item in raw["leaders"]]
+
+
+def _releases_of(raw: dict) -> dict[str, dt.date]:
+    return {code: dt.date.fromisoformat(day) for code, day in raw.get("releases", {}).items()}
+
+
+def load_bundled(path: Path = BUNDLED_LEADERS) -> list[LeaderRecord]:
+    return _leaders_of(_read_bundled(path))
 
 
 def load_bundled_sources(path: Path = BUNDLED_LEADERS) -> tuple[str, ...]:
     """Set/deck ids the bundled list was built from (empty for a list built before they were recorded)."""
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    return tuple(raw.get("sources", ()))
+    return tuple(_read_bundled(path).get("sources", ()))
 
 
 def load_bundled_releases(path: Path = BUNDLED_LEADERS) -> dict[str, dt.date]:
     """Set code -> English release date, as bundled (empty for a list built before they were recorded)."""
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    return {code: dt.date.fromisoformat(day) for code, day in raw.get("releases", {}).items()}
+    return _releases_of(_read_bundled(path))
 
 
 class LeaderRepository:
@@ -166,9 +171,11 @@ class LeaderRepository:
 
 
 def install_bundled(repo: LeaderRepository, path: Path = BUNDLED_LEADERS) -> None:
-    """Bring the catalogue up to the list shipped with the app: its leaders and its sets' release dates."""
-    repo.upsert(load_bundled(path))
-    repo.set_releases(load_bundled_releases(path))
+    """Bring the catalogue up to the list shipped with the app: its leaders and its sets' release dates (the file
+    read once: this runs on every start)."""
+    raw = _read_bundled(path)
+    repo.upsert(_leaders_of(raw))
+    repo.set_releases(_releases_of(raw))
 
 
 def search(leaders: list[Leader], query: str) -> list[Leader]:

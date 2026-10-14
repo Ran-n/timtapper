@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:40.999702
-Revised: 2026/10/13 11:42:03.303659
+Revised: 2026/10/14 07:43:51.234190
 
 Backup: all events and rounds as one JSON file. Leaders are referenced by
 card code (not local DB id), so a backup restores on any install. Restoring
@@ -12,6 +12,7 @@ has been validated — a bad file never leaves the DB half-imported.
 
 import datetime as dt
 import json
+from collections.abc import Callable
 
 from sqlalchemy import delete, select
 
@@ -302,10 +303,8 @@ def parse_backup(data: bytes) -> list[dict]:
     return [_parse_event(ev, i, version) for i, ev in enumerate(raw_events, start=1)]
 
 
-def _set_id(s, code: str | None) -> int | None:
+def _set_id(s, code: str) -> int:
     """The set's id, adding the set when this install doesn't know it yet (a backup from a newer catalogue)."""
-    if code is None:
-        return None
     card_set = s.scalar(select(CardSet).where(CardSet.code == code))
     if card_set is None:
         _log.warning("unknown set %s in the backup — adding it", code)
@@ -315,11 +314,28 @@ def _set_id(s, code: str | None) -> int | None:
     return card_set.id
 
 
+def _memo(lookup: Callable[[str], int]) -> Callable[[str | None], int | None]:
+    """`lookup` asked once per code (None stays None): a backup names the same few leaders and sets in every
+    round, and one query each made a restore of a few hundred rounds wait on as many queries."""
+    ids: dict[str, int] = {}
+
+    def get(code: str | None) -> int | None:
+        if code is None:
+            return None
+        if code not in ids:
+            ids[code] = lookup(code)
+        return ids[code]
+
+    return get
+
+
 def import_backup(db: Database, data: bytes) -> int:
     """Replace all events with the backup's. Returns the number of events restored."""
     events = parse_backup(data)
     leaders = LeaderRepository(db)
     with db.session() as s:
+        leader_id = _memo(lambda code: leaders.ensure(s, code).id)
+        set_id = _memo(lambda code: _set_id(s, code))
         type_ids = {t.key: t.id for t in s.scalars(select(EventType))}
         s.execute(delete(GameRow))
         s.execute(delete(MatchRow))
@@ -329,12 +345,12 @@ def import_backup(db: Database, data: bytes) -> int:
                 name=ev["name"],
                 event_type_id=type_ids[ev["event_type"]],
                 date=ev["date"],
-                leader_id=leaders.ensure(s, ev["leader"]).id if ev["leader"] else None,
+                leader_id=leader_id(ev["leader"]),
                 notes=ev["notes"],
                 placement=ev["placement"],
                 players=ev["players"],
                 dropped=ev["dropped"],
-                set_id=_set_id(s, ev["set"]),
+                set_id=set_id(ev["set"]),
             )
             s.add(row)
             s.flush()
@@ -345,7 +361,7 @@ def import_backup(db: Database, data: bytes) -> int:
                         event_id=row.id,
                         round_no=no,
                         kind=r["kind"],
-                        opponent_leader_id=leaders.ensure(s, r["opponent"]).id if r["opponent"] else None,
+                        opponent_leader_id=leader_id(r["opponent"]),
                         best_of=r["best_of"],
                         notes=r["notes"],
                         # every game of the best-of exists, as the app keeps them; ones the file lacks stay empty

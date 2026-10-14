@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:41.873250
-Revised: 2026/10/13 08:59:20.608933
+Revised: 2026/10/13 22:57:42.101759
 
 ORM schema. BCNF: every non-key attribute depends on a whole candidate key
 and nothing else —
@@ -43,7 +43,6 @@ EVENT_TYPES = (
     "other",
 )
 RESULTS = ("W", "L")  # no draws in the OPTCG: a drawn game is a loss for both players
-ROUND_KINDS = ("swiss", "top_cut", "bye")  # a bye has no opponent and is won without playing
 EVENT_NAME_MAX = 120  # SQLite doesn't enforce String lengths, so the repository and backup import do
 # the most a placement or player count can be (the biggest events draw a few thousand): past SQLite's 64-bit
 # integers a typed or imported number would crash the write instead of being turned down

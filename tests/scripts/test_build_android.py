@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 11:04:05.049410
-Revised: 2026/10/13 22:03:52.285749
+Revised: 2026/10/14 01:08:30.325038
 
 Release Android builds: version codes, signing environment, flet command, dist names and the
 upload-key certificate check (against real keytool/jarsigner signatures for bundles and real
@@ -328,6 +328,31 @@ def test_find_apksigner_without_an_sdk_refuses(tmp_path, monkeypatch):
     monkeypatch.setattr(build_android.Path, "home", lambda: tmp_path)
     with pytest.raises(BuildError, match="no apksigner"):
         build_android.find_apksigner({"LOCALAPPDATA": str(tmp_path)})
+
+
+def _tool(home: Path, relative: str) -> Path:
+    path = home / (f"{relative}.exe" if build_android.os.name == "nt" else relative)
+    path.parent.mkdir(parents=True)
+    path.write_text("")
+    return path
+
+
+def test_sdk_tool_finds_adb_in_the_first_sdk_that_has_it(tmp_path):
+    adb = _tool(tmp_path / "sdk", "platform-tools/adb")
+    env = {"ANDROID_HOME": str(tmp_path / "empty"), "ANDROID_SDK_ROOT": str(tmp_path / "sdk")}
+    assert build_android.sdk_tool("platform-tools/adb", env) == adb
+
+
+def test_sdk_tool_without_the_tool_refuses(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_android.Path, "home", lambda: tmp_path)
+    with pytest.raises(BuildError, match="emulator"):
+        build_android.sdk_tool("emulator/emulator", {"LOCALAPPDATA": str(tmp_path)})
+
+
+def test_sdk_homes_skip_unset_variables(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_android.Path, "home", lambda: tmp_path)
+    homes = build_android.sdk_homes({"LOCALAPPDATA": str(tmp_path / "local")})
+    assert homes == [tmp_path / "Android" / "sdk", tmp_path / "local" / "Android" / "Sdk"]
 
 
 def test_main_reports_a_failed_build_and_exits_1(monkeypatch):
