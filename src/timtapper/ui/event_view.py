@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.952473
-Revised: 2026/10/13 22:53:34.326194
+Revised: 2026/10/14 13:16:03.927932
 
 Event screen: everything edited in place — name, type, date, standing, set,
 own leader and notes in the header; each round as an expandable tile: Swiss,
@@ -24,7 +24,6 @@ from events.domain import BYE, SWISS, TOP_CUT
 from events.naming import numbered
 from events.repository import Event, EventError, Round
 from i18n import UNRANKED_EVENT_TYPES, event_name_template, event_type_label
-from share import render
 from stats.compute import percent, record_of
 from ui.context import AppContext
 from ui.leader_picker import open_picker
@@ -258,6 +257,8 @@ class EventScreen:
         ]
 
     async def _share(self, _e) -> None:
+        from share import render  # PIL, only when a card is shared: it held up the web app's first screen
+
         _ = self.ctx._
         ev, leaders = self.event, self.ctx.leaders_by_id
         await self.ctx.share_file(

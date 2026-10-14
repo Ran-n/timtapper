@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.266526
-Revised: 2026/10/13 22:03:51.266526
+Revised: 2026/10/14 13:16:04.086061
 
 The web build's post-processing (scripts/build_web.py): assets added back into the Python archive, the archive
 URL versioned in index.html, the site zipped, and publishing to the `pages` branch (against local bare repos).
@@ -23,7 +23,11 @@ build_web = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(build_web)
 
 BuildError = build_web.BuildError
-INDEX = '<script>flet = { appPackageUrl: "assets/app/app.zip", noCdn: false };</script>'
+INDEX = (
+    '<base href="/timtapper/">'
+    '<script>flet = { appPackageUrl: "assets/app/app.zip", noCdn: false };'
+    'loader.load({ entrypointBaseUrl: "/timtapper/", assetBase: "/timtapper/" });</script>'
+)
 
 
 @pytest.fixture
@@ -107,21 +111,77 @@ def repo_with_remotes(tmp_path):
     return repo, remotes
 
 
+def test_built_base_is_the_flet_base_url():
+    assert build_web.BUILT_BASE == "/timtapper/"
+
+
+def test_rebase_site_moves_every_base_path(site):
+    build_web.rebase_site(site, "/")
+    html = (site / "index.html").read_text(encoding="utf-8")
+    assert "/timtapper/" not in html
+    assert '<base href="/">' in html
+    assert 'entrypointBaseUrl: "/"' in html
+    assert 'assetBase: "/"' in html
+
+
+def test_rebase_site_to_the_built_base_changes_nothing(site):
+    build_web.rebase_site(site, "/timtapper/")
+    assert (site / "index.html").read_text(encoding="utf-8") == INDEX
+
+
+def test_rebase_site_refuses_an_unknown_template(site):
+    (site / "index.html").write_text('<base href="/timtapper/">', encoding="utf-8")
+    with pytest.raises(BuildError, match="entrypointBaseUrl"):
+        build_web.rebase_site(site, "/")
+
+
+def test_prepare_for_a_custom_domain_writes_cname(site):
+    build_web.prepare_for(site, build_web.PagesHost("/", "timtapper.breren.com"))
+    assert (site / "CNAME").read_text(encoding="utf-8") == "timtapper.breren.com\n"
+    assert '<base href="/">' in (site / "index.html").read_text(encoding="utf-8")
+
+
+def test_prepare_for_a_subpath_host_leaves_the_site_alone(site):
+    build_web.prepare_for(site, build_web.PagesHost())
+    assert not (site / "CNAME").exists()
+    assert (site / "index.html").read_text(encoding="utf-8") == INDEX
+
+
+def test_github_pages_serves_the_custom_domain_and_codeberg_the_subpath():
+    hosts = build_web.PAGES_HOSTS
+    assert hosts["github"] == build_web.PagesHost("/", "timtapper.breren.com")
+    assert hosts["codeberg"] == build_web.PagesHost("/timtapper/")
+    assert set(hosts) == {"github", "codeberg"}
+
+
 def test_publish_force_pushes_one_commit_to_every_remote(site, repo_with_remotes):
     repo, remotes = repo_with_remotes
     build_web.publish(site, "1.2.0", repo=repo)
-    (site / "index.html").write_text("v2", encoding="utf-8")
+    (site / "index.html").write_text(INDEX + "<!-- v2 -->", encoding="utf-8")
     build_web.publish(site, "1.2.1", repo=repo)
     for bare in remotes.values():
         assert _git(bare, "log", "--format=%s", "pages") == "[B] web 1.2.1"  # replaced, not stacked
-        assert _git(bare, "show", "pages:index.html") == "v2"
+        assert _git(bare, "show", "pages:index.html").endswith("<!-- v2 -->")
         assert "assets/app/app.zip" in _git(bare, "ls-tree", "-r", "--name-only", "pages")
+
+
+def test_publish_prepares_each_host_and_leaves_the_build_untouched(site, repo_with_remotes):
+    repo, remotes = repo_with_remotes
+    build_web.publish(site, "1.3.0", repo=repo)
+    github = _git(remotes["github"], "show", "pages:index.html")
+    assert '<base href="/">' in github
+    assert "/timtapper/" not in github
+    assert _git(remotes["github"], "show", "pages:CNAME") == "timtapper.breren.com"
+    assert _git(remotes["codeberg"], "show", "pages:index.html") == INDEX
+    assert "CNAME" not in _git(remotes["codeberg"], "ls-tree", "--name-only", "pages")
+    assert (site / "index.html").read_text(encoding="utf-8") == INDEX  # build/web keeps /timtapper/ for the tests
+    assert not (site / "CNAME").exists()
 
 
 def test_publish_to_a_missing_remote_refuses(site, repo_with_remotes):
     repo, _ = repo_with_remotes
     with pytest.raises(BuildError, match="git remote failed"):
-        build_web.publish(site, "1.2.1", remotes=("gitlab",), repo=repo)
+        build_web.publish(site, "1.2.1", hosts={"gitlab": build_web.PagesHost()}, repo=repo)
 
 
 def test_main_reports_a_failed_build_and_exits_1(monkeypatch):
@@ -144,3 +204,36 @@ def test_main_publishes_only_when_asked(monkeypatch, argv, published):
     monkeypatch.setattr("sys.argv", ["build_web.py", *argv])
     assert build_web.main() == 0
     assert calls == ["build", *([("publish", build_web.project_version())] if published else [])]
+
+
+def _archive_with(site, names):
+    with zipfile.ZipFile(site / build_web.APP_ARCHIVE, "w", zipfile.ZIP_DEFLATED) as z:
+        for name in names:
+            z.writestr(name, name.encode())
+    return site / build_web.APP_ARCHIVE
+
+
+def test_drop_unused_takes_out_only_the_test_suites(site):
+    keep = ["main.pyc", "__pypackages__/sqlalchemy/orm/session.pyc", "__pypackages__/alembic/command.pyc"]
+    drop = ["__pypackages__/sqlalchemy/testing/fixtures.pyc", "__pypackages__/alembic/testing/env.pyc"]
+    archive = _archive_with(site, keep + drop)
+    assert build_web.drop_unused(archive) == 2
+    with zipfile.ZipFile(archive) as z:
+        assert sorted(z.namelist()) == sorted(keep)
+        assert z.read("__pypackages__/sqlalchemy/orm/session.pyc") == b"__pypackages__/sqlalchemy/orm/session.pyc"
+    assert not archive.with_name(archive.name + ".slim").exists()
+
+
+def test_drop_unused_leaves_a_clean_archive_untouched(site):
+    archive = site / build_web.APP_ARCHIVE
+    before = archive.stat().st_mtime_ns
+    assert build_web.drop_unused(archive) == 0
+    assert archive.stat().st_mtime_ns == before
+
+
+def test_finish_site_drops_the_test_suites(site, assets):
+    archive = _archive_with(site, ["main.pyc", "__pypackages__/sqlalchemy/testing/fixtures.pyc"])
+    build_web.finish_site(site, "1.2.1", assets)
+    with zipfile.ZipFile(archive) as z:
+        assert "__pypackages__/sqlalchemy/testing/fixtures.pyc" not in z.namelist()
+        assert "assets/data/leaders.json" in z.namelist()

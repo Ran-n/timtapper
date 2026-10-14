@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:19.051520
-Revised: 2026/10/14 07:43:51.078673
+Revised: 2026/10/14 13:16:03.851402
 
 Leader portraits: a small square crop of each leader card's art (the face sits
 in the upper middle of every card; a two-character card gets one strip per face,
@@ -16,13 +16,18 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import pairwise
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, UnidentifiedImageError
 
 from catalog.optcgapi import IMAGE_TIMEOUT, IMAGE_URL, client_session, is_card_code
 from core.logging import get_logger
 from core.paths import ASSETS_DIR, data_dir
+
+# PIL is imported where it's used, not here: ui.widgets imports this module for source(), and on the web loading
+# PIL's WebAssembly extensions held up the first screen though only a leader update or a share card needs them
+if TYPE_CHECKING:
+    from PIL import Image
 
 _log = get_logger("catalog.portraits")
 
@@ -109,6 +114,8 @@ def crop(card_image: bytes, faces: Faces = DEFAULT_FACE, size: int = SIZE, overl
     """Card image bytes -> a size x size WebP around `faces`, each box kept inside the card. Raises PortraitError.
     With n faces, face i fills strip i of the portrait: a (side / n) x side box centred on it, side by side.
     An `overlay` is lifted off the card first."""
+    from PIL import Image, UnidentifiedImageError
+
     try:
         img = Image.open(io.BytesIO(card_image)).convert("RGB")
     # DecompressionBombError is no OSError: uncaught, one oversized download would abort the whole leader sync
@@ -133,6 +140,8 @@ def lift_overlay(img: Image.Image, overlay: Overlay) -> Image.Image:
     """Undo a white overlay blended at `overlay.alpha` inside its boxes and letters: shown = a * 255 + (1 - a) *
     original, so original = (shown - 255 a) / (1 - a). The antialiased, JPEG-ringed border is median-filtered away.
     An opaque overlay left nothing to recover, so it's filled from the art around it instead (_fill)."""
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+
     w = img.width
     mask = Image.new("L", img.size, 0)
     draw = ImageDraw.Draw(mask)
@@ -154,6 +163,8 @@ def lift_overlay(img: Image.Image, overlay: Overlay) -> Image.Image:
 def _fill(img: Image.Image, mask: Image.Image) -> Image.Image:
     """Paint the masked pixels (grown to cover their antialiased edge) from the unmasked ones around them: blur and put
     the known pixels back, over and over, with a shrinking blur so wide strokes fill first and the seam stays soft."""
+    from PIL import Image, ImageFilter
+
     hole = mask.filter(ImageFilter.MaxFilter(5))
     out = img
     for radius in FILL_RADII:
@@ -164,6 +175,8 @@ def _fill(img: Image.Image, mask: Image.Image) -> Image.Image:
 
 def _letters(glyphs: Image.Image, width: int) -> Image.Image:
     """The glyph mask scaled to `width` (aspect kept), as a hard 0/255 mask."""
+    from PIL import Image
+
     height = max(1, round(width * glyphs.height / glyphs.width))
     scaled = glyphs.convert("L").resize((max(1, width), height), Image.Resampling.BILINEAR)
     return scaled.point(lambda v: 255 if v >= 128 else 0)

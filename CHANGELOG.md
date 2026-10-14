@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/14 10:50:14.741984 )
+[//]: # (+ Revised: 	2026/10/14 13:16:04.317670 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -9,6 +9,13 @@
 All notable changes to this project will be documented in this file.
 
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Changed
+
+- Moved the web version to timtapper.breren.com; ran-n.github.io/timtapper now redirects there, and the Codeberg mirror stays at ran-n.codeberg.page/timtapper
+- Made the web version start faster: it no longer loads the image library before the first screen, and downloads about 0.5 MB less
 
 ## [1.3.0] — 2026-10-13
 

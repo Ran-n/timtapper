@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.068656 )
-[//]: # (+ Revised: 	2026/10/13 22:53:42.838183 )
+[//]: # (+ Revised: 	2026/10/14 12:27:25.449860 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Features in detail
@@ -88,7 +88,7 @@ Leaders downloaded this way get a default upper-middle crop until a release ship
 
 ## In the browser
 
-The same app runs in any modern browser at [ran-n.github.io/timtapper](https://ran-n.github.io/timtapper/) (mirror:
+The same app runs in any modern browser at [timtapper.breren.com](https://timtapper.breren.com/) (mirror:
 [ran-n.codeberg.page/timtapper](https://ran-n.codeberg.page/timtapper/)), iPhones included. Nothing is sent anywhere:
 the app's Python runs in the page itself.
 

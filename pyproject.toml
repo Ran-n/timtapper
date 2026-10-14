@@ -45,7 +45,7 @@ description = "One Piece TCG match tracker"
 [tool.flet.app]
 path = "src/timtapper"
 
-# the web build (scripts/build_web.py) is served from <user>.github.io/timtapper/ and <user>.codeberg.page/timtapper/;
+# the web build (scripts/build_web.py) is served from <user>.codeberg.page/timtapper/ (GitHub Pages: rebased to /);
 # hash routes (#/event/1) so a reload on any screen asks a static host only for index.html
 [tool.flet.web]
 base_url = "timtapper"

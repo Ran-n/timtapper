@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.144622 )
-[//]: # (+ Revised: 	2026/10/14 10:06:55.174462 )
+[//]: # (+ Revised: 	2026/10/14 13:16:04.240980 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Development
@@ -95,15 +95,26 @@ uv run python scripts/build_web.py              # build/web + dist/timtapper-<ve
 uv run python scripts/build_web.py --publish    # ...then force-push it to the `pages` branch
 ```
 
-`flet build web` turns the app into a static site whose Python runs in the browser on Pyodide. The script fixes two
+`flet build web` turns the app into a static site whose Python runs in the browser on Pyodide. The script fixes three
 things after it: flet leaves `assets/` out of the Python archive (the app reads `leaders.json`, fonts and portraits
-from disk, so they go back in), and `index.html` asks for the archive with `?v=<version>`, so browsers fetch the new
+from disk, so they go back in), it takes SQLAlchemy's and Alembic's own test suites out of that archive (nothing in
+the app imports them; `UNUSED` in `scripts/build_web.py`), and `index.html` asks for the archive with `?v=<version>`, so browsers fetch the new
 one after a release. `[tool.flet.web]` in `pyproject.toml` sets the `/timtapper/` base path and `#` routes, so a
 reload on any screen only ever asks the host for `index.html`.
 
+Every package imported before the first screen is unpacked and compiled in the browser while the visitor waits, so
+PIL (leader updates and share cards only) is imported where it's used, not at module level in `catalog/portraits.py`
+or the share views; `tests/test_startup_imports.py` fails if it, or a library test suite, comes back into startup.
+
 `--publish` pushes the site as the single commit of the `pages` branch on `github` and `codeberg`, served at
-[ran-n.github.io/timtapper](https://ran-n.github.io/timtapper/) (Settings → Pages: branch `pages`, root) and
+[timtapper.breren.com](https://timtapper.breren.com/) and
 [ran-n.codeberg.page/timtapper](https://ran-n.codeberg.page/timtapper/). Publish after each release, from its tag.
+Codeberg serves the build as it is, under `/timtapper/`; GitHub's copy is rebased to `/` and carries a `CNAME` file
+naming the domain (`PAGES_HOSTS` in `scripts/build_web.py`). `build/web` and the release's web zip keep `/timtapper/`.
+
+GitHub Pages: Settings → Pages, branch `pages`, root, custom domain `timtapper.breren.com`, HTTPS enforced. The domain
+is a DNS-only (not proxied) Cloudflare `CNAME` from `timtapper` to `ran-n.github.io`, so GitHub can issue its
+certificate; the old `ran-n.github.io/timtapper/` redirects there.
 
 In the browser the file system is in memory: `core/web.py` mounts the data folder on IndexedDB, loads it before the
 database opens and saves it after every commit. Sharing hands the browser the file's bytes rather than its path, and

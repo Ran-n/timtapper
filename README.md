@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/14 10:10:16.952417 )
+[//]: # (+ Revised: 	2026/10/14 12:27:25.366973 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -22,7 +22,7 @@
 
 <p align="center">
   <a href="https://github.com/Ran-n/timtapper/releases/latest"><img src="https://img.shields.io/badge/Download-Android%20APK%20%C2%B7%20Windows-ea6c1a?style=for-the-badge&logo=github" alt="Download the latest release" height="40"></a>
-  <a href="https://ran-n.github.io/timtapper/"><img src="https://img.shields.io/badge/Open%20in%20browser-iPhone%20%C2%B7%20any%20device-2185d0?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Open timtapper in your browser" height="40"></a>
+  <a href="https://timtapper.breren.com/"><img src="https://img.shields.io/badge/Open%20in%20browser-iPhone%20%C2%B7%20any%20device-2185d0?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Open timtapper in your browser" height="40"></a>
 </p>
 
 <p align="center"><sub>
