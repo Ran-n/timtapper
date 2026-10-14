@@ -1,0 +1,1432 @@
+{
+ "generated": "2026-10-11",
+ "sources": [
+  "EB-01",
+  "EB-02",
+  "EB-03",
+  "OP-01",
+  "OP-02",
+  "OP-03",
+  "OP-04",
+  "OP-05",
+  "OP-06",
+  "OP-07",
+  "OP-08",
+  "OP-09",
+  "OP-10",
+  "OP-11",
+  "OP-12",
+  "OP-13",
+  "OP-16",
+  "OP-17",
+  "OP14-EB04",
+  "OP15-EB04",
+  "PRB-01",
+  "PRB-02",
+  "ST-01",
+  "ST-02",
+  "ST-03",
+  "ST-04",
+  "ST-05",
+  "ST-06",
+  "ST-07",
+  "ST-08",
+  "ST-09",
+  "ST-10",
+  "ST-11",
+  "ST-12",
+  "ST-13",
+  "ST-14",
+  "ST-15",
+  "ST-16",
+  "ST-17",
+  "ST-18",
+  "ST-19",
+  "ST-20",
+  "ST-21",
+  "ST-22",
+  "ST-23",
+  "ST-24",
+  "ST-25",
+  "ST-26",
+  "ST-27",
+  "ST-28",
+  "ST-30",
+  "ST-31",
+  "ST-32",
+  "ST-33",
+  "ST-34",
+  "ST-35",
+  "ST-36"
+ ],
+ "releases": {
+  "EB01": "2024-05-03",
+  "EB02": "2025-05-09",
+  "EB03": "2026-02-20",
+  "OP01": "2022-12-02",
+  "OP02": "2023-03-10",
+  "OP03": "2023-06-30",
+  "OP04": "2023-09-22",
+  "OP05": "2023-12-08",
+  "OP06": "2024-03-15",
+  "OP07": "2024-06-28",
+  "OP08": "2024-09-13",
+  "OP09": "2024-12-13",
+  "OP10": "2025-03-21",
+  "OP11": "2025-06-06",
+  "OP12": "2025-08-22",
+  "OP13": "2025-11-07",
+  "OP14": "2026-01-16",
+  "OP15": "2026-04-03",
+  "OP16": "2026-06-12",
+  "OP17": "2026-08-28",
+  "PRB01": "2024-11-08",
+  "PRB02": "2025-10-03",
+  "ST01": "2022-12-02",
+  "ST02": "2022-12-02",
+  "ST03": "2022-12-02",
+  "ST04": "2022-12-02",
+  "ST05": "2023-02-03",
+  "ST06": "2023-03-10",
+  "ST07": "2023-06-30",
+  "ST08": "2023-08-11",
+  "ST09": "2023-08-11",
+  "ST10": "2023-11-10",
+  "ST11": "2024-02-02",
+  "ST12": "2024-03-15",
+  "ST13": "2024-04-19",
+  "ST14": "2024-08-16",
+  "ST15": "2024-10-25",
+  "ST16": "2024-10-25",
+  "ST17": "2024-10-25",
+  "ST18": "2024-10-25",
+  "ST19": "2024-10-25",
+  "ST20": "2024-10-25",
+  "ST21": "2025-03-14",
+  "ST22": "2025-09-05",
+  "ST23": "2025-06-06",
+  "ST24": "2025-06-06",
+  "ST25": "2025-06-06",
+  "ST26": "2025-06-06",
+  "ST27": "2025-06-06",
+  "ST28": "2025-06-06",
+  "ST29": "2026-01-16",
+  "ST30": "2026-06-12",
+  "ST31": "2026-07-31",
+  "ST32": "2026-07-31",
+  "ST33": "2026-07-31",
+  "ST34": "2026-07-31",
+  "ST35": "2026-07-31",
+  "ST36": "2026-07-31"
+ },
+ "leaders": [
+  {
+   "code": "EB01-001",
+   "name": "Kouzuki Oden",
+   "set_code": "EB01",
+   "set_name": "Extra Booster: Memorial Collection",
+   "colors": [
+    "Green",
+    "Red"
+   ]
+  },
+  {
+   "code": "EB01-021",
+   "name": "Hannyabal",
+   "set_code": "EB01",
+   "set_name": "Extra Booster: Memorial Collection",
+   "colors": [
+    "Blue",
+    "Purple"
+   ]
+  },
+  {
+   "code": "EB01-040",
+   "name": "Kyros",
+   "set_code": "EB01",
+   "set_name": "Extra Booster: Memorial Collection",
+   "colors": [
+    "Black",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "EB02-010",
+   "name": "Monkey.D.Luffy",
+   "set_code": "EB02",
+   "set_name": "Extra Booster: Anime 25th Collection",
+   "colors": [
+    "Green",
+    "Purple"
+   ]
+  },
+  {
+   "code": "EB03-001",
+   "name": "Nefeltari Vivi",
+   "set_code": "EB03",
+   "set_name": "Extra Booster: One Piece Heroines Edition",
+   "colors": [
+    "Blue",
+    "Red"
+   ]
+  },
+  {
+   "code": "EB04-001",
+   "name": "Jewelry Bonney",
+   "set_code": "EB04",
+   "set_name": "Adventure on Kami's Island",
+   "colors": [
+    "Red",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP01-001",
+   "name": "Roronoa Zoro",
+   "set_code": "OP01",
+   "set_name": "Romance Dawn",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP01-002",
+   "name": "Trafalgar Law",
+   "set_code": "OP01",
+   "set_name": "Romance Dawn",
+   "colors": [
+    "Green",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP01-003",
+   "name": "Monkey.D.Luffy",
+   "set_code": "OP01",
+   "set_name": "Romance Dawn",
+   "colors": [
+    "Green",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP01-031",
+   "name": "Kouzuki Oden",
+   "set_code": "OP01",
+   "set_name": "Romance Dawn",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP01-060",
+   "name": "Donquixote Doflamingo",
+   "set_code": "OP01",
+   "set_name": "Romance Dawn",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP01-061",
+   "name": "Kaido",
+   "set_code": "OP01",
+   "set_name": "Romance Dawn",
+   "colors": [
+    "Blue",
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP01-062",
+   "name": "Crocodile",
+   "set_code": "OP01",
+   "set_name": "Romance Dawn",
+   "colors": [
+    "Blue",
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP01-091",
+   "name": "King",
+   "set_code": "OP01",
+   "set_name": "Romance Dawn",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP02-001",
+   "name": "Edward.Newgate",
+   "set_code": "OP02",
+   "set_name": "Paramount War",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP02-002",
+   "name": "Monkey.D.Garp",
+   "set_code": "OP02",
+   "set_name": "Paramount War",
+   "colors": [
+    "Red",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP02-025",
+   "name": "Kin'emon",
+   "set_code": "OP02",
+   "set_name": "Paramount War",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP02-026",
+   "name": "Sanji",
+   "set_code": "OP02",
+   "set_name": "Paramount War",
+   "colors": [
+    "Blue",
+    "Green"
+   ]
+  },
+  {
+   "code": "OP02-049",
+   "name": "Emporio.Ivankov",
+   "set_code": "OP02",
+   "set_name": "Paramount War",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP02-071",
+   "name": "Magellan",
+   "set_code": "OP02",
+   "set_name": "Paramount War",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP02-072",
+   "name": "Zephyr",
+   "set_code": "OP02",
+   "set_name": "Paramount War",
+   "colors": [
+    "Purple",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP02-093",
+   "name": "Smoker",
+   "set_code": "OP02",
+   "set_name": "Paramount War",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP03-001",
+   "name": "Portgas.D.Ace",
+   "set_code": "OP03",
+   "set_name": "Pillars of Strength",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP03-021",
+   "name": "Kuro",
+   "set_code": "OP03",
+   "set_name": "Pillars of Strength",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP03-022",
+   "name": "Arlong",
+   "set_code": "OP03",
+   "set_name": "Pillars of Strength",
+   "colors": [
+    "Green",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP03-040",
+   "name": "Nami",
+   "set_code": "OP03",
+   "set_name": "Pillars of Strength",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP03-058",
+   "name": "Iceburg",
+   "set_code": "OP03",
+   "set_name": "Pillars of Strength",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP03-076",
+   "name": "Rob Lucci",
+   "set_code": "OP03",
+   "set_name": "Pillars of Strength",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP03-077",
+   "name": "Charlotte Linlin",
+   "set_code": "OP03",
+   "set_name": "Pillars of Strength",
+   "colors": [
+    "Yellow",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP03-099",
+   "name": "Charlotte Katakuri",
+   "set_code": "OP03",
+   "set_name": "Pillars of Strength",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP04-001",
+   "name": "Nefeltari Vivi",
+   "set_code": "OP04",
+   "set_name": "Kingdoms of Intrigue",
+   "colors": [
+    "Blue",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP04-019",
+   "name": "Donquixote Doflamingo",
+   "set_code": "OP04",
+   "set_name": "Kingdoms of Intrigue",
+   "colors": [
+    "Green",
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP04-020",
+   "name": "Issho",
+   "set_code": "OP04",
+   "set_name": "Kingdoms of Intrigue",
+   "colors": [
+    "Green",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP04-039",
+   "name": "Rebecca",
+   "set_code": "OP04",
+   "set_name": "Kingdoms of Intrigue",
+   "colors": [
+    "Blue",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP04-040",
+   "name": "Queen",
+   "set_code": "OP04",
+   "set_name": "Kingdoms of Intrigue",
+   "colors": [
+    "Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP04-058",
+   "name": "Crocodile",
+   "set_code": "OP04",
+   "set_name": "Kingdoms of Intrigue",
+   "colors": [
+    "Purple",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP05-001",
+   "name": "Sabo",
+   "set_code": "OP05",
+   "set_name": "Awakening of the New Era",
+   "colors": [
+    "Red",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP05-002",
+   "name": "Belo Betty",
+   "set_code": "OP05",
+   "set_name": "Awakening of the New Era",
+   "colors": [
+    "Red",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP05-022",
+   "name": "Donquixote Rosinante",
+   "set_code": "OP05",
+   "set_name": "Awakening of the New Era",
+   "colors": [
+    "Blue",
+    "Green"
+   ]
+  },
+  {
+   "code": "OP05-041",
+   "name": "Sakazuki",
+   "set_code": "OP05",
+   "set_name": "Awakening of the New Era",
+   "colors": [
+    "Blue",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP05-060",
+   "name": "Monkey.D.Luffy",
+   "set_code": "OP05",
+   "set_name": "Awakening of the New Era",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP05-098",
+   "name": "Enel",
+   "set_code": "OP05",
+   "set_name": "Awakening of the New Era",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP06-001",
+   "name": "Uta",
+   "set_code": "OP06",
+   "set_name": "Wings of the Captain",
+   "colors": [
+    "Purple",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP06-020",
+   "name": "Hody Jones",
+   "set_code": "OP06",
+   "set_name": "Wings of the Captain",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP06-021",
+   "name": "Perona",
+   "set_code": "OP06",
+   "set_name": "Wings of the Captain",
+   "colors": [
+    "Green",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP06-022",
+   "name": "Yamato",
+   "set_code": "OP06",
+   "set_name": "Wings of the Captain",
+   "colors": [
+    "Green",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP06-042",
+   "name": "Vinsmoke Reiju",
+   "set_code": "OP06",
+   "set_name": "Wings of the Captain",
+   "colors": [
+    "Blue",
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP06-080",
+   "name": "Gecko Moria",
+   "set_code": "OP06",
+   "set_name": "Wings of the Captain",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP07-001",
+   "name": "Monkey.D.Dragon",
+   "set_code": "OP07",
+   "set_name": "500 Years in the Future",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP07-019",
+   "name": "Jewelry Bonney",
+   "set_code": "OP07",
+   "set_name": "500 Years in the Future",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP07-038",
+   "name": "Boa Hancock",
+   "set_code": "OP07",
+   "set_name": "500 Years in the Future",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP07-059",
+   "name": "Foxy",
+   "set_code": "OP07",
+   "set_name": "500 Years in the Future",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP07-079",
+   "name": "Rob Lucci",
+   "set_code": "OP07",
+   "set_name": "500 Years in the Future",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP07-097",
+   "name": "Vegapunk",
+   "set_code": "OP07",
+   "set_name": "500 Years in the Future",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP08-001",
+   "name": "Tony Tony.Chopper",
+   "set_code": "OP08",
+   "set_name": "Two Legends",
+   "colors": [
+    "Green",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP08-002",
+   "name": "Marco",
+   "set_code": "OP08",
+   "set_name": "Two Legends",
+   "colors": [
+    "Blue",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP08-021",
+   "name": "Carrot",
+   "set_code": "OP08",
+   "set_name": "Two Legends",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP08-057",
+   "name": "King",
+   "set_code": "OP08",
+   "set_name": "Two Legends",
+   "colors": [
+    "Blue",
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP08-058",
+   "name": "Charlotte Pudding",
+   "set_code": "OP08",
+   "set_name": "Two Legends",
+   "colors": [
+    "Purple",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP08-098",
+   "name": "Kalgara",
+   "set_code": "OP08",
+   "set_name": "Two Legends",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP09-001",
+   "name": "Shanks",
+   "set_code": "OP09",
+   "set_name": "Emperors in the New World",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP09-022",
+   "name": "Lim",
+   "set_code": "OP09",
+   "set_name": "Emperors in the New World",
+   "colors": [
+    "Green",
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP09-042",
+   "name": "Buggy",
+   "set_code": "OP09",
+   "set_name": "Emperors in the New World",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP09-061",
+   "name": "Monkey.D.Luffy",
+   "set_code": "OP09",
+   "set_name": "Emperors in the New World",
+   "colors": [
+    "Purple",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP09-062",
+   "name": "Nico Robin",
+   "set_code": "OP09",
+   "set_name": "Emperors in the New World",
+   "colors": [
+    "Purple",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP09-081",
+   "name": "Marshall.D.Teach",
+   "set_code": "OP09",
+   "set_name": "Emperors in the New World",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP10-001",
+   "name": "Smoker",
+   "set_code": "OP10",
+   "set_name": "Royal Blood",
+   "colors": [
+    "Green",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP10-002",
+   "name": "Caesar Clown",
+   "set_code": "OP10",
+   "set_name": "Royal Blood",
+   "colors": [
+    "Blue",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP10-003",
+   "name": "Sugar",
+   "set_code": "OP10",
+   "set_name": "Royal Blood",
+   "colors": [
+    "Purple",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP10-022",
+   "name": "Trafalgar Law",
+   "set_code": "OP10",
+   "set_name": "Royal Blood",
+   "colors": [
+    "Green",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP10-042",
+   "name": "Usopp",
+   "set_code": "OP10",
+   "set_name": "Royal Blood",
+   "colors": [
+    "Blue",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP10-099",
+   "name": "Eustass\"Captain\"Kid",
+   "set_code": "OP10",
+   "set_name": "Royal Blood",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP11-001",
+   "name": "Koby",
+   "set_code": "OP11",
+   "set_name": "A Fist of Divine Speed",
+   "colors": [
+    "Red",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP11-021",
+   "name": "Jinbe",
+   "set_code": "OP11",
+   "set_name": "A Fist of Divine Speed",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP11-022",
+   "name": "Shirahoshi",
+   "set_code": "OP11",
+   "set_name": "A Fist of Divine Speed",
+   "colors": [
+    "Green",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP11-040",
+   "name": "Monkey.D.Luffy",
+   "set_code": "OP11",
+   "set_name": "A Fist of Divine Speed",
+   "colors": [
+    "Blue",
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP11-041",
+   "name": "Nami",
+   "set_code": "OP11",
+   "set_name": "A Fist of Divine Speed",
+   "colors": [
+    "Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP11-062",
+   "name": "Charlotte Katakuri",
+   "set_code": "OP11",
+   "set_name": "A Fist of Divine Speed",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP12-001",
+   "name": "Silvers Rayleigh",
+   "set_code": "OP12",
+   "set_name": "Legacy of the Master",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP12-020",
+   "name": "Roronoa Zoro",
+   "set_code": "OP12",
+   "set_name": "Legacy of the Master",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP12-040",
+   "name": "Kuzan",
+   "set_code": "OP12",
+   "set_name": "Legacy of the Master",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP12-041",
+   "name": "Sanji",
+   "set_code": "OP12",
+   "set_name": "Legacy of the Master",
+   "colors": [
+    "Blue",
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP12-061",
+   "name": "Donquixote Rosinante",
+   "set_code": "OP12",
+   "set_name": "Legacy of the Master",
+   "colors": [
+    "Purple",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP12-081",
+   "name": "Koala",
+   "set_code": "OP12",
+   "set_name": "Legacy of the Master",
+   "colors": [
+    "Black",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP13-001",
+   "name": "Monkey.D.Luffy",
+   "set_code": "OP13",
+   "set_name": "Carrying On His Will",
+   "colors": [
+    "Green",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP13-002",
+   "name": "Portgas.D.Ace",
+   "set_code": "OP13",
+   "set_name": "Carrying On His Will",
+   "colors": [
+    "Blue",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP13-003",
+   "name": "Gol.D.Roger",
+   "set_code": "OP13",
+   "set_name": "Carrying On His Will",
+   "colors": [
+    "Purple",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP13-004",
+   "name": "Sabo",
+   "set_code": "OP13",
+   "set_name": "Carrying On His Will",
+   "colors": [
+    "Red",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP13-079",
+   "name": "Imu",
+   "set_code": "OP13",
+   "set_name": "Carrying On His Will",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP13-100",
+   "name": "Jewelry Bonney",
+   "set_code": "OP13",
+   "set_name": "Carrying On His Will",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP14-001",
+   "name": "Trafalgar Law",
+   "set_code": "OP14",
+   "set_name": "The Azure Sea's Seven",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP14-020",
+   "name": "Dracule Mihawk",
+   "set_code": "OP14",
+   "set_name": "The Azure Sea's Seven",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP14-040",
+   "name": "Jinbe",
+   "set_code": "OP14",
+   "set_name": "The Azure Sea's Seven",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP14-041",
+   "name": "Boa Hancock",
+   "set_code": "OP14",
+   "set_name": "The Azure Sea's Seven",
+   "colors": [
+    "Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP14-060",
+   "name": "Donquixote Doflamingo",
+   "set_code": "OP14",
+   "set_name": "The Azure Sea's Seven",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP14-079",
+   "name": "Crocodile",
+   "set_code": "OP14",
+   "set_name": "The Azure Sea's Seven",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP14-080",
+   "name": "Gecko Moria",
+   "set_code": "OP14",
+   "set_name": "The Azure Sea's Seven",
+   "colors": [
+    "Black",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP15-001",
+   "name": "Krieg",
+   "set_code": "OP15",
+   "set_name": "Adventure on Kami's Island",
+   "colors": [
+    "Green",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP15-002",
+   "name": "Lucy",
+   "set_code": "OP15",
+   "set_name": "Adventure on Kami's Island",
+   "colors": [
+    "Blue",
+    "Red"
+   ]
+  },
+  {
+   "code": "OP15-022",
+   "name": "Brook",
+   "set_code": "OP15",
+   "set_name": "Adventure on Kami's Island",
+   "colors": [
+    "Green",
+    "Black"
+   ]
+  },
+  {
+   "code": "OP15-039",
+   "name": "Rebecca",
+   "set_code": "OP15",
+   "set_name": "Adventure on Kami's Island",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP15-058",
+   "name": "Enel",
+   "set_code": "OP15",
+   "set_name": "Adventure on Kami's Island",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP15-098",
+   "name": "Monkey.D.Luffy",
+   "set_code": "OP15",
+   "set_name": "Adventure on Kami's Island",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP16-001",
+   "name": "Portgas.D.Ace",
+   "set_code": "OP16",
+   "set_name": "The Time of Battle",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP16-022",
+   "name": "Monkey.D.Luffy",
+   "set_code": "OP16",
+   "set_name": "The Time of Battle",
+   "colors": [
+    "Blue",
+    "Green"
+   ]
+  },
+  {
+   "code": "OP16-041",
+   "name": "Buggy",
+   "set_code": "OP16",
+   "set_name": "The Time of Battle",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP16-060",
+   "name": "Sengoku",
+   "set_code": "OP16",
+   "set_name": "The Time of Battle",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP16-079",
+   "name": "Yamato",
+   "set_code": "OP16",
+   "set_name": "The Time of Battle",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP16-080",
+   "name": "Marshall.D.Teach",
+   "set_code": "OP16",
+   "set_name": "The Time of Battle",
+   "colors": [
+    "Black",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "OP17-001",
+   "name": "Edward.Newgate",
+   "set_code": "OP17",
+   "set_name": "The World's Strongest Warriors",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "OP17-020",
+   "name": "Shanks",
+   "set_code": "OP17",
+   "set_name": "The World's Strongest Warriors",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "OP17-039",
+   "name": "Rocks.D.Xebec",
+   "set_code": "OP17",
+   "set_name": "The World's Strongest Warriors",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "OP17-058",
+   "name": "Kaido",
+   "set_code": "OP17",
+   "set_name": "The World's Strongest Warriors",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "OP17-079",
+   "name": "Monkey.D.Luffy",
+   "set_code": "OP17",
+   "set_name": "The World's Strongest Warriors",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "OP17-099",
+   "name": "Charlotte Linlin",
+   "set_code": "OP17",
+   "set_name": "The World's Strongest Warriors",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "PRB01-001",
+   "name": "Sanji",
+   "set_code": "PRB01",
+   "set_name": "Premium Booster -The Best-",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "ST01-001",
+   "name": "Monkey.D.Luffy",
+   "set_code": "ST01",
+   "set_name": "Starter Deck 1: Straw Hat Crew",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "ST02-001",
+   "name": "Eustass\"Captain\"Kid",
+   "set_code": "ST02",
+   "set_name": "Starter Deck 2: Worst Generation",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "ST03-001",
+   "name": "Crocodile",
+   "set_code": "ST03",
+   "set_name": "Starter Deck 3: The Seven Warlords of The Sea",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "ST04-001",
+   "name": "Kaido",
+   "set_code": "ST04",
+   "set_name": "Starter Deck 4: Animal Kingdom Pirates",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "ST05-001",
+   "name": "Shanks",
+   "set_code": "ST05",
+   "set_name": "Starter Deck 5: Film Edition",
+   "colors": [
+    "Purple"
+   ]
+  },
+  {
+   "code": "ST06-001",
+   "name": "Sakazuki",
+   "set_code": "ST06",
+   "set_name": "Starter Deck 6: Absolute Justice",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "ST07-001",
+   "name": "Charlotte Linlin",
+   "set_code": "ST07",
+   "set_name": "Starter Deck 7: Big Mom Pirates",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "ST08-001",
+   "name": "Monkey.D.Luffy",
+   "set_code": "ST08",
+   "set_name": "Starter Deck 8: Monkey.D.Luffy",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "ST09-001",
+   "name": "Yamato",
+   "set_code": "ST09",
+   "set_name": "Starter Deck 9: Yamato",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "ST10-001",
+   "name": "Trafalgar Law",
+   "set_code": "ST10",
+   "set_name": "Ultra Deck: The Three Captains",
+   "colors": [
+    "Purple",
+    "Red"
+   ]
+  },
+  {
+   "code": "ST10-002",
+   "name": "Monkey.D.Luffy",
+   "set_code": "ST10",
+   "set_name": "Ultra Deck: The Three Captains",
+   "colors": [
+    "Purple",
+    "Red"
+   ]
+  },
+  {
+   "code": "ST10-003",
+   "name": "Eustass\"Captain\"Kid",
+   "set_code": "ST10",
+   "set_name": "Ultra Deck: The Three Captains",
+   "colors": [
+    "Purple",
+    "Red"
+   ]
+  },
+  {
+   "code": "ST11-001",
+   "name": "Uta",
+   "set_code": "ST11",
+   "set_name": "Starter Deck 11: Uta",
+   "colors": [
+    "Green"
+   ]
+  },
+  {
+   "code": "ST12-001",
+   "name": "Roronoa Zoro & Sanji",
+   "set_code": "ST12",
+   "set_name": "Starter Deck 12: Zoro and Sanji",
+   "colors": [
+    "Blue",
+    "Green"
+   ]
+  },
+  {
+   "code": "ST13-001",
+   "name": "Sabo",
+   "set_code": "ST13",
+   "set_name": "Ultra Deck: The Three Brothers",
+   "colors": [
+    "Red",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "ST13-002",
+   "name": "Portgas.D.Ace",
+   "set_code": "ST13",
+   "set_name": "Ultra Deck: The Three Brothers",
+   "colors": [
+    "Blue",
+    "Yellow"
+   ]
+  },
+  {
+   "code": "ST13-003",
+   "name": "Monkey.D.Luffy",
+   "set_code": "ST13",
+   "set_name": "Ultra Deck: The Three Brothers",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "ST14-001",
+   "name": "Monkey.D.Luffy",
+   "set_code": "ST14",
+   "set_name": "Starter Deck 14: 3D2Y",
+   "colors": [
+    "Black"
+   ]
+  },
+  {
+   "code": "ST21-001",
+   "name": "Monkey.D.Luffy",
+   "set_code": "ST21",
+   "set_name": "Starter Deck EX: Gear 5",
+   "colors": [
+    "Red"
+   ]
+  },
+  {
+   "code": "ST22-001",
+   "name": "Ace & Newgate",
+   "set_code": "ST22",
+   "set_name": "Starter Deck 22: Ace & Newgate",
+   "colors": [
+    "Blue"
+   ]
+  },
+  {
+   "code": "ST29-001",
+   "name": "Monkey.D.Luffy",
+   "set_code": "ST29",
+   "set_name": "Starter Deck 29: Egghead",
+   "colors": [
+    "Yellow"
+   ]
+  },
+  {
+   "code": "ST30-001",
+   "name": "Luffy & Ace",
+   "set_code": "ST30",
+   "set_name": "Starter Deck EX: Luffy & Ace",
+   "colors": [
+    "Green",
+    "Red"
+   ]
+  }
+ ]
+}
