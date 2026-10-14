@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.346234
-Revised: 2026/10/14 08:10:02.410702
+Revised: 2026/10/14 16:30:40.526472
 
 The built web app (scripts/build_web.py -> build/web), served under /timtapper/ as GitHub Pages and Codeberg Pages
 serve it, driven in headless Chrome: what only a real browser shows, i.e. that the data folder survives a reload,
@@ -29,11 +29,14 @@ SITE = ROOT / "build" / "web"
 VIEWPORT = {"width": 412, "height": 892}
 BOOT_TIMEOUT = 90  # seconds: Pyodide and the app's packages load on the first visit
 STEP_TIMEOUT = 20
+SHELL = "#tt-shell"
+SHELL_TIMEOUT = 2  # seconds from opening the page to the shell on screen: no download stands in between
 NO_WEB_SHARE = "delete Navigator.prototype.share; delete Navigator.prototype.canShare;"
 
 NEW_EVENT = (325, 768)
 BACK = (28, 28)
 SHARE = (205, 469)  # on an event with no leader yet
+ADD_BYE = (205, 676)  # on an event with no rounds yet
 SETTINGS_TAB = (343, 860)
 EXPORT = (98, 481)  # after scrolling Settings down by 600
 IMPORT = (290, 481)
@@ -119,6 +122,22 @@ class WebApp:
         self.page.mouse.wheel(0, 600)
         self.page.wait_for_timeout(1500)
 
+    def glance(self) -> int:
+        """Open the start page and wait only for the shell to be painted, not for the app; returns where this visit's
+        log lines start."""
+        start = len(self.logs)
+        opened = time.monotonic()
+        self.page.goto(self.url, wait_until="commit")
+        self.wait_for("timtapper shell: painted", start, SHELL_TIMEOUT)
+        self.painted_after = time.monotonic() - opened
+        return start
+
+    def handed_over(self, start: int) -> None:
+        """Wait until the app has taken over from the shell, and the shell is gone."""
+        self.wait_for("handed over to the app", start, BOOT_TIMEOUT)
+        self.page.locator(SHELL).wait_for(state="detached", timeout=STEP_TIMEOUT * 1000)
+        self.page.wait_for_timeout(1500)  # the app settles on the screen it was sent to
+
     def close(self) -> None:
         self.context.close()
 
@@ -187,3 +206,65 @@ def test_backup_restores_in_another_browser_and_stays(playwright, base_url, tmp_
     finally:
         target.close()
     assert json.loads(again.read_text(encoding="utf-8"))["events"] == events
+
+
+# ---- the instant shell --------------------------------------------------------------
+@pytest.mark.regression
+def test_a_first_visit_shows_the_app_at_once(playwright, base_url, tmp_path):
+    """The page stayed blank for seconds while Pyodide and the app's packages loaded: it now paints the empty app
+    first, from index.html alone, and the app takes over when it has started."""
+    app = WebApp(playwright, tmp_path / "profile", base_url)
+    try:
+        start = app.glance()
+        shell = app.page.locator(SHELL)
+        assert "No events yet" in shell.inner_text() and "New event" in shell.inner_text()
+        assert app.painted_after < SHELL_TIMEOUT
+        app.handed_over(start)
+        assert app.logs.index(next(x for x in app.logs[start:] if "shell: painted" in x)) < app.logs.index(
+            next(x for x in app.logs[start:] if "timtapper.main: started" in x)
+        )
+    finally:
+        app.close()
+
+
+def test_a_repeat_visit_shows_your_events_and_opens_them_at_once(playwright, base_url, tmp_path):
+    app = WebApp(playwright, tmp_path / "profile", base_url)
+    try:
+        app.open()
+        app.tap(NEW_EVENT, then="event 1 created")
+        saved = len(app.logs)
+        app.tap(ADD_BYE, then="round 1 added")
+        app.tap(BACK)  # leaving the new event keeps it: now the shell shows it too
+        app.wait_for("web shell: 4 screens", saved)
+        start = app.glance()
+        shell = app.page.locator(SHELL)
+        assert "Local #1" in shell.inner_text()
+        shell.get_by_text("Local #1").click()  # in the shell: opens at once, no app needed
+        assert "Bye" in shell.inner_text() and "Automatic win" in shell.inner_text()
+        assert app.page.url.endswith("#/event/1")
+        app.handed_over(start)
+        assert any("ready at /event/1" in x for x in app.logs[start:]) or app.page.url.endswith("#/event/1")
+    finally:
+        app.close()
+
+
+def test_tabs_and_new_event_in_the_shell_reach_the_app(playwright, base_url, tmp_path):
+    app = WebApp(playwright, tmp_path / "profile", base_url)
+    try:
+        app.open()  # a first visit, so the next has a saved shell
+        app.wait_for("web shell: 3 screens")
+        start = app.glance()
+        shell = app.page.locator(SHELL)
+        shell.get_by_text("Stats", exact=True).click()
+        assert "Win rate" in shell.inner_text() and app.page.url.endswith("#/stats")
+        app.handed_over(start)
+        assert app.page.url.endswith("#/stats")
+
+        start = app.glance()
+        app.page.locator(SHELL).get_by_text("New event").click()  # only the app can make one: "Opening…"
+        assert app.page.locator(SHELL).get_by_text("Opening…").is_visible()
+        app.handed_over(start)
+        app.wait_for("new event 1 from the events tab", start)
+        assert app.page.url.endswith("#/event/1")
+    finally:
+        app.close()

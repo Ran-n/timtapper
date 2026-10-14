@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.981408 )
-[//]: # (+ Revised: 	2026/10/14 14:31:33.321063 )
+[//]: # (+ Revised: 	2026/10/14 17:09:23.446800 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Changelog
@@ -9,6 +9,22 @@
 All notable changes to this project will be documented in this file.
 
 This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- Added an instant start to the web version: the page shows your events, each event's rounds and the Stats and Settings tabs the moment it opens, from a copy the app saves after every change, while the app starts behind it; edits wait for the app ("Opening…"), which takes over on the screen you're on, and *New event* opens the new event as soon as it's ready
+- Added a GitLab Pages mirror of the web version at ran-n.gitlab.io/timtapper
+
+### Changed
+
+- Made the web version's first start download the app, Python and Flutter side by side instead of one after another: about 8 s instead of 15 on a fast line
+- Dropped the Windows launchers from the web version's Python archive, so every visitor downloads 0.3 MB less
+
+### Fixed
+
+- Fixed the web version saving its whole database to the browser's storage after every read, not only after changes
 
 ## [1.3.1] — 2026-10-14
 

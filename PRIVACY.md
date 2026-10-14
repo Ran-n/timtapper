@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 11:08:24.982110 )
-[//]: # (+ Revised: 	2026/10/14 12:27:25.620836 )
+[//]: # (+ Revised: 	2026/10/14 17:09:23.638023 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Privacy policy
@@ -26,8 +26,9 @@ The app downloads public card data. It sends nothing about you or your matches:
 - **optcgapi.com**: the list of leader cards and their card images, used to keep the leader list current.
 - **onepiece.limitlesstcg.com**: the release date of each set.
 
-The web version is itself downloaded from **GitHub Pages** (timtapper.breren.com) or **Codeberg Pages**
-(ran-n.codeberg.page); after that it runs entirely in your browser and sends nothing back.
+The web version is itself downloaded from **GitHub Pages** (timtapper.breren.com), **Codeberg Pages**
+(ran-n.codeberg.page) or **GitLab Pages** (ran-n.gitlab.io); after that it runs entirely in your browser and sends
+nothing back.
 
 These sites see the request itself, as any web server does (for example your IP address). Their own privacy policies
 cover how they handle that.

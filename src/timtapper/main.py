@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/13 22:53:34.489023
+Revised: 2026/10/14 16:30:39.441359
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
@@ -12,19 +12,22 @@ build) the data folder is loaded from and saved to the browser's storage.
 """
 
 from collections.abc import Callable
+from functools import partial
+from pathlib import Path
 
 import flet as ft
 
 from catalog.repository import LeaderRepository, install_bundled
 from core.logging import APP_LOGGER, LogTail, get_logger, setup_logging
 from core.paths import ASSETS_DIR, data_dir, db_path
-from core.web import IS_WEB, BrowserStore
+from core.web import IS_WEB, BrowserStore, ShellStore
 from db import Database
 from db.database import MIGRATIONS_DIR
 from db.diagnostics import startup_report
 from i18n import set_lang, tr
 from ui.app import install_routing
 from ui.context import AppContext, saved_language
+from ui.shell import ShellWriter
 
 _log = get_logger("main")
 
@@ -44,8 +47,10 @@ def shape_window(page: ft.Page) -> None:
     page.update()
 
 
-def open_database(on_commit: Callable[[], None] | None = None) -> Database:
-    db = Database(db_path(), on_commit=on_commit)
+def open_database(on_commit: Callable[[], None] | None = None, path: Path | None = None) -> Database:
+    """The app's database (at `path`: elsewhere than the data folder, as the web build's empty one), migrated, with
+    the bundled leaders in."""
+    db = Database(path or db_path(), on_commit=on_commit)
     db.migrate()
     install_bundled(LeaderRepository(db))
     return db
@@ -55,6 +60,38 @@ async def open_browser_store() -> BrowserStore:
     store = BrowserStore(data_dir())
     await store.open()
     return store
+
+
+def _run_all(hooks: list[Callable[[], None]]) -> None:
+    for hook in hooks:
+        hook()
+
+
+def _and_then(first: Callable[..., None] | None, then: Callable[[], None]) -> Callable[..., None]:
+    """A handler that runs `first` (if any) with whatever it's given, then `then`."""
+
+    def both(*args) -> None:
+        if first is not None:
+            first(*args)
+        then()
+
+    return both
+
+
+def start_web_shell(
+    ctx: AppContext, shell: ShellWriter, shell_store: ShellStore, on_commit: list[Callable[[], None]]
+) -> None:
+    """Tell the page the app is on screen, and keep the shell it paints on the next visit up to date: after every
+    change to the data, the language or the theme, on every screen change (leaving a new event's screen keeps it or
+    drops it, without a commit when kept), and once now (the leaders may have changed since)."""
+    on_commit.append(shell.schedule)
+    ctx.on_appearance_change = _and_then(ctx.on_appearance_change, shell.schedule)
+    ctx.page.on_route_change = _and_then(ctx.page.on_route_change, shell.schedule)
+    try:
+        shell_store.announce_ready(ctx.page.route)
+    except Exception:
+        _log.exception("could not tell the page the app is ready; its shell stays until reloaded")
+    shell.schedule()
 
 
 def show_startup_failure(page: ft.Page, exc: Exception, tail: LogTail) -> None:
@@ -83,10 +120,13 @@ async def main(page: ft.Page) -> None:
     page.title = "timtapper"
     shape_window(page)
     tail = LogTail()
+    on_commit: list[Callable[[], None]] = []  # the web build's: save to the browser's storage, refresh the shell
     try:
         with tail.attached("alembic", APP_LOGGER):
             store = await open_browser_store() if IS_WEB else None
-            db = open_database(store.changed if store else None)
+            if store is not None:
+                on_commit.append(store.changed)
+            db = open_database(partial(_run_all, on_commit) if store else None)
     except Exception as exc:
         _log.exception("could not open the database")
         set_lang(page, await saved_language())
@@ -100,12 +140,17 @@ async def main(page: ft.Page) -> None:
             ctx._("Could not save to this browser's storage — export a backup before closing the page"), error=True
         )
 
+    shell_store = ShellStore() if store is not None else None
+    shell = ShellWriter(ctx, db, shell_store) if shell_store is not None else None
+
     def on_disconnect(_e) -> None:
         try:
             ctx.drop_untouched_draft()
         except Exception:
             _log.exception("could not drop the untouched draft event")
         finally:
+            if shell is not None:
+                shell.close()
             db.dispose()  # whatever happened above, the database is closed
 
     page.on_disconnect = on_disconnect
@@ -113,6 +158,8 @@ async def main(page: ft.Page) -> None:
     route_change = install_routing(ctx)
     _log.info("started (%d leaders, db %s)", len(ctx.leaders), db.path)
     route_change()
+    if shell is not None:
+        start_web_shell(ctx, shell, shell_store, on_commit)
     page.run_task(ctx.leader_updates.run_if_due)
 
 

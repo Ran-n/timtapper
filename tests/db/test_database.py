@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.253199
-Revised: 2026/10/14 07:45:08.555002
+Revised: 2026/10/14 16:30:40.438423
 """
 
 import compileall
@@ -397,3 +397,47 @@ def test_the_migrations_build_exactly_the_models_schema(db):
 
     with db.engine.connect() as connection:
         assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+
+
+# ---- telling the web build about changes --------------------------------------------
+@pytest.fixture
+def watched(tmp_path):
+    commits = []
+    db = Database(tmp_path / "watched.db", on_commit=lambda: commits.append(1))
+    db.migrate()
+    assert commits  # the migrations changed the file
+    commits.clear()
+    yield db, commits
+    db.dispose()
+
+
+@pytest.mark.regression
+def test_reads_are_no_change(watched):
+    """Every read commits its session, and each commit saved the whole file to the browser's storage again (and,
+    with the web shell, scheduled a refresh): only a transaction that wrote is a change."""
+    db, commits = watched
+    with db.session() as session:
+        session.execute(text("SELECT 1"))
+        session.execute(text("PRAGMA foreign_keys"))
+    assert commits == []
+
+
+def test_a_write_is_a_change_once(watched):
+    db, commits = watched
+    with db.session() as session:
+        session.execute(text("CREATE TABLE probe (x INTEGER)"))
+        session.execute(text("INSERT INTO probe VALUES (1)"))
+    assert commits == [1]
+    with db.session() as session:  # the next read on the same pooled connection starts clean
+        session.execute(text("SELECT * FROM probe"))
+    assert commits == [1]
+
+
+def test_a_rolled_back_write_is_no_change(watched):
+    db, commits = watched
+    with pytest.raises(RuntimeError), db.session() as session:
+        session.execute(text("CREATE TABLE probe (x INTEGER)"))
+        raise RuntimeError("undo")
+    with db.session() as session:
+        session.execute(text("SELECT 1"))
+    assert commits == []

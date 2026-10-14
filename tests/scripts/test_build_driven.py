@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 23:45:47.553307
-Revised: 2026/10/14 01:08:30.411950
+Revised: 2026/10/14 16:30:40.155210
 
 The driven builds (scripts/build_driven.py): the staged project, the flet commands for the site and the APK,
 where each lands, and that the APK never gets the upload key.
@@ -128,3 +128,14 @@ def test_main_builds_both_targets_by_default(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["build_driven.py"])
     assert build_driven.main() == 0
     assert built == ["web", "apk"]
+
+
+def test_the_driven_web_build_goes_without_the_shell(monkeypatch, tmp_path):
+    """Nothing in the driven app tells the shell it's ready, so the shell would cover it for good."""
+    calls = []
+    monkeypatch.setattr(build_driven, "OUT", tmp_path)
+    monkeypatch.setattr(build_driven, "stage", lambda: tmp_path / "stage")
+    monkeypatch.setattr(build_driven.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(build_driven, "finish_site", lambda site, version, **kw: calls.append(kw))
+    assert build_driven.build("web") == tmp_path / "web"
+    assert calls == [{"shell": False}]

@@ -1,0 +1,84 @@
+/* The web shell (shell.js): a read-only copy of the app's screens, painted before the app is ready. Sizes follow
+   Flutter's Material 3 defaults, as the app's own controls get them. */
+@font-face { font-family: "TtPoppins"; src: url("fonts/Poppins-Regular.ttf"); font-display: swap; }
+@font-face { font-family: "TtPoppinsSemi"; src: url("fonts/Poppins-SemiBold.ttf"); font-display: swap; }
+@font-face { font-family: "TtPoppinsHeavy"; src: url("fonts/Poppins-ExtraBold.ttf"); font-display: swap; }
+@font-face { font-family: "TtIcons"; src: url("assets/fonts/MaterialIcons-Regular.otf"); font-display: block; }
+
+#tt-shell {
+  position: fixed; inset: 0; z-index: 2147483647; display: flex; flex-direction: column;
+  font: 14px/1.43 "TtPoppins", system-ui, sans-serif; color: var(--fg); background: var(--bg);
+  -webkit-tap-highlight-color: transparent; user-select: none; transition: opacity .2s ease;
+  overflow: hidden;
+}
+#tt-shell.tt-gone { opacity: 0; pointer-events: none; }
+#tt-shell * { box-sizing: border-box; min-width: 0; }
+.tt-semi { font-family: "TtPoppinsSemi", "TtPoppins", system-ui, sans-serif; }
+.tt-heavy { font-family: "TtPoppinsHeavy", "TtPoppins", system-ui, sans-serif; }
+.tt-ic {
+  font-family: "TtIcons"; font-style: normal; font-weight: normal; line-height: 1; display: inline-flex;
+  align-items: center; justify-content: center; flex: none; overflow: hidden; -webkit-font-smoothing: antialiased;
+}
+
+.tt-bar { flex: none; height: 56px; display: flex; align-items: center; background: var(--bg); padding-right: 4px; }
+.tt-bar-title { flex: 1; padding: 0 16px; font-size: 22px; line-height: 1.27; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt-bar-lead { flex: none; display: flex; align-items: center; justify-content: center; height: 100%; }
+.tt-body { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; }
+.tt-nav { flex: none; height: 80px; display: flex; background: var(--nav); }
+.tt-dest { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
+.tt-dest-ind { width: 64px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; }
+.tt-dest-label { font-size: 12px; line-height: 1.33; color: var(--muted); }
+.tt-dest.tt-on .tt-dest-ind { background: var(--indicator); }
+.tt-dest.tt-on .tt-dest-label { color: var(--fg); }
+.tt-fab {
+  position: absolute; right: 16px; bottom: 96px; height: 56px; border-radius: 18px; display: flex; align-items: center;
+  gap: 8px; padding: 0 20px 0 16px; background: var(--primary); color: var(--bg); cursor: pointer;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, .25);
+}
+.tt-fab.tt-nonav { bottom: 16px; }
+
+.tt-row { display: flex; flex-direction: row; }
+.tt-col { display: flex; flex-direction: column; }
+.tt-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tt-field {
+  position: relative; border: 1px solid var(--outline); border-radius: 4px; min-height: 52px; display: flex;
+  align-items: center; gap: 12px; padding: 0 12px 0 16px; font-size: 16px;
+}
+/* Flutter's compact density on the web: a dense text field is 40 px tall, a dense dropdown 48 */
+.tt-field.tt-dense { min-height: 40px; padding-left: 12px; }
+.tt-field.tt-dense.tt-menu { min-height: 48px; }
+.tt-field.tt-lead { padding-left: 0; gap: 4px; }
+#tt-shell .tt-field-lead { flex: none; min-width: 44px; display: flex; align-items: center; justify-content: center; }
+.tt-field-label {
+  position: absolute; left: 12px; top: 0; transform: translateY(-50%); padding: 0 4px; font-size: 12px;
+  line-height: 1.33; color: var(--muted); background: var(--fieldbg, var(--bg)); white-space: nowrap;
+}
+.tt-field-placeholder { color: var(--muted); }
+.tt-field-value { flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 0; }
+.tt-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; border-radius: 14px;
+  padding: 0 24px; font-size: 14px; white-space: nowrap; cursor: pointer; flex: none;
+}
+.tt-btn.tt-has-icon { padding-left: 16px; }
+.tt-iconbtn { width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; flex: none; cursor: pointer; }
+.tt-switch { display: inline-flex; align-items: center; gap: 12px; flex: none; }
+.tt-track { width: 52px; height: 32px; border-radius: 16px; border: 2px solid var(--outline); background: var(--track); position: relative; flex: none; }
+.tt-thumb { position: absolute; top: 50%; left: 6px; width: 16px; height: 16px; border-radius: 50%; transform: translateY(-50%); background: var(--outline); }
+.tt-switch.tt-on .tt-track { background: var(--primary); border-color: var(--primary); }
+.tt-switch.tt-on .tt-thumb { left: 22px; width: 24px; height: 24px; background: var(--bg); }
+.tt-seg { display: flex; height: 32px; border: 1px solid var(--outline); border-radius: 20px; overflow: hidden; }
+.tt-seg > div { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; font-size: 14px; white-space: nowrap; }
+.tt-seg > div + div { border-left: 1px solid var(--outline); }
+.tt-seg > .tt-on { background: var(--secondarycontainer); }
+.tt-progress { position: relative; overflow: hidden; }
+.tt-progress > div { position: absolute; left: 0; top: 0; bottom: 0; }
+.tt-tap { cursor: pointer; }
+
+.tt-opening {
+  position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); display: none; align-items: center; gap: 10px;
+  padding: 10px 18px; border-radius: 99px; background: var(--fg); color: var(--bg); font-size: 14px; white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .3);
+}
+#tt-shell.tt-busy .tt-opening { display: flex; }
+.tt-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: tt-spin .8s linear infinite; }
+@keyframes tt-spin { to { transform: rotate(360deg); } }

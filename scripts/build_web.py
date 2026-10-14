@@ -2,28 +2,35 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.026136
-Revised: 2026/10/14 13:16:03.771926
+Revised: 2026/10/14 16:30:39.904867
 
 Build the web version (the app's Python on Pyodide, in the browser) into build/web and dist/, and optionally
-publish it to GitHub Pages and Codeberg Pages:
+publish it to GitHub Pages, GitLab Pages and Codeberg Pages:
 
     uv run python scripts/build_web.py              # build/web + dist/timtapper-<version>-web.zip
     uv run python scripts/build_web.py --publish    # ...then force-push the site to the `pages` branch
 
-Three fixes on top of `flet build web`:
+Five changes on top of `flet build web`:
 - flet leaves assets/ out of the Python archive (the browser gets those files over HTTP), but the app reads
   leaders.json, fonts and portraits from disk, so they're added back into assets/app/app.zip;
-- the test-suite packages of SQLAlchemy and Alembic, which nothing in the app imports, are taken out of it, so every
-  visitor downloads and unpacks less before the app starts;
-- index.html asks for the archive with ?v=<version>, so a browser holding an older copy fetches the new one.
+- files nothing in the browser uses (SQLAlchemy's and Alembic's test suites, the Windows launchers in bin/) are
+  taken out of it, so every visitor downloads and unpacks less before the app starts;
+- index.html asks for the archive with ?v=<version>, so a browser holding an older copy fetches the new one;
+- index.html preloads the archive and the Pyodide runtime: flet's loader asks for Pyodide only once Flutter has
+  started, and for the archive only once Pyodide has, so the three downloads ran one after the other;
+- index.html paints the app's screens the moment it opens (scripts/shell/): what the app saved on the last visit, or
+  on a first one the empty app, built here; Python takes over when it has started.
 
 The base path (/timtapper/) and hash routes come from [tool.flet.web] in pyproject.toml. That is where Codeberg Pages
-serves it (ran-n.codeberg.page/timtapper/); GitHub Pages serves it at the root of its own domain
-(timtapper.breren.com), so its copy is rebased to / and carries a CNAME file naming the domain.
+and GitLab Pages serve it (ran-n.codeberg.page/timtapper/, ran-n.gitlab.io/timtapper/; GitLab through the CI job its
+branch carries); GitHub Pages serves it at the root of its own domain (timtapper.breren.com), so its copy is rebased
+to / and carries a CNAME file naming the domain.
 """
 
 import argparse
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -44,22 +51,58 @@ ASSETS = ROOT / "src" / "timtapper" / "assets"
 APP_ARCHIVE = Path("assets") / "app" / "app.zip"
 ARCHIVE_URL = 'appPackageUrl: "assets/app/app.zip"'
 PAGES_BRANCH = "pages"
-# packages in the archive that only the libraries' own test suites import
-UNUSED = ("__pypackages__/sqlalchemy/testing/", "__pypackages__/alembic/testing/")
+# files in the archive nothing in the browser uses: what only the libraries' own test suites import, and the
+# console launchers (alembic.exe, flet.exe...) the packages install
+UNUSED = ("__pypackages__/sqlalchemy/testing/", "__pypackages__/alembic/testing/", "__pypackages__/bin/")
+PYODIDE_URL = re.compile(r'pyodideUrl: "(?P<dir>[^"]+/)pyodide\.mjs"')
+# what Pyodide's loader fetches before Python can run: the WebAssembly runtime and the standard library
+PYODIDE_FILES = ("pyodide.asm.wasm", "python_stdlib.zip")
+PRELOAD_AFTER = '<meta charset="UTF-8">'
+SHELL_DIR = ROOT / "scripts" / "shell"
+SHELL_AFTER = "<body>"
+APP_SOURCE = ROOT / "src" / "timtapper"
+ICON_USE = re.compile(r"\bft\.Icons\.([A-Z0-9_]+)\b")
+ICON_DEF = re.compile(r"static const IconData (\w+) = IconData\(\s*0x([0-9a-fA-F]+)")
+# what the shell draws itself: a pushed screen's back arrow, a dropdown's arrow, a selected segment's check
+SHELL_ICONS = ("arrow_back", "arrow_drop_down", "check")
+SHELL_BLOCK = re.compile(r"\n<!-- timtapper shell -->.*?<!-- /timtapper shell -->\n", re.DOTALL)
 _FLET_WEB = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["flet"]["web"]
 BUILT_BASE = f"/{_FLET_WEB['base_url']}/"
 BASE_MARKERS = ('<base href="{}">', 'entrypointBaseUrl: "{}"', 'assetBase: "{}"')  # where flet writes it in index.html
 
 
+# GitLab Pages serves only what a CI job named `pages` publishes, so GitLab's `pages` branch carries this job too
+GITLAB_CI = """\
+# the built site (scripts/build_web.py --publish), published by GitLab Pages as it is
+pages:
+  pages: true
+  image: busybox
+  script:
+    - mkdir .public
+    - cp -r $(ls -A | grep -vx -e .public -e .git -e .gitlab-ci.yml) .public/
+    - mv .public public
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == "pages"
+"""
+
+
 @dataclass(frozen=True)
 class PagesHost:
-    """How one static host serves the site: under `base`, and on its own `domain` (written to CNAME) if it has one."""
+    """How one static host serves the site: under `base`, on its own `domain` (written to CNAME) if it has one, and
+    through a GitLab CI `pages` job if `ci_job`."""
 
     base: str = BUILT_BASE
     domain: str | None = None
+    ci_job: bool = False
 
 
-PAGES_HOSTS = {"github": PagesHost("/", "timtapper.breren.com"), "codeberg": PagesHost()}
+PAGES_HOSTS = {
+    "github": PagesHost("/", "timtapper.breren.com"),
+    "gitlab": PagesHost(ci_job=True),
+    "codeberg": PagesHost(),
+}
 
 _log = get_logger("scripts.build_web")
 
@@ -101,12 +144,127 @@ def version_archive_url(index: Path, version: str) -> None:
     index.write_text(html.replace(ARCHIVE_URL, f'appPackageUrl: "assets/app/app.zip?v={version}"'), encoding="utf-8")
 
 
-def finish_site(site: Path, version: str, assets: Path = ASSETS) -> None:
+def add_preloads(index: Path, version: str) -> list[str]:
+    """Make index.html start downloading the Python archive and the Pyodide runtime as the page opens, beside Flutter.
+    The worker fetches each with a plain fetch(), which the preloads match (as="fetch", crossorigin), so it gets the
+    browser's copy rather than downloading it again. Returns the preloaded URLs."""
+    html = index.read_text(encoding="utf-8")
+    pyodide = PYODIDE_URL.search(html)
+    if pyodide is None or PRELOAD_AFTER not in html:
+        raise BuildError(f"{index.name} has no pyodideUrl or charset tag where expected: flet's web template changed")
+    urls = [f"assets/app/app.zip?v={version}", *(pyodide["dir"] + name for name in PYODIDE_FILES)]
+    links = "".join(f'\n  <link rel="preload" href="{url}" as="fetch" crossorigin>' for url in urls)
+    index.write_text(html.replace(PRELOAD_AFTER, PRELOAD_AFTER + links, 1), encoding="utf-8")
+    return urls
+
+
+def icon_names(source: Path = APP_SOURCE) -> set[str]:
+    """Every Material icon the app's code names (ft.Icons.ADD -> "add"), and the shell's own."""
+    names = set(SHELL_ICONS)
+    for path in source.rglob("*.py"):
+        names.update(m.lower() for m in ICON_USE.findall(path.read_text(encoding="utf-8")))
+    return names
+
+
+def flutter_icons() -> Path:
+    """Flutter's icon table, in the SDK flet builds with."""
+    import flet.version
+    from flet_cli.utils.flutter import get_flutter_dir
+
+    path = Path(get_flutter_dir(flet.version.flutter_version)) / "packages/flutter/lib/src/material/icons.dart"
+    if not path.is_file():
+        raise BuildError(f"no {path}: build once with `flet build web` so flet installs its Flutter SDK")
+    return path
+
+
+def icon_codepoints(names: set[str], icons_dart: Path) -> dict[str, int]:
+    """Each icon's codepoint in Flutter's MaterialIcons font, which the site already serves."""
+    table = {name: int(code, 16) for name, code in ICON_DEF.findall(icons_dart.read_text(encoding="utf-8"))}
+    missing = sorted(names - table.keys())
+    if missing:
+        raise BuildError(f"{icons_dart.name} has no {', '.join(missing)}")
+    return {name: table[name] for name in sorted(names)}
+
+
+def first_visit_shells() -> dict[str, dict]:
+    """The shell a first visit paints, in the light and dark palette: the screens of an empty app, built from an
+    empty database in a scratch data folder (building screens looks for downloaded portraits there)."""
+    from i18n import DEFAULT_LANG
+    from main import open_database
+    from ui.shell import default_documents
+    from ui.theme import get_theme
+
+    with tempfile.TemporaryDirectory() as tmp:
+        saved = os.environ.get("FLET_APP_STORAGE_DATA")
+        os.environ["FLET_APP_STORAGE_DATA"] = tmp
+        try:
+            db = open_database(path=Path(tmp) / "shell.db")
+            try:
+                docs = default_documents(db, get_theme(None), DEFAULT_LANG)
+            finally:
+                db.dispose()
+        finally:
+            if saved is None:
+                os.environ.pop("FLET_APP_STORAGE_DATA", None)
+            else:
+                os.environ["FLET_APP_STORAGE_DATA"] = saved
+    return {name: json.loads(text) for name, text in docs.items()}
+
+
+def shell_config() -> dict:
+    """What shell.js reads from window.TIMTAPPER_SHELL: where the app keeps the shell, how it says it's ready, the
+    icons' codepoints and the first-visit shells."""
+    from core import web
+    from ui import shell
+
+    return {
+        "version": shell.VERSION,
+        "db": web.SHELL_DB,
+        "store": web.SHELL_STORE,
+        "key": web.SHELL_KEY,
+        "channel": web.SHELL_CHANNEL,
+        "ready": web.SHELL_READY,
+        "icons": icon_codepoints(icon_names(), flutter_icons()),
+        "defaults": first_visit_shells(),
+    }
+
+
+def add_shell(index: Path, config: dict, shell_dir: Path = SHELL_DIR) -> None:
+    """Paint the shell from index.html itself, first thing in <body>: no request stands between opening the page and
+    seeing the app. A shell already there is replaced."""
+    html = SHELL_BLOCK.sub("", index.read_text(encoding="utf-8"))
+    if SHELL_AFTER not in html:
+        raise BuildError(f"{index.name} has no {SHELL_AFTER}: flet's web template changed")
+    data = json.dumps(config, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    css = (shell_dir / "shell.css").read_text(encoding="utf-8")
+    js = (shell_dir / "shell.js").read_text(encoding="utf-8")
+    block = (
+        f"\n<!-- timtapper shell -->\n<style>{css}</style>\n<script>window.TIMTAPPER_SHELL = {data};</script>\n"
+        f"<script>{js}</script>\n<!-- /timtapper shell -->\n"
+    )
+    index.write_text(html.replace(SHELL_AFTER, SHELL_AFTER + block, 1), encoding="utf-8")
+
+
+def finish_site(
+    site: Path, version: str, assets: Path = ASSETS, *, shell: bool = True, config: dict | None = None
+) -> None:
+    """`shell`: paint the shell, from `config` (shell_config() when not given). The driven test builds go without
+    it: nothing in them tells it the app is ready, and they test the app itself."""
     dropped = drop_unused(site / APP_ARCHIVE)
     _log.info("dropped %d unused library files from the Python archive", dropped)
     added = add_assets(site / APP_ARCHIVE, assets)
     _log.info("added %d asset files to the Python archive", added)
     version_archive_url(site / "index.html", version)
+    _log.info("preloading %s", ", ".join(add_preloads(site / "index.html", version)))
+    if not shell:
+        return
+    config = config if config is not None else shell_config()
+    add_shell(site / "index.html", config)
+    _log.info(
+        "painting the shell first (%d icons, first-visit shells %s)",
+        len(config["icons"]),
+        ", ".join(config["defaults"]),
+    )
     (site / ".nojekyll").touch()  # GitHub Pages: serve the files as they are
 
 
@@ -128,6 +286,8 @@ def prepare_for(site: Path, host: PagesHost) -> None:
     rebase_site(site, host.base)
     if host.domain:
         (site / "CNAME").write_text(f"{host.domain}\n", encoding="utf-8")
+    if host.ci_job:
+        (site / ".gitlab-ci.yml").write_text(GITLAB_CI, encoding="utf-8")
 
 
 def zip_site(site: Path, out: Path) -> Path:

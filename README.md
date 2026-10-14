@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/11 15:48:36.910831 )
-[//]: # (+ Revised: 	2026/10/14 12:27:25.366973 )
+[//]: # (+ Revised: 	2026/10/14 17:09:23.531551 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # timtapper
@@ -31,6 +31,7 @@
   <a href="https://gitlab.com/Ran-n/timtapper/-/releases/permalink/latest"><img src="https://img.shields.io/badge/GitLab-FC6D26?logo=gitlab&logoColor=white" alt="GitLab" align="center"></a>
   · browser:
   <a href="https://ran-n.codeberg.page/timtapper/"><img src="https://img.shields.io/badge/Codeberg%20Pages-2185D0?logo=codeberg&logoColor=white" alt="timtapper on Codeberg Pages" align="center"></a>
+  <a href="https://ran-n.gitlab.io/timtapper/"><img src="https://img.shields.io/badge/GitLab%20Pages-FC6D26?logo=gitlab&logoColor=white" alt="timtapper on GitLab Pages" align="center"></a>
 </sub></p>
 
 No accounts, no server, no sync: your events live on your device, and a JSON backup moves them to another install.

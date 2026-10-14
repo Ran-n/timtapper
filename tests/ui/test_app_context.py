@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/14 07:43:51.793148
+Revised: 2026/10/14 16:30:40.243126
 """
 
 import datetime as dt
@@ -20,6 +20,27 @@ from ui import context as context_mod
 from ui.app import TABS, build_view, install_routing
 from ui.context import PREF_LANG
 from uitools import fire, texts
+
+
+class FakeShellStore:
+    """core.web.ShellStore off the browser: keeps the shell in memory and records the ready message."""
+
+    instances: list[FakeShellStore] = []
+
+    def __init__(self, fail_ready: Exception | None = None):
+        self.saved, self.ready, self.fail_ready = None, [], fail_ready
+        FakeShellStore.instances.append(self)
+
+    async def save(self, text):
+        self.saved = text
+
+    async def load(self):
+        return self.saved
+
+    def announce_ready(self, route):
+        if self.fail_ready:
+            raise self.fail_ready
+        self.ready.append(route)
 
 
 # ---- routing ------------------------------------------------------------------
@@ -370,6 +391,7 @@ async def test_main_in_a_browser_reports_failed_saves(page, monkeypatch):
     monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
     monkeypatch.setattr(main, "IS_WEB", True)
     monkeypatch.setattr(main, "open_browser_store", open_store)
+    monkeypatch.setattr(main, "ShellStore", FakeShellStore)
     await main.main(page)
     store.on_save_failed()
     snack = page.dialogs[-1]
@@ -620,6 +642,7 @@ async def test_web_start_loads_browser_storage_and_saves_every_commit(page, monk
     monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
     monkeypatch.setattr(main, "IS_WEB", True)
     monkeypatch.setattr(main, "open_browser_store", open_store)
+    monkeypatch.setattr(main, "ShellStore", FakeShellStore)
     await main.main(page)
     assert store.changes > 0  # migrations and the bundled leaders
     page.on_disconnect(None)
@@ -638,3 +661,98 @@ async def test_open_browser_store_opens_the_data_folder(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "BrowserStore", Store)
     store = await main.open_browser_store()
     assert opened == [tmp_path / "data"] and store.folder == tmp_path / "data"
+
+
+# ---- the web shell ----------------------------------------------------------------
+def test_new_route_starts_an_event_once(ctx, page, events, monkeypatch):
+    """ "New event" tapped in the web shell before the app was ready: the app starts one, as the button does; the
+    browser's back button can return to the address later, and then it's only the list."""
+    started = []
+    real = app_mod.events_view.new_event
+    monkeypatch.setattr(app_mod.events_view, "new_event", lambda c: started.append(1) or real(c))
+    route_change = install_routing(ctx)
+    page.route = app_mod.NEW_ROUTE
+    route_change()
+    created = events.list()
+    assert started == [1] and page.routes[-1] == f"/event/{created[0].id}"
+    route_change()  # back to #/new: the list (where the untouched new event is dropped, as leaving it always does)
+    assert started == [1] and page.views[-1].route == "/events"
+
+
+async def web_main(page, monkeypatch, store=FakeShellStore):
+    """main() as it runs in a browser, with fakes for the browser's storage and the shell's."""
+
+    class Prefs:
+        async def get(self, key):
+            return None
+
+    class Store:
+        on_save_failed = None
+
+        def changed(self):
+            pass
+
+    async def open_store():
+        return Store()
+
+    monkeypatch.setattr(context_mod.ft, "SharedPreferences", Prefs)
+    monkeypatch.setattr(main, "IS_WEB", True)
+    monkeypatch.setattr(main, "open_browser_store", open_store)
+    monkeypatch.setattr(main, "ShellStore", store)
+    await main.main(page)
+
+
+async def test_web_start_tells_the_page_it_is_ready_and_keeps_the_shell_current(page, monkeypatch):
+    scheduled = []
+    monkeypatch.setattr(main.ShellWriter, "schedule", lambda self: scheduled.append(1))
+    FakeShellStore.instances.clear()
+    await web_main(page, monkeypatch)
+    assert FakeShellStore.instances[0].ready == ["/"]  # FakePage's route: the address the app opened at
+    assert scheduled == [1]  # once at the start: the leaders may have changed since the shell was saved
+    page.on_route_change(None)  # leaving a new event's screen keeps or drops it, without a commit when kept
+    assert len(scheduled) == 2
+    page.on_disconnect(None)
+
+
+async def test_web_start_refreshes_the_shell_on_appearance_and_data_changes(page, monkeypatch):
+    scheduled = []
+    monkeypatch.setattr(main.ShellWriter, "schedule", lambda self: scheduled.append(1))
+    contexts = []
+    real = main.AppContext
+
+    def context(*args):
+        contexts.append(real(*args))
+        return contexts[-1]
+
+    monkeypatch.setattr(main, "AppContext", context)
+    await web_main(page, monkeypatch)
+    before = len(scheduled)
+    contexts[0].appearance_changed()  # a new language or theme
+    assert len(scheduled) == before + 1
+    contexts[0].events.create("Locals", "locals", dt.date(2026, 10, 1), None)  # a commit
+    assert len(scheduled) == before + 2
+    page.on_disconnect(None)
+
+
+async def test_web_start_closes_the_shell_with_the_app(page, monkeypatch):
+    closed = []
+    real = main.ShellWriter.close
+    monkeypatch.setattr(main.ShellWriter, "schedule", lambda self: None)
+    monkeypatch.setattr(main.ShellWriter, "close", lambda self: closed.append(1) or real(self))
+    await web_main(page, monkeypatch)
+    page.on_disconnect(None)
+    assert closed == [1]
+
+
+async def test_web_start_logs_a_ready_message_that_failed(page, monkeypatch, caplog):
+    monkeypatch.setattr(main.ShellWriter, "schedule", lambda self: None)
+    await web_main(page, monkeypatch, store=lambda: FakeShellStore(fail_ready=RuntimeError("no channel")))
+    assert "could not tell the page the app is ready" in caplog.text and "no channel" in caplog.text
+    page.on_disconnect(None)
+
+
+def test_and_then_runs_both_or_just_the_second():
+    calls = []
+    main._and_then(lambda e: calls.append(("first", e)), lambda: calls.append("then"))("event")
+    main._and_then(None, lambda: calls.append("only"))()
+    assert calls == [("first", "event"), "then", "only"]

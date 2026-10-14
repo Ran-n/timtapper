@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.676210
-Revised: 2026/10/13 11:44:58.669215
+Revised: 2026/10/14 16:30:39.629197
 
 Screen routing. Tabs (/events, /stats, /settings) replace the view stack;
 /event/<id> is pushed on top so Android's back button returns to the list.
@@ -25,6 +25,8 @@ from ui.widgets import logo
 _log = get_logger("ui.app")
 
 TABS = ["/events", "/stats", "/settings"]
+# "New event" tapped before the app was ready (the web shell, ui/shell.py): start one, as the button does
+NEW_ROUTE = "/new"
 
 
 def navbar(ctx: AppContext, route: str) -> ft.NavigationBar:
@@ -109,7 +111,14 @@ def install_routing(ctx: AppContext) -> Callable[..., None]:
     """Wire routing/back handling; returns the route handler so main() can render the first screen."""
     page = ctx.page
 
+    # the web shell sends the app there once, when "New event" was tapped before the app was ready (at its start,
+    # or when it hands over); the browser's back button can return to it afterwards, and then it's just the list
+    new_pending = {"open": True}
+
     def route_change(_e=None) -> None:
+        if page.route == NEW_ROUTE and new_pending.pop("open", False):
+            events_view.new_event(ctx)  # navigates to the new event, which lands back here
+            return
         route = page.route if page.route in TABS or page.route.startswith("/event/") else "/events"
         if ctx.draft is not None and route != f"/event/{ctx.draft.id}":
             ctx.drop_untouched_draft()  # before the list is built, so it never shows

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.159067
-Revised: 2026/10/14 01:17:20.437936
+Revised: 2026/10/14 16:30:39.813437
 
 Translation tables, keyed by the English source string exactly as written
 in the code. English (EN) is built from the ES key set so it stays a
@@ -11,6 +11,7 @@ EVERY table — tests/test_i18n.py fails on any missing or stale key.
 """
 
 ES = {
+    "Opening…": "Abriendo…",  # the web shell, while the app starts
     # navigation / screens
     "Events": "Eventos",
     "Event": "Evento",
@@ -355,6 +356,7 @@ ES = {
 }
 
 GL = {
+    "Opening…": "Abrindo…",  # the web shell, while the app starts
     # navigation / screens
     "Events": "Eventos",
     "Event": "Evento",

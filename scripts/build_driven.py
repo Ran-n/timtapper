@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 23:11:32.226320
-Revised: 2026/10/14 01:08:29.222706
+Revised: 2026/10/14 16:30:39.989283
 
 Build the driven web site and Android APK the rendered tests run on (tests/rendered/, markers `web` and `android`):
 
@@ -85,7 +85,7 @@ def build(target: str) -> Path:
     _log.info("building driven %s %s", target, version)
     subprocess.run(["uv", "run", *flet_command(target, version, staged, output)], cwd=ROOT, env=env, check=True)
     if target == "web":
-        finish_site(output, version)
+        finish_site(output, version, shell=False)
         return output
     apks = sorted(output.glob("*.apk"))
     if len(apks) != 1:

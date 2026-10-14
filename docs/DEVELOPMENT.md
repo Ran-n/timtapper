@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.144622 )
-[//]: # (+ Revised: 	2026/10/14 13:16:04.240980 )
+[//]: # (+ Revised: 	2026/10/14 17:09:23.883094 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Development
@@ -95,29 +95,51 @@ uv run python scripts/build_web.py              # build/web + dist/timtapper-<ve
 uv run python scripts/build_web.py --publish    # ...then force-push it to the `pages` branch
 ```
 
-`flet build web` turns the app into a static site whose Python runs in the browser on Pyodide. The script fixes three
+`flet build web` turns the app into a static site whose Python runs in the browser on Pyodide. The script changes five
 things after it: flet leaves `assets/` out of the Python archive (the app reads `leaders.json`, fonts and portraits
-from disk, so they go back in), it takes SQLAlchemy's and Alembic's own test suites out of that archive (nothing in
-the app imports them; `UNUSED` in `scripts/build_web.py`), and `index.html` asks for the archive with `?v=<version>`, so browsers fetch the new
-one after a release. `[tool.flet.web]` in `pyproject.toml` sets the `/timtapper/` base path and `#` routes, so a
-reload on any screen only ever asks the host for `index.html`.
+from disk, so they go back in); it takes what the browser never uses out of that archive (SQLAlchemy's and Alembic's
+own test suites, the Windows launchers in `bin/`; `UNUSED` in `scripts/build_web.py`); `index.html` preloads the
+archive and the Pyodide runtime, which flet's loader would otherwise fetch one after the other, each only once the one
+before has started (a first visit took 14.6 s, about 8 s with the preloads); and `index.html` asks for the archive
+with `?v=<version>`, so browsers fetch the new one after a release; and `index.html` paints the web shell first (below).
+`[tool.flet.web]` in `pyproject.toml` sets the `/timtapper/` base path and `#` routes, so a reload on any screen only
+ever asks the host for `index.html`.
+
+**The web shell.** Even with everything cached, Python takes about 4 s to start in the browser, so the page doesn't
+wait for it. `index.html` carries `scripts/shell/` inline and paints a read-only copy of the app's screens at once:
+what the app saved on the last visit, or on a first visit the empty app, built with the site in light and dark.
+`ui/shell.py` writes that copy: after every change (a commit that wrote, a new language or theme, a screen change) it
+builds each screen the app can open at startup — the three tabs and every event — with the app's own `build_view`,
+and saves the control tree as JSON in the browser's IndexedDB (`ShellStore` in `core/web.py`), with colours resolved
+and icons by name (the build adds the codepoints of every `ft.Icons` the code names, read from Flutter's
+`icons.dart`). An event's screen is rebuilt only when it or the look changes, and the digests are saved with the
+copy, so a new visit picks up where the last left off. `scripts/shell/shell.js` draws the tree with flexbox under
+Flutter's Material 3 sizes at web (compact) density; tabs, events and back work in the copy, a tap that needs the app
+shows *Opening…*, and *New event* queues `#/new` (`NEW_ROUTE`, which starts one event, once). When the app has drawn
+its first screen it says so on a `BroadcastChannel`, with its route; the page sends it to the screen the copy shows if
+that's another one, and fades the copy out. The driven test builds go without it (`finish_site(shell=False)`):
+nothing in them says when they're ready. `tests/web` checks it in Chrome: the empty app on a first visit, your events
+on the next, opening one in the copy, the tabs and *New event*.
 
 Every package imported before the first screen is unpacked and compiled in the browser while the visitor waits, so
 PIL (leader updates and share cards only) is imported where it's used, not at module level in `catalog/portraits.py`
 or the share views; `tests/test_startup_imports.py` fails if it, or a library test suite, comes back into startup.
 
-`--publish` pushes the site as the single commit of the `pages` branch on `github` and `codeberg`, served at
-[timtapper.breren.com](https://timtapper.breren.com/) and
-[ran-n.codeberg.page/timtapper](https://ran-n.codeberg.page/timtapper/). Publish after each release, from its tag.
+`--publish` pushes the site as the single commit of the `pages` branch on `github`, `gitlab` and `codeberg`, served at
+[timtapper.breren.com](https://timtapper.breren.com/), [ran-n.codeberg.page/timtapper](https://ran-n.codeberg.page/timtapper/)
+and [ran-n.gitlab.io/timtapper](https://ran-n.gitlab.io/timtapper/). Publish after each release, from its tag.
 Codeberg serves the build as it is, under `/timtapper/`; GitHub's copy is rebased to `/` and carries a `CNAME` file
-naming the domain (`PAGES_HOSTS` in `scripts/build_web.py`). `build/web` and the release's web zip keep `/timtapper/`.
+naming the domain (`PAGES_HOSTS` in `scripts/build_web.py`). GitLab serves only what a CI job publishes, so its copy
+carries a `.gitlab-ci.yml` whose `pages: true` job publishes the files as they are (Settings → Pages: access for
+everyone, unique domain off, so it's served under `/timtapper/` like Codeberg). GitLab takes 15–20 minutes after the
+job to serve a new copy; until then the previous one stays up. `build/web` and the release's web zip keep `/timtapper/`.
 
 GitHub Pages: Settings → Pages, branch `pages`, root, custom domain `timtapper.breren.com`, HTTPS enforced. The domain
 is a DNS-only (not proxied) Cloudflare `CNAME` from `timtapper` to `ran-n.github.io`, so GitHub can issue its
 certificate; the old `ran-n.github.io/timtapper/` redirects there.
 
 In the browser the file system is in memory: `core/web.py` mounts the data folder on IndexedDB, loads it before the
-database opens and saves it after every commit. Sharing hands the browser the file's bytes rather than its path, and
+database opens and saves it after every commit that wrote (reads commit too, and used to save the whole file again). Sharing hands the browser the file's bytes rather than its path, and
 falls back to a download.
 
 ## Tests
@@ -247,18 +269,19 @@ src/timtapper/      Flet app root (flet build packages this folder)
   main.py           entry point: open DB, migrate, sync leaders, route
   catalog/          leader catalogue: optcgapi + Limitless parsers, bundled list, repository, portraits, daily sync
   events/           events and rounds: CRUD as plain dataclasses
-  core/             logging, storage paths, the web build's browser storage (web.py), errors, version
+  core/             logging, storage paths, the web build's browser storage and shell store (web.py), errors, version
   stats/            pure stat functions (records, splits, matchups)
   share/            Pillow share cards + share-sheet/save delivery
   backup/           JSON export/import
   db/               SQLAlchemy models, Alembic migrations
   i18n/             en/es/gl tables keyed by English source strings
-  ui/               screens (events, event, stats, settings), picker, widgets
+  ui/               screens (events, event, stats, settings), picker, widgets, the web shell's screen copies (shell.py)
   assets/           fonts, icons, logo_mark, bundled leaders.json + leaders/*.webp portraits
 scripts/            build_leaders, build_android, build_windows (+ timtapper.iss), build_web, build_driven,
                     make_icon, make_screenshots,
                     make_bye_joker, demo_driver (the demo data and driver commands), app_driver + app_window
-                    (desktop), driven_main + serve_site (web, Android), android_phone (adb), ci.sh
+                    (desktop), driven_main + serve_site (web, Android), android_phone (adb), ci.sh;
+                    shell/ (the web shell's script and style, inlined into index.html by build_web)
 docs/               logo, screenshots, these docs
 tests/              mirrors src/timtapper; rendered/ drives the real app on every target (markers `desktop`,
                     `web`, `android`); desktop/, web/ and android/ check each platform's own build

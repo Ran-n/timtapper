@@ -2,13 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.184243
-Revised: 2026/10/13 22:53:34.570438
+Revised: 2026/10/14 16:30:40.341160
 
 The web build's browser storage (core.web.BrowserStore), against a fake of Emscripten's FS that keeps an
 "IndexedDB" copy of the mounted folder and answers syncfs on the event loop, as the browser does.
 """
 
 import asyncio
+import logging
 import shutil
 
 import pytest
@@ -173,3 +174,63 @@ def test_defaults_to_pyodides_file_system(monkeypatch, tmp_path):
     monkeypatch.setattr(web, "_pyodide_fs", lambda: (fs, once))
     store = BrowserStore(tmp_path)
     assert (store._fs, store._once) == (fs, once)
+
+
+# ---- the web shell's storage ------------------------------------------------------
+class FakeJS:
+    """run_js stand-in: the three snippets ShellStore runs, against a dict for IndexedDB and a list for the channel."""
+
+    def __init__(self):
+        self.idb, self.posted = {}, []
+
+    def __call__(self, source):
+        if "put(text, key)" in source:
+
+            async def save(db, store, key, text):
+                self.idb[(db, store, key)] = text
+
+            return save
+        if ".get(key)" in source:
+
+            async def load(db, store, key):
+                return self.idb.get((db, store, key))
+
+            return load
+        assert "BroadcastChannel" in source
+        return lambda channel, kind, route: self.posted.append((channel, kind, route))
+
+
+async def test_shell_store_saves_and_loads_where_the_page_reads():
+    js = FakeJS()
+    store = web.ShellStore(js)
+    assert await store.load() is None
+    await store.save('{"v":1}')
+    assert js.idb == {(web.SHELL_DB, web.SHELL_STORE, web.SHELL_KEY): '{"v":1}'}
+    assert await store.load() == '{"v":1}'
+
+
+async def test_shell_store_reads_a_non_string_as_nothing():
+    js = FakeJS()
+    js.idb[(web.SHELL_DB, web.SHELL_STORE, web.SHELL_KEY)] = object()  # what a JsNull or a stray value comes back as
+    assert await web.ShellStore(js).load() is None
+
+
+def test_ready_tells_the_page_the_route_it_opened_at(caplog):
+    caplog.set_level(logging.INFO)
+    js = FakeJS()
+    web.ShellStore(js).announce_ready("/event/3")
+    assert js.posted == [(web.SHELL_CHANNEL, web.SHELL_READY, "/event/3")]
+    assert "ready at /event/3" in caplog.text
+
+
+def test_shell_store_defaults_to_pyodides_run_js(monkeypatch):
+    js = FakeJS()
+    monkeypatch.setattr(web, "_pyodide_run_js", lambda: js)
+    assert web.ShellStore()._run_js is js
+
+
+def test_shell_js_snippets_use_their_arguments():
+    """The snippets get every name from Python, so the page and the app can't disagree on one."""
+    for snippet in (web._SAVE_SHELL_JS, web._LOAD_SHELL_JS):
+        assert "indexedDB.open(db, 1)" in snippet and "createObjectStore(store)" in snippet
+    assert "postMessage({ type, route })" in web._ANNOUNCE_JS

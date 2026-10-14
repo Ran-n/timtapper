@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.068656 )
-[//]: # (+ Revised: 	2026/10/14 12:27:25.449860 )
+[//]: # (+ Revised: 	2026/10/14 17:09:23.752087 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Features in detail
@@ -88,8 +88,9 @@ Leaders downloaded this way get a default upper-middle crop until a release ship
 
 ## In the browser
 
-The same app runs in any modern browser at [timtapper.breren.com](https://timtapper.breren.com/) (mirror:
-[ran-n.codeberg.page/timtapper](https://ran-n.codeberg.page/timtapper/)), iPhones included. Nothing is sent anywhere:
+The same app runs in any modern browser at [timtapper.breren.com](https://timtapper.breren.com/) (mirrors:
+[ran-n.codeberg.page/timtapper](https://ran-n.codeberg.page/timtapper/),
+[ran-n.gitlab.io/timtapper](https://ran-n.gitlab.io/timtapper/)), iPhones included. Nothing is sent anywhere:
 the app's Python runs in the page itself.
 
 - **Your data stays in that browser.** Events are saved to the browser's storage after every change and come back on
@@ -99,6 +100,11 @@ the app's Python runs in the page itself.
   Backups download the same way, and *Import backup* opens the browser's file picker.
 - **New sets**: the daily check works as in the app, but Limitless TCG doesn't let other sites read its pages, so a
   new set's release date only arrives with the next release of timtapper.
+- **Opens at once.** The page shows your events the moment it opens, as you left them: a copy the app saves after
+  every change. You can look through it straight away — the tabs, each event and its rounds — while the app starts
+  behind it (a few seconds), then the app takes over on the screen you're on. Editing waits for the app: tapping a
+  field or a button shows *Opening…* until it's ready, and *New event* opens the new event as soon as it is. A first
+  visit shows the empty app the same way.
 - **First visit** downloads about 20 MB (the app and Python); after that the browser keeps it.
 
 ## Backup
