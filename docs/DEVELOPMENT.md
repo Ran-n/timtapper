@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.144622 )
-[//]: # (+ Revised: 	2026/10/14 17:09:23.883094 )
+[//]: # (+ Revised: 	2026/10/14 17:35:38.300424 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Development
@@ -131,8 +131,9 @@ and [ran-n.gitlab.io/timtapper](https://ran-n.gitlab.io/timtapper/). Publish aft
 Codeberg serves the build as it is, under `/timtapper/`; GitHub's copy is rebased to `/` and carries a `CNAME` file
 naming the domain (`PAGES_HOSTS` in `scripts/build_web.py`). GitLab serves only what a CI job publishes, so its copy
 carries a `.gitlab-ci.yml` whose `pages: true` job publishes the files as they are (Settings → Pages: access for
-everyone, unique domain off, so it's served under `/timtapper/` like Codeberg). GitLab takes 15–20 minutes after the
-job to serve a new copy; until then the previous one stays up. `build/web` and the release's web zip keep `/timtapper/`.
+everyone, unique domain off, so it's served under `/timtapper/` like Codeberg). GitLab deploys a finished job late:
+twenty minutes, or not until the next pipeline on `pages` starts. If the mirror still serves the old copy after half an
+hour, start one (`glab api -X POST "projects/87493519/pipeline?ref=pages"`): the waiting job is deployed at once. `build/web` and the release's web zip keep `/timtapper/`.
 
 GitHub Pages: Settings → Pages, branch `pages`, root, custom domain `timtapper.breren.com`, HTTPS enforced. The domain
 is a DNS-only (not proxied) Cloudflare `CNAME` from `timtapper` to `ran-n.github.io`, so GitHub can issue its
