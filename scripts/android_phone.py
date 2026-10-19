@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 23:47:06.054826
-Revised: 2026/10/14 09:51:57.338853
+Revised: 2026/10/19 13:06:00.232968
 
 Drive an Android phone, normally the test emulator, through adb (the Android SDK's platform-tools): boot it when
 none is running, install and start apps, capture the screen between the system bars, and send real touches, keys
@@ -29,6 +29,7 @@ _log = get_logger("scripts.android_phone")
 BOOT_TIMEOUT = 180  # seconds for a cold emulator boot
 DEFAULT_AVD = "generic_phone_api34"  # Pixel 7 shape (1080 x 2400, 420 dpi), API 34, x86_64
 SOFT_KEYBOARD_SETTING = "show_ime_with_hard_keyboard"
+NIGHT_MODE = re.compile(r"Night mode: (\w+)")
 KEYCODES = {"enter": 66, "tab": 61, "escape": 111, "backspace": 67, "back": 4, "end": 123, "ctrl": 113, "a": 29}
 
 
@@ -38,7 +39,8 @@ class PhoneError(RuntimeError):
 
 class Phone:
     """An Android phone (an emulator) through adb. Uses the one already running, else boots the AVD `avd` headless
-    and shuts it down again in close(); close() also puts back the display size and keyboard setting this changed.
+    and shuts it down again in close(); close() also puts back the display size, keyboard setting and dark mode this
+    changed.
     `avd` defaults to TIMTAPPER_AVD, else the generic test AVD."""
 
     def __init__(self, log_path: Path, avd: str | None = None) -> None:
@@ -58,8 +60,18 @@ class Phone:
         # close() puts the phone's own setting back
         self._ime_setting = self.shell("settings", "get", "secure", SOFT_KEYBOARD_SETTING).strip()
         self.shell("settings", "put", "secure", SOFT_KEYBOARD_SETTING, "0")
+        # light mode, which the tests' colours are read in: an emulator left in dark mode drew every screen dark
+        self._night_mode = self.night_mode()
+        self.shell("cmd", "uimode", "night", "no")
 
     # ---- adb ---------------------------------------------------------------------------
+    def night_mode(self) -> str:
+        """The phone's dark-mode setting: "no", "yes" or "auto"."""
+        found = NIGHT_MODE.search(self.shell("cmd", "uimode", "night"))
+        if found is None:
+            raise PhoneError("`cmd uimode night` didn't say the night mode")
+        return found[1]
+
     def run(self, *args: str, binary: bool = False, check: bool = True, timeout: float = 120):
         command = [self.adb, *(["-s", self.serial] if self.serial else []), *args]
         result = subprocess.run(command, capture_output=True, check=False, timeout=timeout)
@@ -283,6 +295,8 @@ class Phone:
                 self.shell("settings", "put", "secure", SOFT_KEYBOARD_SETTING, self._ime_setting, check=False)
             else:
                 self.shell("settings", "delete", "secure", SOFT_KEYBOARD_SETTING, check=False)
+            if self._night_mode != "no":
+                self.shell("cmd", "uimode", "night", self._night_mode, check=False)
         finally:
             self._shut_down_emulator()
 
