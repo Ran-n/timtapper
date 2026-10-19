@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base href="/">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Local-first One Piece TCG match tracker (Flet, Android + desktop) with shareable stat images.">
+
+  <!-- Unconditional, and not part of the splash block below: this tag used to
+       arrive only because flutter_native_splash injected it. Without it a
+       mobile browser lays the page out at a 980px viewport and scales it
+       down, so the whole app renders tiny. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Timtapper">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png" />
+
+  <title>Timtapper</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Reload when WebKit restores the page from the back/forward cache instead
+    // of resuming it. WebKit restores a Flutter app with its frame scheduling
+    // broken: input and script keep running, but scheduled frames never
+    // render, so the app silently freezes at its last painted state.
+    //
+    // In a packaged (Pyodide) app, Python state lives in the page and is lost
+    // on reload - but WebKit's alternative is an app frozen at its last
+    // painted frame, so a fresh start is still strictly better. Gated to
+    // WebKit (every browser on iOS, Safari on macOS) because other engines
+    // restore correctly and get to keep their state.
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted &&
+        navigator.vendor && navigator.vendor.startsWith('Apple')) {
+        window.location.reload();
+      }
+    });
+  </script>
+
+  <script>
+    var flet = {
+      pyodide: true,
+      noCdn: false,
+      webSocketEndpoint: "/ws",
+      entrypointBaseUrl: "/",
+      assetBase: "/",
+      routeUrlStrategy: "hash",
+      // Only pinned when bundling. Left null, Flutter resolves CanvasKit from
+      // gstatic and the Noto fallback fonts from Google Fonts, and the build
+      // skips shipping local copies. A host serving its own runtime can assign
+      // these without also claiming a no-CDN build.
+      canvasKitBaseUrl: null,
+      // .mjs is required: python-worker.js is a module worker and loads
+      // the runtime via dynamic `import()`. Pyodide >= 0.29 also refuses
+      // to run in classic workers. Use the local copy that `flet build`
+      // drops into web/pyodide/ when --no-cdn is set; otherwise pull
+      // from jsdelivr so the build artifact can stay slim.
+      pyodideUrl: "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs",
+      pythonModuleName: "main",
+      webRenderer: "canvaskit",
+      // "assets/fonts/" is the bundled Noto Emoji; null pulls it from Google Fonts.
+      fontFallbackBaseUrl: null,
+      appPackageUrl: "assets/app/app.zip?v=1.5.0"
+    }
+
+    flet.flutterAppLoaded = new Promise((resolve) => {
+      flet.flutterAppResolve = resolve;
+    });
+
+    flet.flutterAppLoaded.then((flutterApp) => {
+      console.log("Flutter app loaded");
+    });
+  </script>
+
+  <!-- fletAppConfig -->
+
+  <script src="python.js"></script>
+
+  <style id="splash-screen-style">
+    html {
+      height: 100%
+    }
+
+    body {
+      margin: 0;
+      min-height: 100%;
+      background-color: #ffffff;
+      background-size: 100% 100%;
+    }
+
+    .center {
+      margin: 0;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      -ms-transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: #222222;
+      }
+    }
+  </style>
+  <script id="splash-screen-script">
+    function removeSplashFromWeb() {
+      document.getElementById("splash")?.remove();
+      document.getElementById("splash-branding")?.remove();
+      document.body.style.background = "transparent";
+    }
+  </script>
+</head>
+
+<body>
+<!-- timtapper sw -->
+<script>window.TIMTAPPER_SW = {"url":"sw.js","channel":"timtapper-shell","ready":"ready"};</script>
+<script>// Puts the site's service worker (sw.js) in place. scripts/build_web.py writes window.TIMTAPPER_SW before this: the
+// worker's URL, and the channel and message the app says it's ready with.
+//
+// Registered only once the app has started: installing fetches the build's files, and on a first visit the page is
+// fetching those same files. A worker that installed on an earlier visit and is waiting (a new build) takes over as
+// the page opens, which then reloads once, from the new build's cache.
+(() => {
+  "use strict";
+  const config = window.TIMTAPPER_SW;
+  if (!config || !("serviceWorker" in navigator)) return;
+  const sw = navigator.serviceWorker;
+
+  sw.getRegistration().then((registration) => {
+    if (!registration || !registration.waiting || !sw.controller) return;
+    sw.addEventListener("controllerchange", () => location.reload(), { once: true });
+    registration.waiting.postMessage("activate");
+    console.log("timtapper: a new version is ready, reloading");
+  });
+
+  function register() {
+    sw.register(config.url).then(
+      () => console.log("timtapper: service worker registered"),
+      (error) => console.error("timtapper: service worker not registered:", error)
+    );
+  }
+
+  if (!("BroadcastChannel" in window)) return;
+  const channel = new BroadcastChannel(config.channel);
+  channel.onmessage = (ev) => {
+    if (ev.data && ev.data.type === config.ready) {
+      channel.close();
+      register();
+    }
+  };
+})();
+</script>
+<!-- /timtapper sw -->
+
+<!-- timtapper shell -->
+<style>/* The web shell (shell.js): a read-only copy of the app's screens, painted before the app is ready. Sizes follow
+   Flutter's Material 3 defaults, as the app's own controls get them. Its fonts are its own copies (?shell): the app
+   loads the same files at other addresses (?v=<version>), so no stored response is shared between the two. */
+@font-face { font-family: "TtPoppins"; src: url("fonts/Poppins-Regular.ttf?shell"); font-display: swap; }
+@font-face { font-family: "TtPoppinsSemi"; src: url("fonts/Poppins-SemiBold.ttf?shell"); font-display: swap; }
+@font-face { font-family: "TtPoppinsHeavy"; src: url("fonts/Poppins-ExtraBold.ttf?shell"); font-display: swap; }
+@font-face { font-family: "TtIcons"; src: url("assets/fonts/MaterialIcons-Regular.otf"); font-display: block; }
+
+#tt-shell {
+  position: fixed; inset: 0; z-index: 2147483647; display: flex; flex-direction: column;
+  font: 14px/1.43 "TtPoppins", system-ui, sans-serif; color: var(--fg); background: var(--bg);
+  -webkit-tap-highlight-color: transparent; user-select: none; transition: opacity .2s ease;
+  overflow: hidden;
+}
+#tt-shell.tt-gone { opacity: 0; pointer-events: none; }
+#tt-shell * { box-sizing: border-box; min-width: 0; }
+.tt-semi { font-family: "TtPoppinsSemi", "TtPoppins", system-ui, sans-serif; }
+.tt-heavy { font-family: "TtPoppinsHeavy", "TtPoppins", system-ui, sans-serif; }
+.tt-ic {
+  font-family: "TtIcons"; font-style: normal; font-weight: normal; line-height: 1; display: inline-flex;
+  align-items: center; justify-content: center; flex: none; overflow: hidden; -webkit-font-smoothing: antialiased;
+}
+
+.tt-bar { flex: none; height: 56px; display: flex; align-items: center; background: var(--bg); padding-right: 4px; }
+.tt-bar-title { flex: 1; padding: 0 16px; font-size: 22px; line-height: 1.27; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt-bar-lead { flex: none; display: flex; align-items: center; justify-content: center; height: 100%; }
+.tt-body { flex: 1; overflow-y: auto; overflow-x: hidden; position: relative; }
+.tt-nav { flex: none; height: 80px; display: flex; background: var(--nav); }
+.tt-dest { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
+.tt-dest-ind { width: 64px; height: 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; }
+.tt-dest-label { font-size: 12px; line-height: 1.33; color: var(--muted); }
+.tt-dest.tt-on .tt-dest-ind { background: var(--indicator); }
+.tt-dest.tt-on .tt-dest-label { color: var(--fg); }
+.tt-fab {
+  position: absolute; right: 16px; bottom: 96px; height: 56px; border-radius: 18px; display: flex; align-items: center;
+  gap: 8px; padding: 0 20px 0 16px; background: var(--primary); color: var(--bg); cursor: pointer;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, .25);
+}
+.tt-fab.tt-nonav { bottom: 16px; }
+
+.tt-row { display: flex; flex-direction: row; }
+.tt-col { display: flex; flex-direction: column; }
+.tt-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tt-field {
+  position: relative; border: 1px solid var(--outline); border-radius: 4px; min-height: 52px; display: flex;
+  align-items: center; gap: 12px; padding: 0 12px 0 16px; font-size: 16px;
+}
+/* Flutter's compact density on the web: a dense text field is 40 px tall, a dense dropdown 48 */
+.tt-field.tt-dense { min-height: 40px; padding-left: 12px; }
+.tt-field.tt-dense.tt-menu { min-height: 48px; }
+.tt-field.tt-lead { padding-left: 0; gap: 4px; }
+#tt-shell .tt-field-lead { flex: none; min-width: 44px; display: flex; align-items: center; justify-content: center; }
+.tt-field-label {
+  position: absolute; left: 12px; top: 0; transform: translateY(-50%); padding: 0 4px; font-size: 12px;
+  line-height: 1.33; color: var(--muted); background: var(--fieldbg, var(--bg)); white-space: nowrap;
+}
+.tt-field-placeholder { color: var(--muted); }
+.tt-field-value { flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 0; }
+.tt-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 32px; border-radius: 14px;
+  padding: 0 24px; font-size: 14px; white-space: nowrap; cursor: pointer; flex: none;
+}
+.tt-btn.tt-has-icon { padding-left: 16px; }
+.tt-iconbtn { width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; flex: none; cursor: pointer; }
+.tt-switch { display: inline-flex; align-items: center; gap: 12px; flex: none; }
+.tt-track { width: 52px; height: 32px; border-radius: 16px; border: 2px solid var(--outline); background: var(--track); position: relative; flex: none; }
+.tt-thumb { position: absolute; top: 50%; left: 6px; width: 16px; height: 16px; border-radius: 50%; transform: translateY(-50%); background: var(--outline); }
+.tt-switch.tt-on .tt-track { background: var(--primary); border-color: var(--primary); }
+.tt-switch.tt-on .tt-thumb { left: 22px; width: 24px; height: 24px; background: var(--bg); }
+.tt-seg { display: flex; height: 32px; border: 1px solid var(--outline); border-radius: 20px; overflow: hidden; }
+.tt-seg > div { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px; font-size: 14px; white-space: nowrap; }
+.tt-seg > div + div { border-left: 1px solid var(--outline); }
+.tt-seg > .tt-on { background: var(--secondarycontainer); }
+.tt-progress { position: relative; overflow: hidden; }
+.tt-progress > div { position: absolute; left: 0; top: 0; bottom: 0; }
+.tt-tap { cursor: pointer; }
+
+.tt-opening {
+  position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); display: none; align-items: center; gap: 10px;
+  padding: 10px 18px; border-radius: 99px; background: var(--fg); color: var(--bg); font-size: 14px; white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .3);
+}
+#tt-shell.tt-busy .tt-opening { display: flex; }
+.tt-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: tt-spin .8s linear infinite; }
+@keyframes tt-spin { to { transform: rotate(360deg); } }
+</style>
+<script>window.TIMTAPPER_SHELL = {"version":1,"db":"timtapper-shell","store":"shell","key":"current","channel":"timtapper-shell","ready":"ready","icons":{"add":57415,"arrow_back":57490,"arrow_drop_down":57496,"bolt_outlined":61149,"brightness_auto":57612,"calendar_month":984763,"calendar_today_outlined":61201,"casino":57667,"celebration_outlined":61240,"check":57686,"check_circle":57689,"cloud_download":57714,"dark_mode":57776,"delete_outline":57787,"diamond_outlined":984551,"download":57857,"emoji_events_outlined":61466,"event_outlined":61487,"face_3_outlined":985251,"fast_forward_outlined":61511,"filter_list":57984,"filter_list_off":984321,"flag_outlined":61563,"front_hand_outlined":984585,"groups_outlined":61659,"insights":58183,"insights_outlined":61746,"inventory_2_outlined":61748,"light_mode":58234,"looks_one":58297,"looks_two":58298,"map_outlined":61870,"more_vert":58372,"new_releases_outlined":61966,"person_rounded":983153,"public":58608,"sailing_outlined":62256,"science_outlined":62269,"search":58727,"search_off":58728,"settings":58751,"settings_outlined":62318,"share":58771,"storefront_outlined":62447,"style":58899,"style_outlined":62454,"swap_horiz":58917,"upload_file":59030,"workspace_premium_outlined":984737},"defaults":{"light":{"v":1,"lang":"en","dark":false,"colors":{"primary":"#af3a03","onprimary":"#fbf1c7","primarycontainer":"#dfb588","onprimarycontainer":"#3c3836","secondary":"#427b58","onsecondary":"#fbf1c7","secondarycontainer":"#c1c7a0","onsecondarycontainer":"#3c3836","tertiary":"#b57614","ontertiary":"#fbf1c7","tertiarycontainer":"#e1c68d","ontertiarycontainer":"#3c3836","error":"#9d0006","onerror":"#fbf1c7","errorcontainer":"#daa589","onerrorcontainer":"#3c3836","surface":"#fbf1c7","onsurface":"#3c3836","onsurfacevariant":"#7c6f64","outline":"#a89984","outlinevariant":"#d1c3a3","shadow":"#000000","scrim":"#000000","inversesurface":"#3c3836","oninversesurface":"#fbf1c7","inverseprimary":"#76391c","surfacetint":"#fbf1c7","surfacebright":"#ebdbb2","surfacecontainer":"#f2e5bc","surfacecontainerhigh":"#ebdbb2","surfacecontainerhighest":"#d5c4a1","surfacecontainerlow":"#f6ebc2","surfacecontainerlowest":"#fbf1c7","surfacedim":"#fbf1c7"},"scheme":{"bg":"#fbf1c7","fg":"#3c3836","muted":"#7c6f64","nav":"#f2e5bc","indicator":"#dba97b"},"tabs":["/events","/stats","/settings"],"strings":{"opening":"Opening…"},"views":{"/events":{"t":"View","scroll":"auto","controls":[{"t":"Container","content":{"t":"Column","controls":[{"t":"Container","content":{"t":"Column","controls":[{"t":"Image","width":120,"height":120,"src":"logo_mark.png","fit":"contain"},{"t":"Container","height":8},{"t":"Text","value":"No events yet","text_align":"center","font_family":"PoppinsExtraBold","size":20},{"t":"Text","value":"Log a testing session, a locals or a major — then add each round as you play it.","text_align":"center","color":"#7c6f64"}],"horizontal_alignment":"center","spacing":8},"padding":{"t":"Padding","left":24,"top":48,"right":24,"bottom":24},"alignment":{"t":"Alignment","x":0.0,"y":0.0}}]},"padding":{"t":"Padding","left":16,"top":8,"right":16,"bottom":88}}],"route":"/events","appbar":{"t":"AppBar","leading":{"t":"Container","content":{"t":"Image","width":32,"height":32,"src":"logo_mark.png","fit":"contain"},"padding":{"t":"Padding","left":16}},"leading_width":56,"title":{"t":"Text","value":"Events"}},"floating_action_button":{"t":"FloatingActionButton","content":{"t":"Text","value":"New event"},"icon":{"icon":"add"},"tap":true,"nav":"/new"},"navigation_bar":{"t":"NavigationBar","destinations":[{"t":"NavigationBarDestination","icon":{"icon":"style_outlined"},"label":"Events","selected_icon":{"icon":"style"}},{"t":"NavigationBarDestination","icon":{"icon":"insights_outlined"},"label":"Stats","selected_icon":{"icon":"insights"}},{"t":"NavigationBarDestination","icon":{"icon":"settings_outlined"},"label":"Settings","selected_icon":{"icon":"settings"}}],"tap":true}},"/stats":{"t":"View","scroll":"auto","controls":[{"t":"Container","content":{"t":"Column","controls":[{"t":"Column","controls":[{"t":"Dropdown","width":"inf","value":"all","options":[{"t":"DropdownOption","key":"all","text":"All leaders","leading_icon":{"icon":"groups_outlined"}}],"leading_icon":{"icon":"groups_outlined"},"tap":true,"label":"Your leader","dense":true},{"t":"Dropdown","width":"inf","value":"all","options":[{"t":"DropdownOption","key":"all","text":"All event types"}],"tap":true,"label":"Event type","dense":true},{"t":"Dropdown","width":"inf","value":"all","options":[{"t":"DropdownOption","key":"all","text":"All sets"}],"tap":true,"label":"Set","dense":true}]},{"t":"Container","content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Column","expand":true,"controls":[{"t":"Text","value":"Win rate","size":12,"color":"#7c6f64"},{"t":"Text","value":"—","font_family":"PoppinsExtraBold","size":44,"max_lines":1,"color":"#7c6f64"}],"spacing":0},{"t":"Column","controls":[{"t":"Text","value":"Record","size":12,"color":"#7c6f64"},{"t":"Text","value":"0-0","font_family":"PoppinsExtraBold","size":22,"max_lines":1}],"horizontal_alignment":"end","spacing":0},{"t":"Column","controls":[{"t":"Text","value":"Events","size":12,"color":"#7c6f64"},{"t":"Text","value":"0","font_family":"PoppinsExtraBold","size":22,"max_lines":1}],"horizontal_alignment":"end","spacing":0}],"vertical_alignment":"end","spacing":20},{"t":"ProgressBar","value":0,"bar_height":8,"color":"#7c6f64","bgcolor":"#d5c4a1","border_radius":4}],"spacing":12},"padding":18,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18},{"t":"Row","controls":[{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Going 1st","size":12,"color":"#7c6f64"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#7c6f64"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#d8cba9","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Going 2nd","size":12,"color":"#7c6f64"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#7c6f64"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#d8cba9","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18}]},{"t":"Row","controls":[{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Won the die roll","size":12,"color":"#7c6f64"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#7c6f64"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#d8cba9","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Lost the die roll","size":12,"color":"#7c6f64"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#7c6f64"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#d8cba9","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18}]},{"t":"Row","controls":[{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"You chose turn","size":12,"color":"#7c6f64"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#7c6f64"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#d8cba9","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"They chose turn","size":12,"color":"#7c6f64"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#7c6f64"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#d8cba9","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18}]},{"t":"Row","controls":[{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Games","size":12,"color":"#7c6f64"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#7c6f64"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#d8cba9","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18}]},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Best matchup","size":12,"color":"#7c6f64"},{"t":"Text","value":"Not enough games","color":"#7c6f64"}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Worst matchup","size":12,"color":"#7c6f64"},{"t":"Text","value":"Not enough games","color":"#7c6f64"}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Recent form","size":12,"color":"#7c6f64"},{"t":"Row","controls":[{"t":"Text","value":"—"}],"spacing":4,"wrap":true}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18},{"t":"FilledButton","disabled":true,"width":"inf","height":52,"content":"Share summary","icon":{"icon":"share"},"tap":true},{"t":"Container","content":{"t":"Text","value":"MATCHUPS","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#af3a03","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Text","value":"No games logged yet","color":"#7c6f64"},{"t":"Row","controls":[{"t":"TextButton","disabled":true,"content":"Share matchups","icon":{"icon":"share"},"tap":true}],"alignment":"center"},{"t":"Container","height":24}],"horizontal_alignment":"stretch","spacing":8},"padding":{"t":"Padding","left":16,"top":8,"right":16,"bottom":88}}],"route":"/stats","appbar":{"t":"AppBar","title":{"t":"Text","value":"Stats"}},"navigation_bar":{"t":"NavigationBar","destinations":[{"t":"NavigationBarDestination","icon":{"icon":"style_outlined"},"label":"Events","selected_icon":{"icon":"style"}},{"t":"NavigationBarDestination","icon":{"icon":"insights_outlined"},"label":"Stats","selected_icon":{"icon":"insights"}},{"t":"NavigationBarDestination","icon":{"icon":"settings_outlined"},"label":"Settings","selected_icon":{"icon":"settings"}}],"selected_index":1,"tap":true}},"/settings":{"t":"View","scroll":"auto","controls":[{"t":"Container","content":{"t":"Column","controls":[{"t":"Container","content":{"t":"Text","value":"APPEARANCE","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#af3a03","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Dropdown","width":"inf","value":"en","options":[{"t":"DropdownOption","key":"en","text":"English","leading_icon":{"t":"Container","width":47,"content":{"t":"Container","width":27,"height":18,"content":{"t":"Image","width":27,"height":18,"src":"flags/gb.svg","fit":"cover"},"border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":3,"clip_behavior":"antiAlias"},"alignment":{"t":"Alignment","x":0.0,"y":0.0}}}],"leading_icon":{"t":"Container","width":47,"content":{"t":"Container","width":27,"height":18,"content":{"t":"Image","width":27,"height":18,"src":"flags/gb.svg","fit":"cover"},"border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":3,"clip_behavior":"antiAlias"},"alignment":{"t":"Alignment","x":0.0,"y":0.0}},"tap":true,"label":"Language"},{"t":"Text","value":"Theme","size":12,"color":"#7c6f64"},{"t":"ResponsiveRow","controls":[{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Gruvbox","font_family":"PoppinsSemiBold","color":"#3c3836"},{"t":"Icon","icon":{"icon":"check_circle"},"color":"#af3a03","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#af3a03","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#427b58","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#b57614","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#79740e","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#9d0006","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#fbf1c7","border":{"t":"Border","top":{"t":"BorderSide","width":2.5,"color":"#af3a03"},"right":{"t":"BorderSide","width":2.5,"color":"#af3a03"},"bottom":{"t":"BorderSide","width":2.5,"color":"#af3a03"},"left":{"t":"BorderSide","width":2.5,"color":"#af3a03"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Catppuccin","font_family":"PoppinsSemiBold","color":"#4c4f69"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#8839ef","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#8839ef","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#179299","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#fe640b","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#3a8f27","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#d20f39","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#eff1f5","border":{"t":"Border","top":{"t":"BorderSide","color":"#9ca0b0"},"right":{"t":"BorderSide","color":"#9ca0b0"},"bottom":{"t":"BorderSide","color":"#9ca0b0"},"left":{"t":"BorderSide","color":"#9ca0b0"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Dracula","font_family":"PoppinsSemiBold","color":"#1f1f1f"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#644ac9","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#644ac9","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#036a96","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#a34d14","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#14710a","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#cb3a2a","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#fffbeb","border":{"t":"Border","top":{"t":"BorderSide","color":"#a8a389"},"right":{"t":"BorderSide","color":"#a8a389"},"bottom":{"t":"BorderSide","color":"#a8a389"},"left":{"t":"BorderSide","color":"#a8a389"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Nord","font_family":"PoppinsSemiBold","color":"#2e3440"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#5e81ac","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#5e81ac","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#4c8a99","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#b0812e","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#6b8f50","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#bf616a","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#eceff4","border":{"t":"Border","top":{"t":"BorderSide","color":"#8a94a7"},"right":{"t":"BorderSide","color":"#8a94a7"},"bottom":{"t":"BorderSide","color":"#8a94a7"},"left":{"t":"BorderSide","color":"#8a94a7"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Rosé Pine","font_family":"PoppinsSemiBold","color":"#575279"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#b4637a","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#b4637a","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#907aa9","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#c97d1a","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#286983","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#b4373f","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#faf4ed","border":{"t":"Border","top":{"t":"BorderSide","color":"#9893a5"},"right":{"t":"BorderSide","color":"#9893a5"},"bottom":{"t":"BorderSide","color":"#9893a5"},"left":{"t":"BorderSide","color":"#9893a5"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Solarized","font_family":"PoppinsSemiBold","color":"#586e75"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#268bd2","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#268bd2","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#2aa198","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#b58900","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#738500","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#dc322f","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#fdf6e3","border":{"t":"Border","top":{"t":"BorderSide","color":"#93a1a1"},"right":{"t":"BorderSide","color":"#93a1a1"},"bottom":{"t":"BorderSide","color":"#93a1a1"},"left":{"t":"BorderSide","color":"#93a1a1"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Tokyo Night","font_family":"PoppinsSemiBold","color":"#3760bf"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#2e7de9","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#2e7de9","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#007197","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#8c6c3e","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#587539","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#f52a65","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#e1e2e7","border":{"t":"Border","top":{"t":"BorderSide","color":"#a8aecb"},"right":{"t":"BorderSide","color":"#a8aecb"},"bottom":{"t":"BorderSide","color":"#a8aecb"},"left":{"t":"BorderSide","color":"#a8aecb"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Classic","font_family":"PoppinsSemiBold","color":"#231918"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#c62828","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#c62828","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#775652","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#705c2e","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#2e7d4f","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#ba1a1a","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#fff8f6","border":{"t":"Border","top":{"t":"BorderSide","color":"#857370"},"right":{"t":"BorderSide","color":"#857370"},"bottom":{"t":"BorderSide","color":"#857370"},"left":{"t":"BorderSide","color":"#857370"}},"border_radius":16,"ink":true,"tap":true}]},{"t":"SegmentedButton","width":"inf","segments":[{"t":"Segment","value":"system","icon":{"icon":"brightness_auto"},"label":{"t":"Text","value":"System","size":13,"overflow":"visible","no_wrap":true}},{"t":"Segment","value":"light","icon":{"icon":"light_mode"},"label":{"t":"Text","value":"Light","size":13,"overflow":"visible","no_wrap":true}},{"t":"Segment","value":"dark","icon":{"icon":"dark_mode"},"label":{"t":"Text","value":"Dark","size":13,"overflow":"visible","no_wrap":true}}],"selected":["system"],"tap":true},{"t":"Container","content":{"t":"Text","value":"LEADERS","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#af3a03","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Text","value":"138 leaders in the catalogue. New sets are added automatically.","color":"#7c6f64"},{"t":"Row","controls":[{"t":"FilledTonalButton","content":"Update leaders","icon":{"icon":"cloud_download"},"tap":true},{"t":"ProgressRing","visible":false,"width":20,"height":20}]},{"t":"Container","content":{"t":"Text","value":"BACKUP","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#af3a03","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Text","value":"Your data only lives on this device. Export a backup now and then so you never lose it.","color":"#7c6f64"},{"t":"Row","controls":[{"t":"FilledTonalButton","content":"Export backup","icon":{"icon":"upload_file"},"tap":true},{"t":"OutlinedButton","content":"Import backup","icon":{"icon":"download"},"tap":true}],"wrap":true},{"t":"Container","content":{"t":"Text","value":"ABOUT","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#af3a03","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Container","content":{"t":"Row","controls":[{"t":"Image","width":56,"height":56,"src":"logo_mark.png","fit":"contain"},{"t":"Column","expand":true,"controls":[{"t":"Text","value":"timtapper 1.5.0","font_family":"PoppinsSemiBold"},{"t":"Text","value":"Fan-made tracker. Not affiliated with or endorsed by Bandai, Eiichiro Oda or Shueisha. Leader data from optcgapi.com.","size":12,"color":"#7c6f64"}],"spacing":4}],"vertical_alignment":"start","spacing":14},"padding":14,"bgcolor":"#f2e5bc","border":{"t":"Border","top":{"t":"BorderSide","color":"#d1c3a3"},"right":{"t":"BorderSide","color":"#d1c3a3"},"bottom":{"t":"BorderSide","color":"#d1c3a3"},"left":{"t":"BorderSide","color":"#d1c3a3"}},"border_radius":18},{"t":"Container","height":24}]},"padding":{"t":"Padding","left":16,"top":8,"right":16,"bottom":88}}],"route":"/settings","appbar":{"t":"AppBar","title":{"t":"Text","value":"Settings"}},"navigation_bar":{"t":"NavigationBar","destinations":[{"t":"NavigationBarDestination","icon":{"icon":"style_outlined"},"label":"Events","selected_icon":{"icon":"style"}},{"t":"NavigationBarDestination","icon":{"icon":"insights_outlined"},"label":"Stats","selected_icon":{"icon":"insights"}},{"t":"NavigationBarDestination","icon":{"icon":"settings_outlined"},"label":"Settings","selected_icon":{"icon":"settings"}}],"selected_index":2,"tap":true}}},"images":{},"digests":{}},"dark":{"v":1,"lang":"en","dark":true,"colors":{"primary":"#fe8019","onprimary":"#282828","primarycontainer":"#6b4629","onprimarycontainer":"#ebdbb2","secondary":"#8ec07c","onsecondary":"#282828","secondarycontainer":"#4c5845","onsecondarycontainer":"#ebdbb2","tertiary":"#fabd2f","ontertiary":"#282828","tertiarycontainer":"#6a572f","ontertiarycontainer":"#ebdbb2","error":"#fb4934","onerror":"#282828","errorcontainer":"#6a3730","onerrorcontainer":"#ebdbb2","surface":"#282828","onsurface":"#ebdbb2","onsurfacevariant":"#a89984","outline":"#665c54","outlinevariant":"#494440","shadow":"#000000","scrim":"#000000","inversesurface":"#ebdbb2","oninversesurface":"#282828","inverseprimary":"#f4ae66","surfacetint":"#282828","surfacebright":"#3c3836","surfacecontainer":"#32302f","surfacecontainerhigh":"#3c3836","surfacecontainerhighest":"#504945","surfacecontainerlow":"#2d2c2c","surfacecontainerlowest":"#282828","surfacedim":"#282828"},"scheme":{"bg":"#282828","fg":"#ebdbb2","muted":"#a89984","nav":"#32302f","indicator":"#794c27"},"tabs":["/events","/stats","/settings"],"strings":{"opening":"Opening…"},"views":{"/events":{"t":"View","scroll":"auto","controls":[{"t":"Container","content":{"t":"Column","controls":[{"t":"Container","content":{"t":"Column","controls":[{"t":"Image","width":120,"height":120,"src":"logo_mark.png","fit":"contain"},{"t":"Container","height":8},{"t":"Text","value":"No events yet","text_align":"center","font_family":"PoppinsExtraBold","size":20},{"t":"Text","value":"Log a testing session, a locals or a major — then add each round as you play it.","text_align":"center","color":"#a89984"}],"horizontal_alignment":"center","spacing":8},"padding":{"t":"Padding","left":24,"top":48,"right":24,"bottom":24},"alignment":{"t":"Alignment","x":0.0,"y":0.0}}]},"padding":{"t":"Padding","left":16,"top":8,"right":16,"bottom":88}}],"route":"/events","appbar":{"t":"AppBar","leading":{"t":"Container","content":{"t":"Image","width":32,"height":32,"src":"logo_mark.png","fit":"contain"},"padding":{"t":"Padding","left":16}},"leading_width":56,"title":{"t":"Text","value":"Events"}},"floating_action_button":{"t":"FloatingActionButton","content":{"t":"Text","value":"New event"},"icon":{"icon":"add"},"tap":true,"nav":"/new"},"navigation_bar":{"t":"NavigationBar","destinations":[{"t":"NavigationBarDestination","icon":{"icon":"style_outlined"},"label":"Events","selected_icon":{"icon":"style"}},{"t":"NavigationBarDestination","icon":{"icon":"insights_outlined"},"label":"Stats","selected_icon":{"icon":"insights"}},{"t":"NavigationBarDestination","icon":{"icon":"settings_outlined"},"label":"Settings","selected_icon":{"icon":"settings"}}],"tap":true}},"/stats":{"t":"View","scroll":"auto","controls":[{"t":"Container","content":{"t":"Column","controls":[{"t":"Column","controls":[{"t":"Dropdown","width":"inf","value":"all","options":[{"t":"DropdownOption","key":"all","text":"All leaders","leading_icon":{"icon":"groups_outlined"}}],"leading_icon":{"icon":"groups_outlined"},"tap":true,"label":"Your leader","dense":true},{"t":"Dropdown","width":"inf","value":"all","options":[{"t":"DropdownOption","key":"all","text":"All event types"}],"tap":true,"label":"Event type","dense":true},{"t":"Dropdown","width":"inf","value":"all","options":[{"t":"DropdownOption","key":"all","text":"All sets"}],"tap":true,"label":"Set","dense":true}]},{"t":"Container","content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Column","expand":true,"controls":[{"t":"Text","value":"Win rate","size":12,"color":"#a89984"},{"t":"Text","value":"—","font_family":"PoppinsExtraBold","size":44,"max_lines":1,"color":"#a89984"}],"spacing":0},{"t":"Column","controls":[{"t":"Text","value":"Record","size":12,"color":"#a89984"},{"t":"Text","value":"0-0","font_family":"PoppinsExtraBold","size":22,"max_lines":1}],"horizontal_alignment":"end","spacing":0},{"t":"Column","controls":[{"t":"Text","value":"Events","size":12,"color":"#a89984"},{"t":"Text","value":"0","font_family":"PoppinsExtraBold","size":22,"max_lines":1}],"horizontal_alignment":"end","spacing":0}],"vertical_alignment":"end","spacing":20},{"t":"ProgressBar","value":0,"bar_height":8,"color":"#a89984","bgcolor":"#504945","border_radius":4}],"spacing":12},"padding":18,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18},{"t":"Row","controls":[{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Going 1st","size":12,"color":"#a89984"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#a89984"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#4c4742","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Going 2nd","size":12,"color":"#a89984"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#a89984"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#4c4742","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18}]},{"t":"Row","controls":[{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Won the die roll","size":12,"color":"#a89984"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#a89984"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#4c4742","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Lost the die roll","size":12,"color":"#a89984"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#a89984"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#4c4742","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18}]},{"t":"Row","controls":[{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"You chose turn","size":12,"color":"#a89984"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#a89984"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#4c4742","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"They chose turn","size":12,"color":"#a89984"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#a89984"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#4c4742","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18}]},{"t":"Row","controls":[{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Games","size":12,"color":"#a89984"},{"t":"Container","content":{"t":"Text","value":"—","font_family":"PoppinsSemiBold","size":15,"color":"#a89984"},"padding":{"t":"Padding","left":10,"top":3,"right":10,"bottom":3},"bgcolor":"#4c4742","border_radius":99}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18}]},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Best matchup","size":12,"color":"#a89984"},{"t":"Text","value":"Not enough games","color":"#a89984"}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Worst matchup","size":12,"color":"#a89984"},{"t":"Text","value":"Not enough games","color":"#a89984"}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18},{"t":"Container","expand":true,"content":{"t":"Column","controls":[{"t":"Text","value":"Recent form","size":12,"color":"#a89984"},{"t":"Row","controls":[{"t":"Text","value":"—"}],"spacing":4,"wrap":true}],"spacing":4,"tight":true},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18},{"t":"FilledButton","disabled":true,"width":"inf","height":52,"content":"Share summary","icon":{"icon":"share"},"tap":true},{"t":"Container","content":{"t":"Text","value":"MATCHUPS","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#fe8019","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Text","value":"No games logged yet","color":"#a89984"},{"t":"Row","controls":[{"t":"TextButton","disabled":true,"content":"Share matchups","icon":{"icon":"share"},"tap":true}],"alignment":"center"},{"t":"Container","height":24}],"horizontal_alignment":"stretch","spacing":8},"padding":{"t":"Padding","left":16,"top":8,"right":16,"bottom":88}}],"route":"/stats","appbar":{"t":"AppBar","title":{"t":"Text","value":"Stats"}},"navigation_bar":{"t":"NavigationBar","destinations":[{"t":"NavigationBarDestination","icon":{"icon":"style_outlined"},"label":"Events","selected_icon":{"icon":"style"}},{"t":"NavigationBarDestination","icon":{"icon":"insights_outlined"},"label":"Stats","selected_icon":{"icon":"insights"}},{"t":"NavigationBarDestination","icon":{"icon":"settings_outlined"},"label":"Settings","selected_icon":{"icon":"settings"}}],"selected_index":1,"tap":true}},"/settings":{"t":"View","scroll":"auto","controls":[{"t":"Container","content":{"t":"Column","controls":[{"t":"Container","content":{"t":"Text","value":"APPEARANCE","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#fe8019","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Dropdown","width":"inf","value":"en","options":[{"t":"DropdownOption","key":"en","text":"English","leading_icon":{"t":"Container","width":47,"content":{"t":"Container","width":27,"height":18,"content":{"t":"Image","width":27,"height":18,"src":"flags/gb.svg","fit":"cover"},"border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":3,"clip_behavior":"antiAlias"},"alignment":{"t":"Alignment","x":0.0,"y":0.0}}}],"leading_icon":{"t":"Container","width":47,"content":{"t":"Container","width":27,"height":18,"content":{"t":"Image","width":27,"height":18,"src":"flags/gb.svg","fit":"cover"},"border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":3,"clip_behavior":"antiAlias"},"alignment":{"t":"Alignment","x":0.0,"y":0.0}},"tap":true,"label":"Language"},{"t":"Text","value":"Theme","size":12,"color":"#a89984"},{"t":"ResponsiveRow","controls":[{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Gruvbox","font_family":"PoppinsSemiBold","color":"#ebdbb2"},{"t":"Icon","icon":{"icon":"check_circle"},"color":"#fe8019","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#fe8019","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#8ec07c","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#fabd2f","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#b8bb26","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#fb4934","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#282828","border":{"t":"Border","top":{"t":"BorderSide","width":2.5,"color":"#fe8019"},"right":{"t":"BorderSide","width":2.5,"color":"#fe8019"},"bottom":{"t":"BorderSide","width":2.5,"color":"#fe8019"},"left":{"t":"BorderSide","width":2.5,"color":"#fe8019"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Catppuccin","font_family":"PoppinsSemiBold","color":"#cdd6f4"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#cba6f7","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#cba6f7","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#94e2d5","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#fab387","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#a6e3a1","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#f38ba8","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#1e1e2e","border":{"t":"Border","top":{"t":"BorderSide","color":"#6c7086"},"right":{"t":"BorderSide","color":"#6c7086"},"bottom":{"t":"BorderSide","color":"#6c7086"},"left":{"t":"BorderSide","color":"#6c7086"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Dracula","font_family":"PoppinsSemiBold","color":"#f8f8f2"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#bd93f9","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#bd93f9","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#8be9fd","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#ffb86c","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#50fa7b","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#ff5555","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#282a36","border":{"t":"Border","top":{"t":"BorderSide","color":"#6272a4"},"right":{"t":"BorderSide","color":"#6272a4"},"bottom":{"t":"BorderSide","color":"#6272a4"},"left":{"t":"BorderSide","color":"#6272a4"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Nord","font_family":"PoppinsSemiBold","color":"#eceff4"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#88c0d0","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#88c0d0","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#81a1c1","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#ebcb8b","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#a3be8c","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#bf616a","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#2e3440","border":{"t":"Border","top":{"t":"BorderSide","color":"#616e88"},"right":{"t":"BorderSide","color":"#616e88"},"bottom":{"t":"BorderSide","color":"#616e88"},"left":{"t":"BorderSide","color":"#616e88"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Rosé Pine","font_family":"PoppinsSemiBold","color":"#e0def4"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#ebbcba","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#ebbcba","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#c4a7e7","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#f6c177","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#9ccfd8","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#eb6f92","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#191724","border":{"t":"Border","top":{"t":"BorderSide","color":"#6e6a86"},"right":{"t":"BorderSide","color":"#6e6a86"},"bottom":{"t":"BorderSide","color":"#6e6a86"},"left":{"t":"BorderSide","color":"#6e6a86"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Solarized","font_family":"PoppinsSemiBold","color":"#93a1a1"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#268bd2","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#268bd2","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#2aa198","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#b58900","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#859900","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#dc322f","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#002b36","border":{"t":"Border","top":{"t":"BorderSide","color":"#586e75"},"right":{"t":"BorderSide","color":"#586e75"},"bottom":{"t":"BorderSide","color":"#586e75"},"left":{"t":"BorderSide","color":"#586e75"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Tokyo Night","font_family":"PoppinsSemiBold","color":"#c0caf5"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#7aa2f7","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#7aa2f7","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#7dcfff","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#e0af68","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#9ece6a","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#f7768e","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#1a1b26","border":{"t":"Border","top":{"t":"BorderSide","color":"#414868"},"right":{"t":"BorderSide","color":"#414868"},"bottom":{"t":"BorderSide","color":"#414868"},"left":{"t":"BorderSide","color":"#414868"}},"border_radius":16,"ink":true,"tap":true},{"t":"Container","col":{"xs":6,"sm":4},"height":84,"content":{"t":"Column","controls":[{"t":"Row","controls":[{"t":"Text","expand":true,"value":"Classic","font_family":"PoppinsSemiBold","color":"#f1dfdc"},{"t":"Icon","visible":false,"icon":{"icon":"check_circle"},"color":"#ffb4a8","size":18}]},{"t":"Row","controls":[{"t":"Container","width":14,"height":14,"bgcolor":"#ffb4a8","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#e7bdb7","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#dfc38c","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#7fd8a0","border_radius":7},{"t":"Container","width":14,"height":14,"bgcolor":"#ffb4ab","border_radius":7}],"spacing":4}],"alignment":"spaceBetween"},"padding":12,"bgcolor":"#1a1111","border":{"t":"Border","top":{"t":"BorderSide","color":"#a08c89"},"right":{"t":"BorderSide","color":"#a08c89"},"bottom":{"t":"BorderSide","color":"#a08c89"},"left":{"t":"BorderSide","color":"#a08c89"}},"border_radius":16,"ink":true,"tap":true}]},{"t":"SegmentedButton","width":"inf","segments":[{"t":"Segment","value":"system","icon":{"icon":"brightness_auto"},"label":{"t":"Text","value":"System","size":13,"overflow":"visible","no_wrap":true}},{"t":"Segment","value":"light","icon":{"icon":"light_mode"},"label":{"t":"Text","value":"Light","size":13,"overflow":"visible","no_wrap":true}},{"t":"Segment","value":"dark","icon":{"icon":"dark_mode"},"label":{"t":"Text","value":"Dark","size":13,"overflow":"visible","no_wrap":true}}],"selected":["system"],"tap":true},{"t":"Container","content":{"t":"Text","value":"LEADERS","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#fe8019","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Text","value":"138 leaders in the catalogue. New sets are added automatically.","color":"#a89984"},{"t":"Row","controls":[{"t":"FilledTonalButton","content":"Update leaders","icon":{"icon":"cloud_download"},"tap":true},{"t":"ProgressRing","visible":false,"width":20,"height":20}]},{"t":"Container","content":{"t":"Text","value":"BACKUP","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#fe8019","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Text","value":"Your data only lives on this device. Export a backup now and then so you never lose it.","color":"#a89984"},{"t":"Row","controls":[{"t":"FilledTonalButton","content":"Export backup","icon":{"icon":"upload_file"},"tap":true},{"t":"OutlinedButton","content":"Import backup","icon":{"icon":"download"},"tap":true}],"wrap":true},{"t":"Container","content":{"t":"Text","value":"ABOUT","style":{"t":"TextStyle","size":12,"font_family":"PoppinsExtraBold","color":"#fe8019","letter_spacing":1.4}},"padding":{"t":"Padding","left":4,"top":20,"right":4,"bottom":4}},{"t":"Container","content":{"t":"Row","controls":[{"t":"Image","width":56,"height":56,"src":"logo_mark.png","fit":"contain"},{"t":"Column","expand":true,"controls":[{"t":"Text","value":"timtapper 1.5.0","font_family":"PoppinsSemiBold"},{"t":"Text","value":"Fan-made tracker. Not affiliated with or endorsed by Bandai, Eiichiro Oda or Shueisha. Leader data from optcgapi.com.","size":12,"color":"#a89984"}],"spacing":4}],"vertical_alignment":"start","spacing":14},"padding":14,"bgcolor":"#32302f","border":{"t":"Border","top":{"t":"BorderSide","color":"#494440"},"right":{"t":"BorderSide","color":"#494440"},"bottom":{"t":"BorderSide","color":"#494440"},"left":{"t":"BorderSide","color":"#494440"}},"border_radius":18},{"t":"Container","height":24}]},"padding":{"t":"Padding","left":16,"top":8,"right":16,"bottom":88}}],"route":"/settings","appbar":{"t":"AppBar","title":{"t":"Text","value":"Settings"}},"navigation_bar":{"t":"NavigationBar","destinations":[{"t":"NavigationBarDestination","icon":{"icon":"style_outlined"},"label":"Events","selected_icon":{"icon":"style"}},{"t":"NavigationBarDestination","icon":{"icon":"insights_outlined"},"label":"Stats","selected_icon":{"icon":"insights"}},{"t":"NavigationBarDestination","icon":{"icon":"settings_outlined"},"label":"Settings","selected_icon":{"icon":"settings"}}],"selected_index":2,"tap":true}}},"images":{},"digests":{}}}};</script>
+<script>// The web shell: paints a read-only copy of the app's screens the moment the page opens, while Pyodide and the app
+// start behind it, then fades out when the app says it's on screen. The copy is what the app saved on the last
+// visit (ui/shell.py, kept in IndexedDB), or, on a first visit, the empty app built with the site.
+//
+// Moving around works in the copy itself: the tabs, opening an event, going back. A tap that needs the app (an edit,
+// "New event") shows "Opening…", and the address is set so the app opens on that screen. The address only changes
+// through history.replaceState, so the browser's history holds no screen the copy merely showed.
+//
+// scripts/build_web.py writes window.TIMTAPPER_SHELL before this script: the IndexedDB names, the ready channel, the
+// codepoint of every icon the app uses, and the first-visit copies.
+(() => {
+  "use strict";
+  const config = window.TIMTAPPER_SHELL;
+  // ?noshell: the page as it was before the shell, to tell whether a browser's trouble comes from it
+  if (!config || new URLSearchParams(location.search).has("noshell")) return;
+  const READY_FADE_DELAY = 250; // ms after "ready": Flutter paints the app's first frame meanwhile
+  const LOAD_TIMEOUT = 400; // ms to wait for the saved copy before showing the first-visit one
+
+  const root = document.createElement("div");
+  root.id = "tt-shell";
+  document.body.prepend(root);
+  const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  let doc = null;
+  let route = "/events";
+  let pendingRoute = null; // what the app should open once ready, when the copy can't show it itself
+  let gone = false;
+
+  // ---- colors and sizes -------------------------------------------------
+  function color(value) {
+    if (typeof value !== "string") return null;
+    const [token, opacity] = value.split(",");
+    let hex = token.startsWith("#") ? token : (doc.colors[token.toLowerCase().replace(/_/g, "")] || token);
+    if (opacity === undefined || !hex.startsWith("#")) return hex;
+    hex = hex.slice(1);
+    if (hex.length === 8) hex = hex.slice(2);
+    const n = parseInt(hex, 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${parseFloat(opacity)})`;
+  }
+  const px = (v) => (v === "inf" ? "100%" : typeof v === "number" ? `${v}px` : null);
+  function edges(p) {
+    if (p == null) return null;
+    if (typeof p === "number") return `${p}px`;
+    return `${p.top || 0}px ${p.right || 0}px ${p.bottom || 0}px ${p.left || 0}px`;
+  }
+  function radius(r) {
+    if (r == null) return null;
+    if (typeof r === "number") return `${r}px`;
+    return `${r.top_left || 0}px ${r.top_right || 0}px ${r.bottom_right || 0}px ${r.bottom_left || 0}px`;
+  }
+  function borderSide(side) {
+    if (!side) return null;
+    return `${side.width ?? 1}px solid ${color(side.color) || "var(--outline)"}`;
+  }
+  const FONTS = { PoppinsSemiBold: "tt-semi", PoppinsExtraBold: "tt-heavy" };
+  const ALIGN = { start: "flex-start", end: "flex-end", center: "center", spaceBetween: "space-between",
+    spaceAround: "space-around", spaceEvenly: "space-evenly", stretch: "stretch", baseline: "baseline" };
+  const axis = (a) => (a <= -0.5 ? "flex-start" : a >= 0.5 ? "flex-end" : "center");
+
+  // ---- building blocks --------------------------------------------------
+  function el(tag, cls, style) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (style) for (const [k, v] of Object.entries(style)) if (v != null && v !== "") e.style[k] = v;
+    return e;
+  }
+  function icon(data, size, col) {
+    const name = data && (data.icon || data);
+    const cp = config.icons[name];
+    const e = el("span", "tt-ic", { fontSize: px(size || 24), width: px(size || 24), height: px(size || 24),
+      color: col || null });
+    if (cp) e.textContent = String.fromCodePoint(cp);
+    return e;
+  }
+  function text(value, cls) {
+    const e = el("span", cls);
+    e.textContent = value;
+    return e;
+  }
+  function imageSrc(src) {
+    if (src && typeof src === "object" && src.img) {
+      const data = doc.images[src.img];
+      return data ? `data:image/webp;base64,${data}` : null;
+    }
+    return typeof src === "string" ? src : null;
+  }
+  function content(c) {
+    // a button's content: a control, or plain text
+    if (c == null) return null;
+    return typeof c === "string" ? text(c) : render(c);
+  }
+  function flexChild(e, node, parentDir) {
+    if (node.expand) {
+      e.style.flex = `${node.expand === true ? 1 : node.expand} 1 0`;
+      if (parentDir === "row") e.style.minWidth = "0";
+    }
+    return e;
+  }
+  function mark(e, node) {
+    if (node.nav) {
+      e.dataset.nav = node.nav;
+      e.classList.add("tt-tap");
+    } else if (node.tap) {
+      e.dataset.tap = "1";
+      e.classList.add("tt-tap");
+    }
+    if (node.visible === false) e.style.display = "none";
+    return e;
+  }
+
+  // ---- controls ---------------------------------------------------------
+  const R = {};
+  function render(node, parentDir) {
+    if (!node || typeof node !== "object") return el("span");
+    const f = R[node.t] || R.Unknown;
+    const e = f(node);
+    return mark(flexChild(e, node, parentDir), node);
+  }
+  function children(e, nodes, dir) {
+    for (const n of nodes || []) e.appendChild(render(n, dir));
+    return e;
+  }
+  R.Unknown = (n) => (n.content ? render(n.content) : el("span"));
+  R.Column = (n) => {
+    const e = el("div", "tt-col", {
+      gap: px(n.spacing ?? 10),
+      justifyContent: ALIGN[n.alignment] || null,
+      alignItems: ALIGN[n.horizontal_alignment || "start"],
+      // stretching its children, a column is as wide as it may be (Flutter gives them its full width)
+      width: n.horizontal_alignment === "stretch" ? "100%" : null,
+    });
+    return children(e, n.controls, "col");
+  };
+  R.Row = (n) => {
+    const e = el("div", "tt-row", {
+      gap: n.wrap ? `${n.run_spacing ?? 10}px ${n.spacing ?? 10}px` : px(n.spacing ?? 10),
+      justifyContent: ALIGN[n.alignment] || null,
+      alignItems: ALIGN[n.vertical_alignment || "center"],
+      flexWrap: n.wrap ? "wrap" : null,
+      display: n.tight ? "inline-flex" : null,
+      width: n.tight ? null : "100%",
+    });
+    return children(e, n.controls, "row");
+  };
+  R.ResponsiveRow = (n) => {
+    const spacing = n.spacing ?? 10;
+    const e = el("div", "tt-row", { flexWrap: "wrap", gap: `${n.run_spacing ?? 10}px ${spacing}px`, width: "100%" });
+    for (const c of n.controls || []) {
+      const span = typeof c.col === "number" ? c.col : (c.col && (c.col.xs ?? c.col.sm)) || 12;
+      const child = render(c, "row");
+      child.style.flex = "none";
+      child.style.width = `calc(${(span / 12) * 100}% - ${spacing * (1 - span / 12)}px)`;
+      e.appendChild(child);
+    }
+    return e;
+  };
+  R.Stack = (n) => {
+    const e = el("div", null, { position: "relative", width: px(n.width), height: px(n.height) });
+    for (const c of n.controls || []) {
+      const child = render(c);
+      const positioned = ["left", "top", "right", "bottom"].some((k) => c[k] != null);
+      if (positioned) {
+        child.style.position = "absolute";
+        for (const k of ["left", "top", "right", "bottom"]) if (c[k] != null) child.style[k] = `${c[k]}px`;
+      }
+      e.appendChild(child);
+    }
+    return e;
+  };
+  R.Container = (n) => {
+    const e = el("div", null, {
+      width: px(n.width),
+      height: px(n.height),
+      padding: edges(n.padding),
+      margin: edges(n.margin),
+      background: n.gradient ? gradient(n.gradient) : color(n.bgcolor),
+      borderRadius: radius(n.border_radius),
+      overflow: n.clip_behavior && n.clip_behavior !== "none" ? "hidden" : null,
+      flex: "none",
+    });
+    if (n.border) {
+      for (const side of ["top", "right", "bottom", "left"]) {
+        const b = n.border[side];
+        if (b) e.style[`border${side[0].toUpperCase()}${side.slice(1)}`] = borderSide(b);
+      }
+    }
+    if (n.alignment) {
+      Object.assign(e.style, { display: "flex", justifyContent: axis(n.alignment.x ?? 0),
+        alignItems: axis(n.alignment.y ?? 0) });
+      if (n.width == null) e.style.width = "100%";
+    }
+    if (n.content) {
+      const child = render(n.content);
+      if (!n.alignment && n.width == null && child.classList.contains("tt-row")) child.style.width = "100%";
+      // a sized box (or one pinned to both edges of a stack) gives its column or row that size, as Flutter's
+      // tight constraints do
+      const flex = /tt-(col|row)/.test(child.className);
+      if (flex && (n.height != null || (n.top != null && n.bottom != null))) child.style.height = "100%";
+      if (flex && (n.width != null || (n.left != null && n.right != null))) child.style.width = "100%";
+      e.appendChild(child);
+    }
+    if (n.expand && !n.content) e.style.alignSelf = "stretch";
+    return e;
+  };
+  function gradient(g) {
+    const stops = (g.colors || []).map((c, i) => `${color(c)}${g.stops ? ` ${g.stops[i] * 100}%` : ""}`);
+    const vertical = (g.begin?.y ?? -1) !== (g.end?.y ?? 1) && (g.begin?.x ?? 0) === (g.end?.x ?? 0);
+    return `linear-gradient(${vertical ? "180deg" : "90deg"}, ${stops.join(", ")})`;
+  }
+  R.Text = (n) => {
+    const style = n.style || {};
+    const family = n.font_family || style.font_family;
+    const e = el("span", `tt-text ${FONTS[family] || ""}`, {
+      fontSize: px(n.size ?? style.size),
+      color: color(n.color ?? style.color),
+      letterSpacing: px(style.letter_spacing),
+      textAlign: n.text_align || null,
+      whiteSpace: n.no_wrap ? "nowrap" : null,
+    });
+    if (n.max_lines) Object.assign(e.style, { display: "-webkit-box", webkitLineClamp: n.max_lines,
+      webkitBoxOrient: "vertical", overflow: "hidden" });
+    if (n.overflow === "ellipsis") Object.assign(e.style, { overflow: "hidden", textOverflow: "ellipsis" });
+    e.textContent = n.value ?? "";
+    return e;
+  };
+  R.Icon = (n) => icon(n.icon, n.size, color(n.color));
+  R.Image = (n) => {
+    const src = imageSrc(n.src);
+    const box = el("div", null, { width: px(n.width), height: px(n.height), flex: "none", display: "flex",
+      alignItems: "center", justifyContent: "center", overflow: "hidden" });
+    const fallback = n.error_content ? render(n.error_content) : null;
+    if (!src) {
+      if (fallback) box.appendChild(fallback);
+      return box;
+    }
+    const img = el("img", null, { width: "100%", height: "100%", objectFit: n.fit === "contain" ? "contain" : "cover" });
+    img.alt = "";
+    img.src = src;
+    if (fallback) img.onerror = () => img.replaceWith(fallback);
+    box.appendChild(img);
+    return box;
+  };
+  function field(n, valueText, trailing) {
+    const lead = n.prefix_icon || n.leading_icon;
+    const e = el("div", `tt-field${n.dense ? " tt-dense" : ""}${lead ? " tt-lead" : ""}`, { width: px(n.width) });
+    if (lead) {
+      const box = el("span", "tt-field-lead");
+      box.appendChild(lead.t ? render(lead) : icon(lead, 20, "var(--muted)"));
+      e.appendChild(box);
+    }
+    const value = valueText ?? "";
+    if (n.prefix && value) e.appendChild(render(n.prefix));
+    const v = el("span", "tt-field-value", { fontSize: px(n.text_size) });
+    if (value) {
+      v.textContent = value;
+      if (n.label) e.appendChild(text(n.label, "tt-field-label"));
+    } else {
+      v.textContent = n.label || n.hint_text || "";
+      v.classList.add("tt-field-placeholder");
+    }
+    e.appendChild(v);
+    if (trailing) e.appendChild(trailing);
+    e.dataset.tap = "1";
+    e.classList.add("tt-tap");
+    return e;
+  }
+  R.TextField = (n) => field(n, n.value);
+  R.Dropdown = (n) => {
+    const option = (n.options || []).find((o) => o.key === n.value) || (n.options || [])[0];
+    const node = option && option.leading_icon ? { ...n, leading_icon: option.leading_icon } : n;
+    const e = field(node, option ? (option.text ?? option.key) : n.value, icon("arrow_drop_down", 20, "var(--muted)"));
+    e.classList.add("tt-menu");
+    return e;
+  };
+  function button(n, look) {
+    const style = n.style || {};
+    const e = el("div", `tt-btn tt-semi${n.icon ? " tt-has-icon" : ""}`, {
+      height: px(n.height), width: px(n.width), ...look,
+    });
+    if (style.color) e.style.color = color(style.color);
+    if (style.side) e.style.border = borderSide(style.side);
+    if (style.padding) e.style.padding = edges(style.padding);
+    if (n.icon) e.appendChild(icon(n.icon, 18));
+    const c = content(n.content);
+    if (c) e.appendChild(c);
+    e.dataset.tap = "1";
+    return e;
+  }
+  R.FilledButton = (n) => button(n, { background: "var(--primary)", color: "var(--bg)" });
+  R.FilledTonalButton = (n) => button(n, { background: "var(--secondarycontainer)", color: "var(--fg)" });
+  R.OutlinedButton = (n) => button(n, { border: "1px solid var(--outline)", color: "var(--primary)" });
+  R.TextButton = (n) => button(n, { color: "var(--primary)", padding: "0 12px" });
+  R.Button = R.FilledTonalButton;
+  R.IconButton = (n) => {
+    const e = el("div", "tt-iconbtn");
+    e.appendChild(n.icon && n.icon.t ? render(n.icon) : icon(n.icon, 24, color(n.icon_color) || "var(--muted)"));
+    e.dataset.tap = "1";
+    return e;
+  };
+  R.PopupMenuButton = R.IconButton;
+  R.Switch = (n) => {
+    const e = el("div", `tt-switch${n.value ? " tt-on" : ""}`);
+    const track = el("div", "tt-track");
+    track.appendChild(el("div", "tt-thumb"));
+    e.appendChild(track);
+    if (n.label) e.appendChild(typeof n.label === "string" ? text(n.label) : render(n.label));
+    e.dataset.tap = "1";
+    return e;
+  };
+  R.SegmentedButton = (n) => {
+    const e = el("div", "tt-seg tt-semi", { width: px(n.width) });
+    const selected = new Set(n.selected || []);
+    for (const s of n.segments || []) {
+      const on = selected.has(s.value);
+      const seg = el("div", on ? "tt-on" : null);
+      // a selected segment shows a check in place of its icon, unless told not to
+      if (on && n.show_selected_icon !== false) seg.appendChild(icon("check", 18));
+      else if (s.icon) seg.appendChild(s.icon.t ? render(s.icon) : icon(s.icon, 18));
+      const label = content(s.label);
+      if (label) seg.appendChild(label);
+      e.appendChild(seg);
+    }
+    e.dataset.tap = "1";
+    return e;
+  };
+  R.ExpansionTile = (n) => {
+    const shape = n.collapsed_shape || n.shape || {};
+    const e = el("div", "tt-col", {
+      background: color(n.collapsed_bgcolor || n.bgcolor),
+      borderRadius: px(shape.radius),
+      border: borderSide(shape.side),
+      padding: edges(n.tile_padding) || "0 16px",
+      minHeight: "56px",
+      justifyContent: "center",
+      gap: "2px",
+      fontSize: "16px",
+    });
+    const title = typeof n.title === "string" ? text(n.title) : render(n.title);
+    e.appendChild(title);
+    if (n.subtitle) {
+      const sub = typeof n.subtitle === "string" ? text(n.subtitle) : render(n.subtitle);
+      sub.style.color = sub.style.color || "var(--muted)";
+      e.appendChild(sub);
+    }
+    e.dataset.tap = "1";
+    return e;
+  };
+  R.ProgressBar = (n) => {
+    const e = el("div", "tt-progress", { height: px(n.bar_height ?? 4), background: color(n.bgcolor) || "var(--secondarycontainer)",
+      borderRadius: radius(n.border_radius), width: "100%" });
+    if (n.value != null) e.appendChild(el("div", null, { width: `${Math.max(0, Math.min(1, n.value)) * 100}%`,
+      background: color(n.color) || "var(--primary)", borderRadius: radius(n.border_radius) }));
+    return e;
+  };
+  R.ProgressRing = (n) => el("span", "tt-spin", { width: px(n.width), height: px(n.height) });
+  R.Divider = () => el("div", null, { height: "1px", background: "var(--outlinevariant)", width: "100%" });
+
+  // ---- screens ----------------------------------------------------------
+  function appBar(view) {
+    const bar = view.appbar || {};
+    const e = el("div", "tt-bar");
+    const back = route.startsWith("/event/");
+    if (back) {
+      const b = el("div", "tt-iconbtn");
+      b.appendChild(icon("arrow_back", 24));
+      b.dataset.nav = "/events";
+      const lead = el("div", "tt-bar-lead", { width: "56px" });
+      lead.appendChild(b);
+      e.appendChild(lead);
+    } else if (bar.leading) {
+      const lead = el("div", "tt-bar-lead", { width: px(bar.leading_width ?? 56) });
+      lead.appendChild(render(bar.leading));
+      e.appendChild(lead);
+    }
+    const title = el("div", "tt-bar-title tt-heavy");
+    title.textContent = bar.title ? (bar.title.value ?? "") : "";
+    e.appendChild(title);
+    for (const a of bar.actions || []) e.appendChild(render(a));
+    return e;
+  }
+  function navBar(view) {
+    const nav = view.navigation_bar;
+    const e = el("div", "tt-nav");
+    (nav.destinations || []).forEach((d, i) => {
+      const on = i === (nav.selected_index ?? 0);
+      const dest = el("div", `tt-dest${on ? " tt-on" : ""}`);
+      const ind = el("div", "tt-dest-ind");
+      ind.appendChild(icon(on && d.selected_icon ? d.selected_icon : d.icon, 24));
+      dest.appendChild(ind);
+      dest.appendChild(text(d.label || "", `tt-dest-label${on ? " tt-semi" : ""}`));
+      dest.dataset.nav = doc.tabs[i];
+      e.appendChild(dest);
+    });
+    return e;
+  }
+  function show(next) {
+    const view = doc.views[next] || doc.views["/events"];
+    route = doc.views[next] ? next : "/events";
+    root.replaceChildren();
+    root.appendChild(appBar(view));
+    const body = el("div", "tt-body", { padding: edges(view.padding ?? 10) }); // a View's default padding
+    for (const c of view.controls || []) body.appendChild(render(c, "col"));
+    root.appendChild(body);
+    if (view.navigation_bar) root.appendChild(navBar(view));
+    const fab = view.floating_action_button;
+    if (fab) {
+      const f = el("div", `tt-fab tt-semi${view.navigation_bar ? "" : " tt-nonav"}`);
+      if (fab.icon) f.appendChild(icon(fab.icon, 24));
+      const label = content(fab.content);
+      if (label) f.appendChild(label);
+      if (fab.nav) f.dataset.nav = fab.nav;
+      root.appendChild(f);
+    }
+    const opening = el("div", "tt-opening");
+    opening.appendChild(el("span", "tt-spin"));
+    opening.appendChild(text(doc.strings.opening));
+    root.appendChild(opening);
+    setAddress(route);
+  }
+  function setAddress(r) {
+    const hash = `#${r}`;
+    if (location.hash !== hash) history.replaceState(history.state, "", hash);
+  }
+  function busy() {
+    root.classList.add("tt-busy");
+  }
+
+  root.addEventListener("click", (ev) => {
+    if (gone || !doc) return;
+    const target = ev.target.closest("[data-nav],[data-tap]");
+    if (!target) return;
+    const nav = target.dataset.nav;
+    if (nav && doc.views[nav]) {
+      show(nav);
+      return;
+    }
+    if (nav) {
+      // a screen the copy doesn't have ("New event"): the app opens it
+      pendingRoute = nav;
+      setAddress(nav);
+    }
+    busy();
+  });
+
+  // ---- the copy to show, and handing over -------------------------------
+  function theme() {
+    const s = doc.scheme;
+    const c = doc.colors;
+    const vars = { "--bg": s.bg, "--fg": s.fg, "--muted": s.muted, "--nav": s.nav, "--indicator": s.indicator,
+      "--primary": c.primary, "--outline": c.outline, "--outlinevariant": c.outlinevariant,
+      "--secondarycontainer": c.secondarycontainer, "--track": c.surfacecontainerhighest };
+    for (const [k, v] of Object.entries(vars)) if (v) root.style.setProperty(k, v);
+    document.documentElement.style.background = s.bg;
+  }
+  function start(saved) {
+    if (doc || gone) return;
+    try {
+      doc = saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.warn("timtapper shell: the saved copy is not JSON; showing the first-visit one", e);
+      doc = null;
+    }
+    if (!doc || doc.v !== config.version) doc = config.defaults[dark ? "dark" : "light"];
+    theme();
+    const wanted = decodeURIComponent((location.hash || "").replace(/^#/, "")) || "/events";
+    if (doc.views[wanted]) {
+      show(wanted);
+    } else {
+      show("/events");
+      if (wanted !== "/events") {
+        pendingRoute = wanted; // a screen only the app can open (an event made since, "New event")
+        setAddress(wanted);
+        busy();
+      }
+    }
+    console.log("timtapper shell: painted", route);
+  }
+  function load() {
+    return new Promise((resolve) => {
+      let open;
+      try {
+        open = indexedDB.open(config.db, 1);
+      } catch (e) {
+        console.warn("timtapper shell: no IndexedDB", e);
+        resolve(null);
+        return;
+      }
+      open.onupgradeneeded = () => open.result.createObjectStore(config.store);
+      open.onerror = () => resolve(null);
+      open.onsuccess = () => {
+        try {
+          const get = open.result.transaction(config.store).objectStore(config.store).get(config.key);
+          get.onsuccess = () => { open.result.close(); resolve(get.result ?? null); };
+          get.onerror = () => { open.result.close(); resolve(null); };
+        } catch (e) {
+          open.result.close();
+          resolve(null);
+        }
+      };
+    });
+  }
+  function handOver(appRoute) {
+    if (gone) return;
+    gone = true;
+    // the app opened where the address pointed when it started; take it to what the shell shows (or was asked for)
+    const wanted = pendingRoute || route;
+    if (doc && appRoute && wanted !== appRoute) {
+      history.replaceState(history.state, "", `#${appRoute}`);
+      location.hash = wanted; // a real change of address: the app's router follows it
+    }
+    setTimeout(() => {
+      root.classList.add("tt-gone");
+      document.documentElement.style.background = "";
+      setTimeout(() => root.remove(), 300);
+    }, READY_FADE_DELAY);
+    console.log("timtapper shell: handed over to the app");
+  }
+
+  if ("BroadcastChannel" in window) {
+    const channel = new BroadcastChannel(config.channel);
+    channel.onmessage = (ev) => {
+      if (ev.data && ev.data.type === config.ready) {
+        channel.close();
+        handOver(ev.data.route);
+      }
+    };
+  }
+  const fallback = setTimeout(() => start(null), LOAD_TIMEOUT);
+  load().then((saved) => {
+    clearTimeout(fallback);
+    start(saved);
+  });
+})();
+</script>
+<!-- /timtapper shell -->
+
+  <picture id="splash">
+    <source srcset="splash/img/light-1x.png 1x, splash/img/light-2x.png 2x, splash/img/light-3x.png 3x, splash/img/light-4x.png 4x" media="(prefers-color-scheme: light)">
+    <source srcset="splash/img/dark-1x.png 1x, splash/img/dark-2x.png 2x, splash/img/dark-3x.png 3x, splash/img/dark-4x.png 4x" media="(prefers-color-scheme: dark)">
+    <img class="center" aria-hidden="true" src="splash/img/light-1x.png" alt="">
+  </picture>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+
+</html>
