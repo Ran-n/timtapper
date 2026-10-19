@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.026136
-Revised: 2026/10/14 16:30:39.904867
+Revised: 2026/10/15 01:26:05.893286
 
 Build the web version (the app's Python on Pyodide, in the browser) into build/web and dist/, and optionally
 publish it to GitHub Pages, GitLab Pages and Codeberg Pages:
@@ -16,8 +16,8 @@ Five changes on top of `flet build web`:
 - files nothing in the browser uses (SQLAlchemy's and Alembic's test suites, the Windows launchers in bin/) are
   taken out of it, so every visitor downloads and unpacks less before the app starts;
 - index.html asks for the archive with ?v=<version>, so a browser holding an older copy fetches the new one;
-- index.html preloads the archive and the Pyodide runtime: flet's loader asks for Pyodide only once Flutter has
-  started, and for the archive only once Pyodide has, so the three downloads ran one after the other;
+- Python starts with the page: flet starts it only once Flutter has, and then loads Pyodide and downloads the archive
+  one after the other; now the page starts the worker first thing, which loads both at once while Flutter starts;
 - index.html paints the app's screens the moment it opens (scripts/shell/): what the app saved on the last visit, or
   on a first one the empty app, built here; Python takes over when it has started.
 
@@ -40,11 +40,15 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import blake3
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # build_android, when imported from the tests
 
 from build_android import DIST, ROOT, BuildError, project_version  # noqa: E402  (it puts the app on sys.path)
 
+from catalog.portraits import BUNDLED_LIST  # noqa: E402
 from core.logging import get_logger, setup_logging  # noqa: E402
+from core.web import PILLOW  # noqa: E402
 
 SITE = ROOT / "build" / "web"
 ASSETS = ROOT / "src" / "timtapper" / "assets"
@@ -52,13 +56,65 @@ APP_ARCHIVE = Path("assets") / "app" / "app.zip"
 ARCHIVE_URL = 'appPackageUrl: "assets/app/app.zip"'
 PAGES_BRANCH = "pages"
 # files in the archive nothing in the browser uses: what only the libraries' own test suites import, and the
-# console launchers (alembic.exe, flet.exe...) the packages install
+# console launchers (alembic.exe, flet.exe...) the packages install. SQLAlchemy's other dialects can't go: the app
+# uses only sqlite, but importing alembic imports every dialect's DDL module
 UNUSED = ("__pypackages__/sqlalchemy/testing/", "__pypackages__/alembic/testing/", "__pypackages__/bin/")
-PYODIDE_URL = re.compile(r'pyodideUrl: "(?P<dir>[^"]+/)pyodide\.mjs"')
-# what Pyodide's loader fetches before Python can run: the WebAssembly runtime and the standard library
-PYODIDE_FILES = ("pyodide.asm.wasm", "python_stdlib.zip")
-PRELOAD_AFTER = '<meta charset="UTF-8">'
+# what the web app fetches only when it draws a picture (core.web.RenderDeps): Pillow, from Pyodide's CDN, and the
+# bundled portraits, from the site's leaders/ (flet copies assets/ there), whose names go in instead
+LATER = ("__pypackages__/PIL/", f"__pypackages__/{PILLOW}-")
+PORTRAITS = Path("leaders")
+# flet's python.js starts the Python worker only when Dart connects, once Flutter has started; these make it start
+# with the page, and the worker load Pyodide (or restore it from a snapshot) and unpack the app meanwhile
+# (scripts/prestart/, see prestart_python)
+PRESTART_DIR = ROOT / "scripts" / "prestart"
+SNAPSHOT_KEY = "__SNAPSHOT_KEY__"
+FLET_LOAD_BODY = "//FLET_LOAD_BODY\n"
+FLET_OPTIONS = "FLET_OPTIONS"
+PYTHON_JS_AFTER = "let _documentUrl = document.URL;\n"
+PYTHON_JS_WORKER = 'app.worker = new Worker("python-worker.js", { type: "module" });'
+PYTHON_JS_TAKE_OVER = (
+    'app.worker = _prestarted || new Worker("python-worker.js", { type: "module" });\n    _prestarted = null;'
+)
+WORKER_LOAD = re.compile(
+    r"const pyodideModule = await import\(self\.pyodideUrl\);\n(?P<body>.*?)[ \t]*self\.pyodide = await "
+    r"(?P<call>loadPyodide\(\{.*?\}\);)",
+    re.DOTALL,
+)
+WORKER_INIT_AT = "self.initPyodide = async function () {"
+# the boot waits for the prestart before it touches Python: a JS object Python holds (flet_js, registered next) would
+# keep the prestart from taking Python's snapshot
+WORKER_START = (
+    "self.pyodide = await self.startPyodide();\n"
+    "        if (self.appUnpacked) flet_js.appUnpackedFrom = await self.appUnpacked;"
+)
+WORKER_DOWNLOAD = '        if "script" not in py_args:\n'
+WORKER_SKIP_DOWNLOAD = """\
+        if "script" not in py_args and getattr(flet_js, "appUnpackedFrom", None) == app_package_url:
+            print("App archive unpacked ahead")
+        elif "script" not in py_args:
+"""
+WORKER_ONMESSAGE = "self.onmessage = async (event) => {\n"
+WORKER_ON_PRESTART = """\
+    if (event.data && event.data.prestart) {
+        self.pyodideUrl = event.data.pyodideUrl;
+        self.appPackageUrl = event.data.appPackageUrl;
+        self.pythonModuleName = event.data.pythonModuleName;
+        self.snapshotKey = event.data.snapshotKey;
+        self.prestart();
+        return;
+    }
+"""
 SHELL_DIR = ROOT / "scripts" / "shell"
+SW_DIR = ROOT / "scripts" / "sw"
+SW_FILE = "sw.js"
+SW_BLOCK = re.compile(r"\n<!-- timtapper sw -->.*?<!-- /timtapper sw -->\n", re.DOTALL)
+# what the service worker doesn't keep: what no page asks for (source maps, flet's build id, the licences page's
+# NOTICES, which it keeps once asked for), the hosts' files, and the worker itself
+SW_SKIP = re.compile(r"(^|/)\.|\.map$|\.hash$|^(NOTICES|assets/NOTICES|version\.json|CNAME|sw\.js)$")
+# Flutter's own service worker: deprecated, empty, on the same scope as the site's, and its loader waits up to 4 s
+# for it to activate before starting Flutter
+FLUTTER_SW = "flutter_service_worker.js"
+FLUTTER_SW_SETTINGS = re.compile(r"\n[ \t]*serviceWorkerSettings: \{.*?\n[ \t]*\},", re.DOTALL)
 SHELL_AFTER = "<body>"
 APP_SOURCE = ROOT / "src" / "timtapper"
 ICON_USE = re.compile(r"\bft\.Icons\.([A-Z0-9_]+)\b")
@@ -108,16 +164,22 @@ _log = get_logger("scripts.build_web")
 
 
 def add_assets(archive: Path, assets: Path = ASSETS) -> int:
-    """Put every file under `assets` into the Python archive at assets/<path>, as native builds ship it.
-    Returns how many were added; files already there are left alone."""
+    """Put every file under `assets` into the Python archive at assets/<path>, as native builds ship it, but the
+    portraits: their names, in assets/leaders/bundled.txt. Returns how many were added; files already there are left
+    alone."""
+    portraits = assets / PORTRAITS
     with zipfile.ZipFile(archive, "a", zipfile.ZIP_DEFLATED) as z:
         present = set(z.namelist())
         added = 0
-        for path in sorted(p for p in assets.rglob("*") if p.is_file()):
+        for path in sorted(p for p in assets.rglob("*") if p.is_file() and p.parent != portraits):
             name = f"assets/{path.relative_to(assets).as_posix()}"
             if name not in present:
                 z.write(path, name)
                 added += 1
+        listed = f"assets/{(PORTRAITS / BUNDLED_LIST).as_posix()}"
+        if listed not in present:
+            z.writestr(listed, "".join(f"{p.name}\n" for p in sorted(portraits.glob("*.webp"))))
+            added += 1
     return added
 
 
@@ -144,18 +206,45 @@ def version_archive_url(index: Path, version: str) -> None:
     index.write_text(html.replace(ARCHIVE_URL, f'appPackageUrl: "assets/app/app.zip?v={version}"'), encoding="utf-8")
 
 
-def add_preloads(index: Path, version: str) -> list[str]:
-    """Make index.html start downloading the Python archive and the Pyodide runtime as the page opens, beside Flutter.
-    The worker fetches each with a plain fetch(), which the preloads match (as="fetch", crossorigin), so it gets the
-    browser's copy rather than downloading it again. Returns the preloaded URLs."""
-    html = index.read_text(encoding="utf-8")
-    pyodide = PYODIDE_URL.search(html)
-    if pyodide is None or PRELOAD_AFTER not in html:
-        raise BuildError(f"{index.name} has no pyodideUrl or charset tag where expected: flet's web template changed")
-    urls = [f"assets/app/app.zip?v={version}", *(pyodide["dir"] + name for name in PYODIDE_FILES)]
-    links = "".join(f'\n  <link rel="preload" href="{url}" as="fetch" crossorigin>' for url in urls)
-    index.write_text(html.replace(PRELOAD_AFTER, PRELOAD_AFTER + links, 1), encoding="utf-8")
-    return urls
+def _replace_once(text: str, old: str, new: str, name: str) -> str:
+    if text.count(old) != 1:
+        raise BuildError(f"{name} no longer holds {old.strip()!r} once: flet's web template changed")
+    return text.replace(old, new)
+
+
+def snapshot_key(archive: Path) -> str:
+    """What names the Python archive's snapshot: a digest of the archive, so another build's is never restored."""
+    return blake3.blake3(archive.read_bytes()).hexdigest()[:16]
+
+
+def prestart_python(site: Path, prestart_dir: Path = PRESTART_DIR) -> None:
+    """Start Python with the page instead of once Flutter has started. flet's python.js creates the worker only when
+    Dart connects, and the worker then loads Pyodide and downloads and unpacks the archive one after the other; now
+    the page starts the worker first thing, which loads Pyodide (from a snapshot, after the first visit) and fetches
+    the archive at once and unpacks it, while Flutter downloads and starts. When Dart connects it takes that worker
+    over, and the boot script skips the download when the archive it would fetch is the one already unpacked."""
+    python_js = site / "python.js"
+    page = (prestart_dir / "page.js").read_text(encoding="utf-8")
+    page = _replace_once(page, SNAPSHOT_KEY, snapshot_key(site / APP_ARCHIVE), "page.js")
+    js = _replace_once(python_js.read_text(encoding="utf-8"), PYTHON_JS_AFTER, PYTHON_JS_AFTER + page, python_js.name)
+    python_js.write_text(_replace_once(js, PYTHON_JS_WORKER, PYTHON_JS_TAKE_OVER, python_js.name), encoding="utf-8")
+
+    worker = site / "python-worker.js"
+    js = worker.read_text(encoding="utf-8")
+    load = WORKER_LOAD.search(js)
+    if load is None:
+        raise BuildError(f"{worker.name} no longer loads Pyodide as expected: flet's web template changed")
+    js = js[: load.start()] + WORKER_START + js[load.end() :]
+    # flet's own options for loadPyodide, which the snapshot's are added to
+    options = load["call"].removeprefix("loadPyodide(").removesuffix(");")
+    prestart = (prestart_dir / "worker.js").read_text(encoding="utf-8")
+    prestart = _replace_once(prestart, FLET_LOAD_BODY, load["body"], "worker.js")
+    prestart = _replace_once(prestart, FLET_OPTIONS, options, "worker.js")
+    js = _replace_once(js, WORKER_INIT_AT, prestart + WORKER_INIT_AT, worker.name)
+    js = _replace_once(js, WORKER_DOWNLOAD, WORKER_SKIP_DOWNLOAD, worker.name)
+    worker.write_text(
+        _replace_once(js, WORKER_ONMESSAGE, WORKER_ONMESSAGE + WORKER_ON_PRESTART, worker.name), encoding="utf-8"
+    )
 
 
 def icon_names(source: Path = APP_SOURCE) -> set[str]:
@@ -245,17 +334,72 @@ def add_shell(index: Path, config: dict, shell_dir: Path = SHELL_DIR) -> None:
     index.write_text(html.replace(SHELL_AFTER, SHELL_AFTER + block, 1), encoding="utf-8")
 
 
+def drop_flutter_service_worker(site: Path) -> None:
+    """Keep Flutter's loader from registering its service worker (FLUTTER_SW), and take the file out."""
+    bootstrap = site / "flutter_bootstrap.js"
+    js, found = FLUTTER_SW_SETTINGS.subn("", bootstrap.read_text(encoding="utf-8"))
+    if found != 1:
+        raise BuildError(f"{bootstrap.name} has no serviceWorkerSettings: flet's web template changed")
+    bootstrap.write_text(js, encoding="utf-8")
+    (site / FLUTTER_SW).unlink(missing_ok=True)
+
+
+def kept_files(site: Path, version: str) -> list[str]:
+    """What the service worker keeps, as the page asks for it: the page as ./, the Python archive with its ?v=."""
+    files = []
+    for path in sorted(p for p in site.rglob("*") if p.is_file()):
+        name = path.relative_to(site).as_posix()
+        if SW_SKIP.search(name):
+            continue
+        files.append(
+            "./" if name == "index.html" else f"{name}?v={version}" if name == APP_ARCHIVE.as_posix() else name
+        )
+    return files
+
+
+def build_id(site: Path) -> str:
+    """A digest of every file of the site: a new build's service worker is a new file, which browsers install."""
+    digest = blake3.blake3()
+    for path in sorted(p for p in site.rglob("*") if p.is_file() and p.name != SW_FILE):
+        digest.update(path.relative_to(site).as_posix().encode() + b"\0")
+        digest.update(blake3.blake3(path.read_bytes()).digest())
+    return digest.hexdigest()[:16]
+
+
+def add_service_worker(site: Path, version: str, config: dict, sw_dir: Path = SW_DIR) -> list[str]:
+    """Write the site's service worker (scripts/sw/sw.js), keeping the site's files, and have index.html register it
+    once the app says it's ready (scripts/sw/register.js), on `config`'s channel. Returns the files it keeps."""
+    index = site / "index.html"
+    html = SW_BLOCK.sub("", index.read_text(encoding="utf-8"))
+    if SHELL_AFTER not in html:
+        raise BuildError(f"{index.name} has no {SHELL_AFTER}: flet's web template changed")
+    data = json.dumps({"url": SW_FILE, "channel": config["channel"], "ready": config["ready"]}, separators=(",", ":"))
+    js = (sw_dir / "register.js").read_text(encoding="utf-8")
+    block = (
+        f"\n<!-- timtapper sw -->\n<script>window.TIMTAPPER_SW = {data};</script>\n<script>{js}</script>\n"
+        "<!-- /timtapper sw -->\n"
+    )
+    index.write_text(html.replace(SHELL_AFTER, SHELL_AFTER + block, 1), encoding="utf-8")
+    files = kept_files(site, version)
+    build = json.dumps({"id": build_id(site), "files": files}, separators=(",", ":"))
+    worker = (sw_dir / SW_FILE).read_text(encoding="utf-8")
+    (site / SW_FILE).write_text(f"const BUILD = {build};\n{worker}", encoding="utf-8")
+    return files
+
+
 def finish_site(
     site: Path, version: str, assets: Path = ASSETS, *, shell: bool = True, config: dict | None = None
 ) -> None:
     """`shell`: paint the shell, from `config` (shell_config() when not given). The driven test builds go without
     it: nothing in them tells it the app is ready, and they test the app itself."""
-    dropped = drop_unused(site / APP_ARCHIVE)
+    dropped = drop_unused(site / APP_ARCHIVE, UNUSED + LATER)
     _log.info("dropped %d unused library files from the Python archive", dropped)
     added = add_assets(site / APP_ARCHIVE, assets)
     _log.info("added %d asset files to the Python archive", added)
     version_archive_url(site / "index.html", version)
-    _log.info("preloading %s", ", ".join(add_preloads(site / "index.html", version)))
+    prestart_python(site)
+    _log.info("Python starts with the page")
+    drop_flutter_service_worker(site)
     if not shell:
         return
     config = config if config is not None else shell_config()
@@ -266,6 +410,8 @@ def finish_site(
         ", ".join(config["defaults"]),
     )
     (site / ".nojekyll").touch()  # GitHub Pages: serve the files as they are
+    kept = add_service_worker(site, version, config)
+    _log.info("the service worker keeps %d files", len(kept))
 
 
 def rebase_site(site: Path, base: str, built: str = BUILT_BASE) -> None:

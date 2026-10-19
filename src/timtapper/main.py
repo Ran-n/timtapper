@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.651174
-Revised: 2026/10/14 16:30:39.441359
+Revised: 2026/10/15 01:26:05.128159
 
 timtapper entry point (what `flet run` / `flet build` start). Opens the local
 database, applies migrations, syncs the bundled leader list, shows the events
@@ -17,10 +17,11 @@ from pathlib import Path
 
 import flet as ft
 
+from catalog import portraits
 from catalog.repository import LeaderRepository, install_bundled
 from core.logging import APP_LOGGER, LogTail, get_logger, setup_logging
 from core.paths import ASSETS_DIR, data_dir, db_path
-from core.web import IS_WEB, BrowserStore, ShellStore
+from core.web import IS_WEB, BrowserStore, RenderDeps, ShellStore, fetch_bytes
 from db import Database
 from db.database import MIGRATIONS_DIR
 from db.diagnostics import startup_report
@@ -54,6 +55,12 @@ def open_database(on_commit: Callable[[], None] | None = None, path: Path | None
     db.migrate()
     install_bundled(LeaderRepository(db))
     return db
+
+
+def render_deps() -> RenderDeps | None:
+    """On the web, what drawing pictures needs that the app's archive leaves out (Pillow, the bundled portraits),
+    fetched when needed; None elsewhere, where both are on disk."""
+    return RenderDeps(lambda: portraits.fetch_listed(fetch_bytes)) if IS_WEB else None
 
 
 async def open_browser_store() -> BrowserStore:
@@ -134,6 +141,7 @@ async def main(page: ft.Page) -> None:
         return
 
     ctx = AppContext(page, db)
+    ctx.render_deps = render_deps()
     await ctx.load_prefs()
     if store is not None:
         store.on_save_failed = lambda: ctx.notify(
@@ -160,6 +168,8 @@ async def main(page: ft.Page) -> None:
     route_change()
     if shell is not None:
         start_web_shell(ctx, shell, shell_store, on_commit)
+    if ctx.render_deps is not None:
+        ctx.render_deps.prefetch()
     page.run_task(ctx.leader_updates.run_if_due)
 
 

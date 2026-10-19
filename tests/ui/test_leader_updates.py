@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:12.217340
-Revised: 2026/10/13 11:42:03.907353
+Revised: 2026/10/15 00:58:29.089618
 """
 
 import asyncio
@@ -259,3 +259,27 @@ async def test_an_unexpected_failure_of_the_set_check_is_logged_not_raised(ctx, 
     await ctx.leader_updates.run_if_due()
     assert "background leader check failed" in caplog.text and "certificate store missing" in caplog.text
     assert prefs == {} and page.dialogs == []
+
+
+async def test_an_update_loads_what_cropping_portraits_needs_first(ctx, api, prefs):
+    calls = []
+
+    class Deps:
+        async def ready(self):
+            calls.append(api["leader_downloads"])
+
+    ctx.render_deps = Deps()
+    with_new_set(api)
+    await ctx.leader_updates.run_if_due()
+    assert calls == [0] and api["leader_downloads"] == 1  # Pillow was there before the leaders came in
+
+
+async def test_an_update_offline_for_pillow_is_a_catalog_error_and_syncs_nothing(ctx, api, prefs):
+    class Deps:
+        async def ready(self):
+            raise OSError("offline")
+
+    ctx.render_deps = Deps()
+    with pytest.raises(CatalogError, match="cropping portraits needs: offline"):
+        await ctx.leader_updates.run()
+    assert api["leader_downloads"] == 0

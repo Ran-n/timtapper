@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.346234
-Revised: 2026/10/14 16:30:40.526472
+Revised: 2026/10/15 01:26:05.687104
 
 The built web app (scripts/build_web.py -> build/web), served under /timtapper/ as GitHub Pages and Codeberg Pages
 serve it, driven in headless Chrome: what only a real browser shows, i.e. that the data folder survives a reload,
@@ -13,6 +13,7 @@ viewport's coordinates (412 x 892), and each step waits for the app's own log li
 """
 
 import json
+import shutil
 import sys
 import time
 import zipfile
@@ -172,6 +173,9 @@ def test_share_downloads_the_card_where_the_browser_cannot_share(playwright, bas
         app.open()
         app.tap(NEW_EVENT, then="event 1 created")
         card = app.download(SHARE, tmp_path / "downloads")
+        # the archive leaves Pillow out: the first card loads Pyodide's, and the bundled portraits are fetched
+        assert any("loaded pillow" in line for line in app.logs)
+        app.wait_for("bundled portraits: 138 fetched, 0 failed")
     finally:
         app.close()
     with Image.open(card) as image:
@@ -227,6 +231,27 @@ def test_a_first_visit_shows_the_app_at_once(playwright, base_url, tmp_path):
         app.close()
 
 
+@pytest.mark.regression
+def test_python_starts_with_the_page_and_fetches_the_archive_once(playwright, base_url, tmp_path):
+    """flet started Python only once Flutter had, and Python then fetched the archive only once Pyodide had loaded, so
+    a first visit waited for each in turn; the preloads meant to overlap them went unused, as a worker's fetch can't
+    use a page's preload. The page now starts the worker first, which unpacks the archive while Flutter starts."""
+    app = WebApp(playwright, tmp_path / "profile", base_url)
+    archives: list[str] = []
+    # the page's own requests: the service worker's (it keeps the site once the app has started) aren't the app's
+    app.context.on(
+        "request",
+        lambda r: "app.zip" in r.url and r.service_worker is None and archives.append(r.url),
+    )
+    try:
+        lines = app.open()
+        assert any("App archive unpacked ahead" in line for line in lines)
+        assert not any("Downloading app archive" in line or "couldn't unpack" in line for line in lines)
+        assert len(archives) == 1, archives
+    finally:
+        app.close()
+
+
 def test_a_repeat_visit_shows_your_events_and_opens_them_at_once(playwright, base_url, tmp_path):
     app = WebApp(playwright, tmp_path / "profile", base_url)
     try:
@@ -268,3 +293,115 @@ def test_tabs_and_new_event_in_the_shell_reach_the_app(playwright, base_url, tmp
         assert app.page.url.endswith("#/event/1")
     finally:
         app.close()
+
+
+# ---- repeat visits: the service worker and Python's snapshot ---------------------------
+SNAPSHOTS = "timtapper-python"
+SAVED = "saved Python's snapshot"
+RESTORED = "Python restored from its snapshot"
+
+
+@pytest.mark.regression
+def test_a_repeat_visit_starts_python_from_its_snapshot(playwright, base_url, tmp_path):
+    """Every visit spent about 3 s of CPU starting Python and importing the app: the first now keeps a snapshot of
+    Python with the app imported, and the next restores it."""
+    app = WebApp(playwright, tmp_path / "profile", base_url, web_share=False)
+    try:
+        first = app.open()
+        app.wait_for(SAVED)
+        assert not any(RESTORED in line for line in first)
+        app.tap(NEW_EVENT, then="event 1 created")
+        again = app.reload()
+        assert any(RESTORED in line for line in again)
+        assert not any(SAVED in line or "starting it afresh" in line for line in again)
+        app.tap(BACK)  # the restored app works as a started one: its screens, its data, a backup
+        app.open_backup_section()
+        backup = app.download(EXPORT, tmp_path / "downloads")
+    finally:
+        app.close()
+    assert [e["name"] for e in json.loads(backup.read_text(encoding="utf-8"))["events"]] == ["Local #1"]
+
+
+def test_a_snapshot_that_wont_restore_is_dropped_and_python_starts_afresh(playwright, base_url, tmp_path):
+    app = WebApp(playwright, tmp_path / "profile", base_url)
+    try:
+        app.open()
+        app.wait_for(SAVED)
+        app.page.evaluate(
+            """async (name) => {
+                const cache = await caches.open(name);
+                for (const key of await cache.keys()) await cache.put(key, new Response(new Uint8Array(64)));
+            }""",
+            SNAPSHOTS,
+        )
+        start = len(app.logs)
+        lines = app.reload()
+        assert any("snapshot didn't restore, starting it afresh" in line for line in lines)
+        app.wait_for(SAVED, start)  # and a good one kept in its place
+    finally:
+        app.close()
+
+
+def _site_requests(app: WebApp) -> list:
+    responses: list = []
+    app.context.on("response", lambda r: r.request.service_worker is None and responses.append(r))
+    return responses
+
+
+@pytest.mark.regression
+def test_a_repeat_visit_comes_from_the_service_worker(playwright, base_url, tmp_path):
+    """GitHub Pages lets browsers keep a file 10 minutes, then every file of the site was asked for again: the
+    service worker now keeps the build's files and serves the page from them."""
+    app = WebApp(playwright, tmp_path / "profile", base_url)
+    try:
+        app.open()
+        app.wait_for("service worker registered")
+        app.page.evaluate("navigator.serviceWorker.ready.then(() => true)")
+        responses = _site_requests(app)
+        app.reload()
+        assert app.page.evaluate("!!navigator.serviceWorker.controller")
+        by_name = {r.url.split("/timtapper/")[-1]: r for r in responses if "/timtapper/" in r.url}
+        for name in ("", "main.dart.js", "python.js", "python-worker.js", "assets/app/app.zip?v="):
+            hit = next(r for url, r in by_name.items() if url.startswith(name) and (name or url == ""))
+            assert hit.from_service_worker, name
+    finally:
+        app.close()
+
+
+def test_a_new_build_takes_over_on_the_next_visit(playwright, tmp_path):
+    """A release reaches a visitor within the next visits: the worker of the visit that finds it keeps the new
+    build's files in the background, and a page that opens with it waiting has it take over and reloads once."""
+    if not _site_built():
+        pytest.skip("no web build: run `uv run python scripts/build_web.py` first")
+    from serve_site import SiteServer
+
+    site = tmp_path / "site"
+    shutil.copytree(SITE, site)
+    server = SiteServer(site).start()
+    app = WebApp(playwright, tmp_path / "profile", server.url)
+    try:
+        app.open()
+        app.wait_for("service worker registered")
+        app.page.evaluate("navigator.serviceWorker.ready.then(() => true)")
+        sw = site / "sw.js"
+        sw.write_text(sw.read_text(encoding="utf-8").replace('"id":"', '"id":"new', 1), encoding="utf-8")
+        # the visits after it: one finds the new worker (it installs and waits), and the first to open with it
+        # waiting has it take over and reloads once
+        took_over = None
+        for _ in range(4):
+            start = len(app.logs)
+            app.page.goto(server.url, wait_until="commit")
+            app._booted(start)
+            if any("a new version is ready, reloading" in line for line in app.logs[start:]):
+                took_over = start
+                break
+        assert took_over is not None, "the new build never took over"
+        assert app.wait_for("started (", took_over + 1)
+        caches = app.page.evaluate("caches.keys()")
+        assert [c for c in caches if c.startswith("timtapper-site-")] == [
+            c for c in caches if c.startswith("timtapper-site-new")
+        ]
+        assert SNAPSHOTS in caches  # the site's update leaves Python's snapshot alone
+    finally:
+        app.close()
+        server.stop()

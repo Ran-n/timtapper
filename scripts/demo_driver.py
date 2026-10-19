@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 23:10:19.506999
-Revised: 2026/10/14 03:41:53.675108
+Revised: 2026/10/15 01:26:05.219735
 
 The real app on a fixed set of demo events, and every command a test driver sends it: the part of driving the app
 that is the same on every target. Two transports carry the commands, one JSON object per command, one reply each:
@@ -46,7 +46,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import flet as ft
-from PIL import Image
 
 import main as app_main
 from catalog import sync as sync_mod
@@ -169,6 +168,7 @@ class Demo:
         self.page = page
         self.db = app_main.open_database()
         self.ctx = AppContext(page, self.db)
+        self.ctx.render_deps = app_main.render_deps()  # the web build's Pillow and portraits, as main() sets them
         set_lang(page, "en")
         self.ctx.theme = get_theme("gruvbox")
         self.route_change = install_routing(self.ctx)
@@ -192,6 +192,9 @@ class Demo:
         async def deliver(path: Path, *, title: str, mime_type: str) -> Delivery:
             shared = {"path": str(path), "title": title, "mime_type": mime_type, "bytes": path.stat().st_size}
             if mime_type.startswith("image/"):
+                # imported here: the web build loads Pillow only for drawing a card (core.web.RenderDeps), done by now
+                from PIL import Image
+
                 with Image.open(path) as image:
                     shared["pixels"] = list(image.size)
             self.shared_files.append(shared)

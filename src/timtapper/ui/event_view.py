@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.952473
-Revised: 2026/10/14 13:16:03.927932
+Revised: 2026/10/15 00:58:28.210188
 
 Event screen: everything edited in place — name, type, date, standing, set,
 own leader and notes in the header; each round as an expandable tile: Swiss,
@@ -257,12 +257,10 @@ class EventScreen:
         ]
 
     async def _share(self, _e) -> None:
-        from share import render  # PIL, only when a card is shared: it held up the web app's first screen
-
         _ = self.ctx._
         ev, leaders = self.event, self.ctx.leaders_by_id
-        await self.ctx.share_file(
-            lambda: render.event_card(ev, leaders, _, event_type_label(_, ev.event_type)), title=ev.name
+        await self.ctx.share_card(
+            lambda render: render.event_card(ev, leaders, _, event_type_label(_, ev.event_type)), title=ev.name
         )
 
     # ---- rounds ----------------------------------------------------------

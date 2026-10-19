@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.106265
-Revised: 2026/10/14 16:30:39.538001
+Revised: 2026/10/15 00:58:27.932393
 
 Running in a browser: `flet build web` runs the app's Python on Pyodide (WebAssembly) in a web worker, where the
 file system lives in memory. BrowserStore keeps the data folder in the browser's IndexedDB instead, so events
@@ -11,7 +11,7 @@ survive a reload: loaded once at startup, saved again after every database commi
 
 import asyncio
 import sys
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -152,3 +152,55 @@ class BrowserStore:
 
         self._fs.syncfs(populate, self._once(finished))
         await done
+
+
+# Pyodide's own build of Pillow, the one flet bundles too: the web build leaves it out of the app's archive
+# (scripts/build_web.py), so every visit downloads less, and it's loaded from Pyodide's CDN the first time it's needed
+PILLOW = "pillow"
+
+
+def _pyodide_load_package() -> Callable[[str], Awaitable[Any]]:  # pragma: no cover - only importable inside Pyodide
+    import pyodide_js
+
+    return pyodide_js.loadPackage
+
+
+async def fetch_bytes(url: str) -> bytes:  # pragma: no cover - only importable inside Pyodide
+    """`url`, relative to the site, fetched by the browser. Raises OSError on an error status."""
+    from pyodide.http import pyfetch
+
+    response = await pyfetch(url)
+    if not response.ok:
+        raise OSError(f"HTTP {response.status} {url}")
+    return await response.bytes()
+
+
+class RenderDeps:
+    """What drawing pictures needs on the web that the app's archive leaves out: Pillow, and the bundled portraits
+    (`fetch_portraits` brings them). Each is fetched once, the portraits from `prefetch()` on, Pillow only when first
+    needed: loading it holds Python up for a moment, so it doesn't run right after startup."""
+
+    def __init__(
+        self,
+        fetch_portraits: Callable[[], Awaitable[Any]],
+        load_package: Callable[[str], Awaitable[Any]] | None = None,
+    ) -> None:
+        self._fetch_portraits = fetch_portraits
+        self._load_package = load_package
+        self._portraits: asyncio.Task | None = None
+        self._pillow: asyncio.Task | None = None
+
+    def prefetch(self) -> None:
+        if self._portraits is None:
+            self._portraits = asyncio.get_running_loop().create_task(self._fetch_portraits())
+
+    async def ready(self) -> None:
+        """Wait until Pillow and the portraits are there. Raises what loading Pillow raised; the next call retries."""
+        if self._pillow is None or (self._pillow.done() and self._pillow.exception() is not None):
+            self._pillow = asyncio.get_running_loop().create_task(self._load(PILLOW))
+        self.prefetch()
+        await asyncio.gather(self._pillow, self._portraits)
+
+    async def _load(self, package: str) -> None:
+        await (self._load_package or _pyodide_load_package())(package)
+        _log.info("loaded %s", package)

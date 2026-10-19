@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:19.051520
-Revised: 2026/10/14 13:16:03.851402
+Revised: 2026/10/15 00:58:27.840051
 
 Leader portraits: a small square crop of each leader card's art (the face sits
 in the upper middle of every card; a two-character card gets one strip per face,
@@ -11,7 +11,9 @@ assets/leaders/; leaders added later by "Update leaders" get theirs downloaded
 into the app's data dir.
 """
 
+import asyncio
 import io
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import pairwise
@@ -34,6 +36,9 @@ _log = get_logger("catalog.portraits")
 # ~ the source pixels in a face crop (cards are 600 px wide) and enough for 56 dp at 3x density
 SIZE = 160
 BUNDLED_DIR = ASSETS_DIR / "leaders"
+# the web build ships the bundled portraits' names in this file instead of the portraits (scripts/build_web.py): the
+# page loads them over HTTP, and fetch_listed brings them onto disk for what draws them itself
+BUNDLED_LIST = "bundled.txt"
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,16 +244,47 @@ def _write_whole(path: Path, data: bytes) -> None:
         raise
 
 
+@lru_cache(maxsize=4)
+def _listed(folder: Path) -> frozenset[str]:
+    """The portrait files `folder`'s BUNDLED_LIST names; none without one (every build but the web's)."""
+    try:
+        return frozenset((folder / BUNDLED_LIST).read_text(encoding="utf-8").split())
+    except FileNotFoundError:
+        return frozenset()
+
+
 def local_file(code: str) -> Path | None:
     """`code`'s portrait on disk: the bundled one, else one downloaded later, else None (also for a code that is no
-    card code)."""
+    card code). On the web a bundled portrait is listed rather than shipped: its path is given before fetch_listed has
+    brought it, and reading it until then fails like reading a damaged file."""
     if not is_card_code(code):
         return None
+    name = filename(code)
     for folder in (BUNDLED_DIR, cache_dir()):
-        path = folder / filename(code)
+        path = folder / name
         if path.is_file():
             return path
-    return None
+    return BUNDLED_DIR / name if name in _listed(BUNDLED_DIR) else None
+
+
+async def fetch_listed(fetch: Callable[[str], Awaitable[bytes]]) -> tuple[int, int]:
+    """Bring every listed bundled portrait not yet on disk into BUNDLED_DIR, each fetched with `fetch` from the site's
+    leaders/ folder (where the page shows them from). Returns (saved, failed); a failed one is drawn empty."""
+
+    async def bring(name: str) -> bool:
+        try:
+            _write_whole(BUNDLED_DIR / name, await fetch(f"leaders/{name}"))
+            return True
+        except Exception as exc:  # one portrait the site can't serve leaves only that one face empty
+            _log.warning("bundled portrait %s not fetched: %s", name, exc)
+            return False
+
+    names = sorted(n for n in _listed(BUNDLED_DIR) if not (BUNDLED_DIR / n).is_file())
+    results = await asyncio.gather(*(bring(n) for n in names))
+    saved = sum(results)
+    if names:
+        _log.info("bundled portraits: %d fetched, %d failed", saved, len(names) - saved)
+    return saved, len(names) - saved
 
 
 @lru_cache(maxsize=512)

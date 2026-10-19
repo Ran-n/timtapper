@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:43.228774
-Revised: 2026/10/14 13:16:04.004675
+Revised: 2026/10/15 00:58:28.393530
 
 Stats tab: overall record, splits, recent form and the matchup table, filterable by own leader, event type and set.
 """
@@ -193,20 +193,20 @@ class StatsScreen:
         ]
 
     async def _share_summary(self, _e) -> None:
-        from share import render  # PIL, only when a card is shared: it held up the web app's first screen
-
         _ = self.ctx._
         s, scope, leaders, own = self._summary_data(), self.scope_label(), self.ctx.leaders_by_id, self.own_leader
-        await self.ctx.share_file(lambda: render.summary_card(scope, s, leaders, _, own), title=_("Overall record"))
+        await self.ctx.share_card(
+            lambda render: render.summary_card(scope, s, leaders, _, own), title=_("Overall record")
+        )
 
     async def _share_matchups(self, _e) -> None:
-        from share import render  # PIL, only when a card is shared: it held up the web app's first screen
-
         _ = self.ctx._
         events = self.ctx.events.list()
         s, ms = summarize(events, self.filters), matchups(events, self.filters)
         scope, leaders, own = self.scope_label(), self.ctx.leaders_by_id, self.own_leader
-        await self.ctx.share_file(lambda: render.matchups_card(scope, s, ms, leaders, _, own), title=_("Matchups"))
+        await self.ctx.share_card(
+            lambda render: render.matchups_card(scope, s, ms, leaders, _, own), title=_("Matchups")
+        )
 
     def _summary_data(self) -> Summary:
         return summarize(self.ctx.events.list(), self.filters)

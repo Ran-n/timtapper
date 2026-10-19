@@ -2,13 +2,14 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.266526
-Revised: 2026/10/14 16:30:40.074666
+Revised: 2026/10/15 01:26:05.787373
 
 The web build's post-processing (scripts/build_web.py): assets added back into the Python archive, the archive
 URL versioned in index.html, the site zipped, and publishing to the `pages` branch (against local bare repos).
 """
 
 import importlib.util
+import json
 import subprocess
 import sys
 import zipfile
@@ -30,7 +31,55 @@ INDEX = (
     'loader.load({ entrypointBaseUrl: "/timtapper/", assetBase: "/timtapper/" });</script>'
     "<body><script>flutter</script></body>"
 )
-SHELL = {"version": 1, "icons": {"add": 0xE047}, "defaults": {"light": {"v": 1}, "dark": {"v": 1}}}
+# the parts of flet's python.js and python-worker.js that prestart_python patches, as flet writes them
+PYTHON_JS = """let _apps = {};
+let _documentUrl = document.URL;
+
+globalThis.jsConnect = async function(appId, args, dartOnMessage) {
+    app.worker = new Worker("python-worker.js", { type: "module" });
+}
+"""
+PYTHON_WORKER = """self.initPyodide = async function () {
+    try {
+        const pyodideModule = await import(self.pyodideUrl);
+        const loadPyodide = pyodideModule.loadPyodide || self.loadPyodide;
+        self.pyodide = await loadPyodide({
+            stdout: (text) => self.sendPythonOutput(text, false),
+        });
+        self.pyodide.registerJsModule("flet_js", flet_js);
+        flet_js.documentUrl = documentUrl;
+        await self.pyodide.runPythonAsync(`
+        if "script" not in py_args:
+            print("Downloading app archive")
+        else:
+            print("Saving script to a file")
+      `);
+    } catch (error) {}
+};
+
+self.onmessage = async (event) => {
+    // run only once
+    if (!self.initialized) {
+    }
+};
+"""
+# the part of flet's flutter_bootstrap.js that registers Flutter's own service worker
+FLUTTER_BOOTSTRAP = """\
+_flutter.loader.load({
+    config: flutterConfig,
+    serviceWorkerSettings: {
+        serviceWorkerVersion: "2768462183" /* deprecated */,
+    },
+    onEntrypointLoaded: async function (engineInitializer) {}
+});
+"""
+SHELL = {
+    "version": 1,
+    "channel": "timtapper-shell",
+    "ready": "ready",
+    "icons": {"add": 0xE047},
+    "defaults": {"light": {"v": 1}, "dark": {"v": 1}},
+}
 
 
 @pytest.fixture
@@ -50,6 +99,10 @@ def site(tmp_path):
     with zipfile.ZipFile(root / build_web.APP_ARCHIVE, "w") as z:
         z.writestr("main.pyc", b"code")
     (root / "index.html").write_text(INDEX, encoding="utf-8")
+    (root / "python.js").write_text(PYTHON_JS, encoding="utf-8")
+    (root / "python-worker.js").write_text(PYTHON_WORKER, encoding="utf-8")
+    (root / "flutter_bootstrap.js").write_text(FLUTTER_BOOTSTRAP, encoding="utf-8")
+    (root / build_web.FLUTTER_SW).write_text("self.skipWaiting();", encoding="utf-8")
     return root
 
 
@@ -59,8 +112,19 @@ def test_assets_go_back_into_the_python_archive(site, assets):
     archive = site / build_web.APP_ARCHIVE
     assert build_web.add_assets(archive, assets) == 2
     with zipfile.ZipFile(archive) as z:
-        assert sorted(z.namelist()) == ["assets/data/leaders.json", "assets/leaders/OP01-001.webp", "main.pyc"]
-        assert z.read("assets/leaders/OP01-001.webp") == b"webp"
+        assert sorted(z.namelist()) == ["assets/data/leaders.json", "assets/leaders/bundled.txt", "main.pyc"]
+
+
+@pytest.mark.regression
+def test_portraits_go_into_the_archive_by_name_only(site, assets):
+    """Every visit downloaded the 1.1 MB of bundled portraits inside the archive, though the page shows them from the
+    site's leaders/ and only a share card reads them from disk: the archive now names them, and the app fetches them
+    (catalog.portraits.fetch_listed)."""
+    (assets / "leaders" / "ST01-001.webp").write_bytes(b"webp")
+    build_web.add_assets(site / build_web.APP_ARCHIVE, assets)
+    with zipfile.ZipFile(site / build_web.APP_ARCHIVE) as z:
+        assert z.read("assets/leaders/bundled.txt").decode().split() == ["OP01-001.webp", "ST01-001.webp"]
+        assert not [n for n in z.namelist() if n.endswith(".webp")]
 
 
 def test_adding_assets_twice_adds_nothing(site, assets):
@@ -77,23 +141,88 @@ def test_archive_url_carries_the_version(site):
 
 
 @pytest.mark.regression
-def test_preloads_start_the_archive_and_pyodide_with_the_page(site):
-    """flet's loader asked for Pyodide only once Flutter had started and for the archive only once Pyodide had, so
-    the three downloads ran one after another (14.6 s to start on a fast line, 12 s of it waiting)."""
-    pyodide = "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/"
-    urls = build_web.add_preloads(site / "index.html", "1.2.1")
-    assert urls == ["assets/app/app.zip?v=1.2.1", pyodide + "pyodide.asm.wasm", pyodide + "python_stdlib.zip"]
-    html = (site / "index.html").read_text(encoding="utf-8")
-    links = [f'<link rel="preload" href="{url}" as="fetch" crossorigin>' for url in urls]
-    assert all(link in html for link in links)
-    # after <base>, which relative hrefs resolve against, and before any script runs
-    assert html.index('<base href="/timtapper/">') < html.index(links[0]) < html.index("<script>")
+def test_the_page_starts_python_and_dart_takes_its_worker_over(site):
+    """flet's python.js started the Python worker only when Dart connected, once Flutter had started, and the worker
+    then loaded Pyodide and downloaded the archive one after the other (16 s to start at 18 Mbit/s, 12.7 s now)."""
+    build_web.prestart_python(site)
+    js = (site / "python.js").read_text(encoding="utf-8")
+    # started as python.js loads, with what the page already knows, before Dart can connect
+    assert (
+        js.index("let _prestarted = new Worker(")
+        < js.index("_prestarted.postMessage({")
+        < js.index("globalThis.jsConnect")
+    )
+    assert "prestart: true" in js and "appPackageUrl: flet.appPackageUrl" in js
+    assert 'app.worker = _prestarted || new Worker("python-worker.js", { type: "module" });' in js
+    assert "_prestarted = null;" in js  # a reconnect starts a fresh worker, as flet does
+    assert js.count("new Worker(") == 2
 
 
-def test_preloads_refuse_an_unknown_template(site):
-    (site / "index.html").write_text('<meta charset="UTF-8"><script>flet = {};</script>', encoding="utf-8")
+def test_the_worker_unpacks_the_archive_ahead_and_the_boot_uses_it(site):
+    build_web.prestart_python(site)
+    js = (site / "python-worker.js").read_text(encoding="utf-8")
+    # flet's own options for loadPyodide, kept for every load: from the prestart or the boot, whichever is first
+    assert js.count("loadPyodide(") == 1
+    assert "self.fletOptions = () => ({\n            stdout: (text) => self.sendPythonOutput(text, false)," in js
+    assert "return await loadPyodide({ ...self.fletOptions(), ...options });" in js
+    assert 'pyodide.unpackArchive(await response.arrayBuffer(), "zip");' in js
+    # the boot waits for the prestart before it touches Python, and downloads only if the unpacking failed or Dart
+    # asked for another archive
+    assert (
+        js.index("self.pyodide = await self.startPyodide();")
+        < js.index("flet_js.appUnpackedFrom = await self.appUnpacked")
+        < js.index('registerJsModule("flet_js"')
+    )
+    skip = 'if "script" not in py_args and getattr(flet_js, "appUnpackedFrom", None) == app_package_url:'
+    assert js.index(skip) < js.index('elif "script" not in py_args:') < js.index("Downloading app archive")
+    assert js.index("else:") > js.index("Downloading app archive")  # a script still goes to its own branch
+    # the prestart message is handled before flet's run-once init, which still takes the first message from Dart
+    assert js.index("if (event.data && event.data.prestart) {") < js.index("// run only once")
+    assert "self.snapshotKey = event.data.snapshotKey;" in js
+
+
+@pytest.mark.regression
+def test_python_starts_from_a_snapshot_kept_for_this_archive_only(site):
+    """Starting Python and importing the app took about 3 s of CPU on every visit; a snapshot of it restores in a
+    tenth of that, but only one made from the same archive may be."""
+    build_web.prestart_python(site)
+    key = build_web.snapshot_key(site / build_web.APP_ARCHIVE)
+    assert f'snapshotKey: "{key}"' in (site / "python.js").read_text(encoding="utf-8")
+    js = (site / "python-worker.js").read_text(encoding="utf-8")
+    assert "_loadSnapshot: snapshot, createPyodideModule" in js and "makeMemorySnapshot()" in js
+    # what's snapshotted holds no JS function: flet's output goes in once the snapshot is taken
+    assert "_makeSnapshot: true, stdout: undefined, stderr: undefined" in js
+    assert js.index("await self.saveSnapshot(pyodide);") < js.index("self.attachOutput(pyodide);\n        }")
+
+
+def test_a_new_archive_has_a_new_snapshot_key(site):
+    before = build_web.snapshot_key(site / build_web.APP_ARCHIVE)
+    with zipfile.ZipFile(site / build_web.APP_ARCHIVE, "a") as z:
+        z.writestr("other.pyc", b"code")
+    assert build_web.snapshot_key(site / build_web.APP_ARCHIVE) != before
+
+
+@pytest.mark.parametrize(
+    ("name", "gone"),
+    [
+        ("python.js", "let _documentUrl = document.URL;"),
+        ("python.js", 'app.worker = new Worker("python-worker.js", { type: "module" });'),
+        ("python-worker.js", "const pyodideModule = await import(self.pyodideUrl);"),
+        ("python-worker.js", 'if "script" not in py_args:'),
+        ("python-worker.js", "self.onmessage = async (event) => {"),
+    ],
+)
+def test_prestart_refuses_an_unknown_template(site, name, gone):
+    path = site / name
+    path.write_text(path.read_text(encoding="utf-8").replace(gone, "changed"), encoding="utf-8")
     with pytest.raises(BuildError, match="web template changed"):
-        build_web.add_preloads(site / "index.html", "1.2.1")
+        build_web.prestart_python(site)
+
+
+def test_prestart_refuses_a_template_it_already_patched(site):
+    build_web.prestart_python(site)
+    with pytest.raises(BuildError, match="web template changed"):
+        build_web.prestart_python(site)
 
 
 def test_unknown_index_template_refuses(site):
@@ -107,15 +236,89 @@ def test_finish_site(site, assets):
     assert (site / ".nojekyll").is_file()
     html = (site / "index.html").read_text(encoding="utf-8")
     assert 'appPackageUrl: "assets/app/app.zip?v=1.2.1"' in html
-    assert '<link rel="preload" href="assets/app/app.zip?v=1.2.1" as="fetch" crossorigin>' in html
+    assert '<link rel="preload"' not in html  # a worker's fetch can't use them: they downloaded twice
+    assert "_prestarted" in (site / "python.js").read_text(encoding="utf-8")
     with zipfile.ZipFile(site / build_web.APP_ARCHIVE) as z:
         assert "assets/data/leaders.json" in z.namelist()
+
+
+# ---- service workers ------------------------------------------------------------------
+@pytest.mark.regression
+def test_flutters_service_worker_goes(site):
+    """Flutter's loader waited up to 4 s for its own service worker (deprecated, and empty) before starting Flutter,
+    and registered it on the site's scope."""
+    build_web.drop_flutter_service_worker(site)
+    bootstrap = (site / "flutter_bootstrap.js").read_text(encoding="utf-8")
+    assert "serviceWorkerSettings" not in bootstrap and "onEntrypointLoaded" in bootstrap
+    assert not (site / build_web.FLUTTER_SW).exists()
+
+
+def test_flutters_service_worker_refuses_an_unknown_template(site):
+    (site / "flutter_bootstrap.js").write_text("_flutter.loader.load({});", encoding="utf-8")
+    with pytest.raises(BuildError, match="web template changed"):
+        build_web.drop_flutter_service_worker(site)
+
+
+def test_the_service_worker_keeps_what_the_page_asks_for(site):
+    for name in ("main.dart.js", "main.dart.js.map", "assets/NOTICES", ".nojekyll", "sw.js", "leaders/OP01-001.webp"):
+        (site / name).parent.mkdir(parents=True, exist_ok=True)
+        (site / name).write_text("x", encoding="utf-8")
+    files = build_web.kept_files(site, "1.2.1")
+    assert "./" in files and "index.html" not in files  # the page, as it's asked for
+    assert "assets/app/app.zip?v=1.2.1" in files  # the archive, as the page asks for it
+    assert {"main.dart.js", "leaders/OP01-001.webp", "python.js"} <= set(files)
+    assert not {"main.dart.js.map", "assets/NOTICES", ".nojekyll", "sw.js"} & set(files)
+
+
+def test_a_changed_file_is_a_new_build_and_the_worker_itself_is_none(site):
+    before = build_web.build_id(site)
+    (site / "sw.js").write_text("anything", encoding="utf-8")
+    assert build_web.build_id(site) == before
+    (site / "python.js").write_text("changed", encoding="utf-8")
+    assert build_web.build_id(site) != before
+
+
+def test_add_service_worker_writes_the_worker_and_registers_it_once_the_app_is_ready(site):
+    files = build_web.add_service_worker(site, "1.2.1", SHELL)
+    worker = (site / "sw.js").read_text(encoding="utf-8")
+    build = json.loads(worker.split("\n", 1)[0].removeprefix("const BUILD = ").removesuffix(";"))
+    assert build == {"id": build_web.build_id(site), "files": files}
+    assert 'addEventListener("fetch"' in worker
+    html = (site / "index.html").read_text(encoding="utf-8")
+    assert 'window.TIMTAPPER_SW = {"url":"sw.js","channel":"timtapper-shell","ready":"ready"};' in html
+    assert html.index("<body>") < html.index("<!-- timtapper sw -->")
+    build_web.add_service_worker(site, "1.2.1", SHELL)  # again: replaced, not added twice
+    assert (site / "index.html").read_text(encoding="utf-8").count("<!-- timtapper sw -->") == 1
+
+
+def test_add_service_worker_refuses_an_unknown_template(site):
+    (site / "index.html").write_text("<html></html>", encoding="utf-8")
+    with pytest.raises(BuildError, match="web template changed"):
+        build_web.add_service_worker(site, "1.2.1", SHELL)
+
+
+def test_finish_site_keeps_the_site_in_a_service_worker(site, assets):
+    build_web.finish_site(site, "1.2.1", assets, config=SHELL)
+    assert (site / "sw.js").is_file() and not (site / build_web.FLUTTER_SW).exists()
+
+
+def test_finish_site_without_the_shell_has_no_service_worker(site, assets):
+    """The driven test builds: nothing in them says the app is ready, which registering it waits for."""
+    build_web.finish_site(site, "1.2.1", assets, shell=False)
+    assert not (site / "sw.js").exists() and not (site / build_web.FLUTTER_SW).exists()
 
 
 def test_zip_site_keeps_paths_relative(site, tmp_path):
     out = build_web.zip_site(site, tmp_path / "timtapper-1.2.1-web.zip")
     with zipfile.ZipFile(out) as z:
-        assert sorted(z.namelist()) == ["assets/app/app.zip", "index.html"]
+        assert sorted(z.namelist()) == [
+            "assets/app/app.zip",
+            "flutter_bootstrap.js",
+            "flutter_service_worker.js",
+            "index.html",
+            "python-worker.js",
+            "python.js",
+        ]
 
 
 def _git(cwd, *args):
@@ -288,6 +491,18 @@ def test_finish_site_drops_the_test_suites(site, assets):
     with zipfile.ZipFile(archive) as z:
         assert "__pypackages__/sqlalchemy/testing/fixtures.pyc" not in z.namelist()
         assert "assets/data/leaders.json" in z.namelist()
+
+
+@pytest.mark.regression
+def test_finish_site_leaves_pillow_to_be_loaded_when_needed(site, assets):
+    """Pillow was 1.4 MB of the archive every visit downloads, for share cards and new leaders' portraits only: the
+    web app now loads Pyodide's own build of it then (core.web.RenderDeps)."""
+    names = ["main.pyc", "__pypackages__/PIL/Image.pyc", "__pypackages__/pillow-12.2.0.dist-info/METADATA"]
+    archive = _archive_with(site, [*names, "__pypackages__/pillowcase/x.pyc"])
+    build_web.finish_site(site, "1.2.1", assets, shell=False)
+    with zipfile.ZipFile(archive) as z:
+        assert not set(names[1:]) & set(z.namelist())
+        assert {"main.pyc", "__pypackages__/pillowcase/x.pyc"} <= set(z.namelist())
 
 
 # ---- the shell ----------------------------------------------------------------------

@@ -1,12 +1,12 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 11:08:24.982110 )
-[//]: # (+ Revised: 	2026/10/14 17:09:23.638023 )
+[//]: # (+ Revised: 	2026/10/15 00:58:27.346826 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Privacy policy
 
-Effective 13 October 2026. Applies to the timtapper app on Android and desktop, and to its web version.
+Effective 15 October 2026. Applies to the timtapper app on Android and desktop, and to its web version.
 
 ## What timtapper collects
 
@@ -17,7 +17,8 @@ no data from the app.
 
 The events, rounds, leaders and settings you enter are stored only in the app's own storage on your device. Uninstalling
 the app deletes them. In the web version they are stored in that browser's own storage on your device instead, and
-clearing the site's data deletes them.
+clearing the site's data deletes them. To open faster, the web version also keeps its own files and a ready-started
+copy of its Python engine there; neither holds anything you entered (the copy is made before your data is opened).
 
 ## Network requests
 
@@ -28,7 +29,9 @@ The app downloads public card data. It sends nothing about you or your matches:
 
 The web version is itself downloaded from **GitHub Pages** (timtapper.breren.com), **Codeberg Pages**
 (ran-n.codeberg.page) or **GitLab Pages** (ran-n.gitlab.io); after that it runs entirely in your browser and sends
-nothing back.
+nothing back. To run, it also downloads public software: its Python engine (and, when you first share a card, its
+image library) from **jsDelivr** (cdn.jsdelivr.net), its graphics engine from **Google** (www.gstatic.com), and, for
+characters its own fonts lack, fonts from **Google Fonts**.
 
 These sites see the request itself, as any web server does (for example your IP address). Their own privacy policies
 cover how they handle that.

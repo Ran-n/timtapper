@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:10:30.268389
-Revised: 2026/10/14 07:43:51.470511
+Revised: 2026/10/15 00:58:28.586031
 
 Leader portrait cropping, lookup (bundled asset / downloaded cache / none) and download.
 """
@@ -559,3 +559,58 @@ def test_a_finished_download_leaves_no_partial_file_behind():
     respx.get(IMAGE_URL.format(code="OP99-001")).mock(return_value=httpx.Response(200, content=card_jpeg()))
     assert portraits.download_missing(["OP99-001"]) == (1, 0)
     assert [p.name for p in portraits.cache_dir().iterdir()] == ["OP99-001.webp"]
+
+
+# ---- the web build: bundled portraits listed, fetched on demand ----------------------
+@pytest.fixture
+def listed(tmp_path, monkeypatch):
+    """A BUNDLED_DIR as the web build ships it: a list of the portraits' names, none of the portraits."""
+    folder = tmp_path / "bundled"
+    folder.mkdir()
+    (folder / portraits.BUNDLED_LIST).write_text("OP01-001.webp\nST01-001.webp\n", encoding="utf-8")
+    monkeypatch.setattr(portraits, "BUNDLED_DIR", folder)
+    portraits._listed.cache_clear()
+    yield folder
+    portraits._listed.cache_clear()
+
+
+def test_a_listed_portrait_shows_from_the_site_before_it_is_fetched(listed):
+    assert portraits.local_file("OP01-001") == listed / "OP01-001.webp"
+    assert portraits.source("OP01-001") == "leaders/OP01-001.webp"  # the page loads it over HTTP
+    assert portraits.local_file("OP02-001") is None  # neither listed nor downloaded
+
+
+async def test_fetch_listed_brings_the_listed_portraits_not_yet_on_disk(listed):
+    (listed / "ST01-001.webp").write_bytes(b"already")
+    asked = []
+
+    async def fetch(url):
+        asked.append(url)
+        return b"webp"
+
+    assert await portraits.fetch_listed(fetch) == (1, 0)
+    assert asked == ["leaders/OP01-001.webp"]
+    assert (listed / "OP01-001.webp").read_bytes() == b"webp"
+    assert (listed / "ST01-001.webp").read_bytes() == b"already"
+
+
+async def test_fetch_listed_counts_and_logs_what_the_site_did_not_serve(listed, caplog):
+    async def fetch(url):
+        if "OP01" in url:
+            raise OSError(f"HTTP 404 {url}")
+        return b"webp"
+
+    assert await portraits.fetch_listed(fetch) == (1, 1)
+    assert "bundled portrait OP01-001.webp not fetched: HTTP 404" in caplog.text
+    assert not (listed / "OP01-001.webp").exists()
+
+
+async def test_fetch_listed_without_a_list_fetches_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(portraits, "BUNDLED_DIR", tmp_path)
+    portraits._listed.cache_clear()
+
+    async def fetch(url):
+        raise AssertionError("fetched")
+
+    assert await portraits.fetch_listed(fetch) == (0, 0)
+    portraits._listed.cache_clear()

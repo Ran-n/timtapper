@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 22:03:51.184243
-Revised: 2026/10/14 16:30:40.341160
+Revised: 2026/10/15 00:58:28.680646
 
 The web build's browser storage (core.web.BrowserStore), against a fake of Emscripten's FS that keeps an
 "IndexedDB" copy of the mounted folder and answers syncfs on the event loop, as the browser does.
@@ -234,3 +234,54 @@ def test_shell_js_snippets_use_their_arguments():
     for snippet in (web._SAVE_SHELL_JS, web._LOAD_SHELL_JS):
         assert "indexedDB.open(db, 1)" in snippet and "createObjectStore(store)" in snippet
     assert "postMessage({ type, route })" in web._ANNOUNCE_JS
+
+
+# ---- RenderDeps: Pillow and the portraits, on demand ---------------------------------
+class FakeDeps:
+    """A RenderDeps' loader and portrait fetch, counting calls; `fail` makes the next Pillow load raise it."""
+
+    def __init__(self):
+        self.loads: list[str] = []
+        self.fetches = 0
+        self.fail: Exception | None = None
+
+    async def load(self, package):
+        self.loads.append(package)
+        if self.fail is not None:
+            exc, self.fail = self.fail, None
+            raise exc
+
+    async def fetch(self):
+        self.fetches += 1
+        await asyncio.sleep(0)
+
+
+async def test_render_deps_load_pillow_and_the_portraits_once(caplog):
+    fake = FakeDeps()
+    deps = web.RenderDeps(fake.fetch, fake.load)
+    with caplog.at_level(logging.INFO, logger="timtapper.web"):
+        await deps.ready()
+        await deps.ready()
+    assert fake.loads == [web.PILLOW] and fake.fetches == 1
+    assert "loaded pillow" in caplog.text
+
+
+async def test_render_deps_fetch_the_portraits_from_the_start_and_pillow_only_when_asked():
+    fake = FakeDeps()
+    deps = web.RenderDeps(fake.fetch, fake.load)
+    deps.prefetch()
+    deps.prefetch()
+    await asyncio.sleep(0.01)
+    assert fake.fetches == 1 and fake.loads == []  # loading Pillow holds Python up: not right after startup
+    await deps.ready()
+    assert fake.fetches == 1 and fake.loads == [web.PILLOW]
+
+
+async def test_render_deps_retry_pillow_after_a_failed_load():
+    fake = FakeDeps()
+    fake.fail = OSError("offline")
+    deps = web.RenderDeps(fake.fetch, fake.load)
+    with pytest.raises(OSError, match="offline"):
+        await deps.ready()
+    await deps.ready()
+    assert fake.loads == [web.PILLOW, web.PILLOW]

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 23:45:48.412221
-Revised: 2026/10/14 01:08:30.580639
+Revised: 2026/10/15 01:26:05.313628
 
 The driven builds' side of the driver: answering one command (scripts/demo_driver.py) and the poll loop
 (scripts/driven_main.py), against a scripted harness and a real one.
@@ -107,3 +107,18 @@ async def test_post_reaches_a_real_harness():
         server.stop()
     assert reply == {"cmd": "idle"}
     assert channel.wait(0, timeout=1) == {"ok": True}
+
+
+def test_the_demo_draws_pictures_as_the_app_does(page, monkeypatch):
+    """The demo builds its own context, and on the web it had no RenderDeps: its first share card failed, as the
+    archive carries no Pillow."""
+    import demo_driver
+
+    import main as app_main
+
+    monkeypatch.setattr(app_main, "IS_WEB", True)
+    demo = demo_driver.Demo(page, demo_driver.TODAY, "t")
+    try:
+        assert isinstance(demo.ctx.render_deps, app_main.RenderDeps)
+    finally:
+        demo.db.dispose()

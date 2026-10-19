@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:42.770833
-Revised: 2026/10/14 07:45:08.392050
+Revised: 2026/10/15 00:58:28.116948
 
 Per-session app context handed to every screen: repositories, the cached
 leader catalogue, translation, notifications, preferences and navigation.
@@ -12,11 +12,13 @@ import asyncio
 import datetime as dt
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 
 import flet as ft
 
 from catalog.repository import Leader, LeaderRepository, set_codes, set_on
 from core.logging import get_logger
+from core.web import RenderDeps
 from db import Database
 from events.naming import suggest_name
 from events.repository import Event, EventError, EventRepository
@@ -50,6 +52,7 @@ class AppContext:
         self.db = db
         self.leader_repo = LeaderRepository(db)
         self.leader_updates = LeaderUpdater(self)
+        self.render_deps: RenderDeps | None = None  # the web build's: what drawing pictures needs, fetched on demand
         self.events = EventRepository(db)
         self.theme_mode = DEFAULT_MODE
         self.theme: AppTheme = get_theme(None)
@@ -195,15 +198,30 @@ class AppContext:
         self.page.navigate(route)
 
     # ---- sharing ------------------------------------------------------
+    async def render_ready(self) -> None:
+        """Wait until drawing pictures can start: at once, but on the web once Pillow and the bundled portraits are
+        there (RenderDeps). Raises what fetching them raised."""
+        if self.render_deps is not None:
+            await self.render_deps.ready()
+
+    async def share_card(self, draw: Callable[[ModuleType], Path], *, title: str) -> None:
+        """Share a card share.render draws: `draw` gets that module, imported only now, as PIL held up the web app's
+        first screen (and on the web, isn't loaded until a card needs it)."""
+        try:
+            await self.render_ready()
+            from share import render
+        except Exception as exc:
+            self._could_not_create(title, exc)
+            return
+        await self.share_file(lambda: draw(render), title=title)
+
     async def share_file(self, render: Callable[[], Path], *, title: str, mime_type: str = "image/png") -> None:
         """Render off the UI thread, then share (or save). Every failure is reported to the user."""
         _ = self._
         try:
             path = await asyncio.to_thread(render)
         except Exception as exc:
-            _log.exception("could not render %s", title)
-            # "file": a share card or a backup
-            self.notify(_("Could not create the file ({error})").format(error=type(exc).__name__), error=True)
+            self._could_not_create(title, exc)
             return
         try:
             outcome = await deliver(path, title=title, mime_type=mime_type)
@@ -213,3 +231,8 @@ class AppContext:
             return
         if outcome == Delivery.SAVED:
             self.notify(_("Saved"))
+
+    def _could_not_create(self, title: str, exc: Exception) -> None:
+        _log.exception("could not render %s", title)
+        # "file": a share card or a backup
+        self.notify(self._("Could not create the file ({error})").format(error=type(exc).__name__), error=True)

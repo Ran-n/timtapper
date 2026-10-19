@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.144622 )
-[//]: # (+ Revised: 	2026/10/14 17:35:38.300424 )
+[//]: # (+ Revised: 	2026/10/15 01:26:05.498810 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Development
@@ -95,18 +95,45 @@ uv run python scripts/build_web.py              # build/web + dist/timtapper-<ve
 uv run python scripts/build_web.py --publish    # ...then force-push it to the `pages` branch
 ```
 
-`flet build web` turns the app into a static site whose Python runs in the browser on Pyodide. The script changes five
-things after it: flet leaves `assets/` out of the Python archive (the app reads `leaders.json`, fonts and portraits
-from disk, so they go back in); it takes what the browser never uses out of that archive (SQLAlchemy's and Alembic's
-own test suites, the Windows launchers in `bin/`; `UNUSED` in `scripts/build_web.py`); `index.html` preloads the
-archive and the Pyodide runtime, which flet's loader would otherwise fetch one after the other, each only once the one
-before has started (a first visit took 14.6 s, about 8 s with the preloads); and `index.html` asks for the archive
-with `?v=<version>`, so browsers fetch the new one after a release; and `index.html` paints the web shell first (below).
+`flet build web` turns the app into a static site whose Python runs in the browser on Pyodide. What the script
+changes after it, all in `finish_site`:
+
+- **The Python archive.** flet leaves `assets/` out of it, but the app reads `leaders.json` and its fonts from disk, so
+  they go back in. What the browser doesn't need at start stays out (`UNUSED`, `LATER`): SQLAlchemy's and Alembic's own
+  test suites, the Windows launchers in `bin/`, Pillow, and the bundled portraits, whose names go in instead
+  (`assets/leaders/bundled.txt`). On the web `core.web.RenderDeps` loads Pyodide's own Pillow (the same version) the
+  first time a share card or a leader update needs it, and fetches the portraits from the site's `leaders/` in the
+  background after startup (`portraits.fetch_listed`); the page itself shows them from there. 9.4 MB became 7.1 MB.
+  SQLAlchemy's other dialects can't go: importing Alembic imports every one's DDL module.
+- **Python starts with the page** (`prestart_python`, `scripts/prestart/`). flet's `python.js` starts the Python worker
+  only once Flutter has started, and the worker then loads Pyodide and downloads the archive one after the other. The
+  patched `python.js` starts the worker first thing; it loads Pyodide and fetches and unpacks the archive at once,
+  while Flutter downloads and starts, and when Dart connects it takes that worker over and the boot skips the
+  download. (`<link rel="preload">`s did this before, and went unused: a worker's fetch can't use a page's preload.)
+- **Python starts from a snapshot** after the first visit. Starting Python and importing the app takes about 3 s of
+  CPU; after such a start the worker imports the app's module (not running it), keeps Pyodide's memory snapshot in
+  Cache Storage (`timtapper-python`, ~55 MB), and boots on. The next visit restores it in about 0.15 s; only the files
+  are not in it, so the archive is still unpacked. It's Pyodide's experimental `_makeSnapshot`/`_loadSnapshot`, and
+  two things it needs aren't obvious: Python must hold no JS object when the snapshot is taken (flet's stdout/stderr
+  functions go in afterwards, and flet's boot waits for the prestart before it registers `flet_js`), and Pyodide
+  restores into its default-sized memory, so the worker grows it first. And in a Pyodide made to be snapshotted,
+  the `js` module's getters fail ("Illegal invocation"): reach the page through `pyodide.code.run_js` instead. A snapshot is restored only for the archive it
+  was made from (a BLAKE3 key the build writes into `python.js`) and the Pyodide that made it; one that fails to
+  restore is dropped, and Python starts afresh.
+- **The service worker** (`add_service_worker`, `scripts/sw/`). GitHub Pages lets browsers keep a file 10 minutes. The
+  service worker keeps every file of the build (`kept_files`) and serves them, the page included, from that build's
+  cache. A new build is a new `sw.js` (its id is a BLAKE3 digest of the site): the visit that finds it fills the new
+  cache in the background, and a page that opens with it waiting has it take over and reloads once. It registers only
+  once the app says it's ready, so a first visit doesn't download everything twice. Flutter's own service worker
+  (deprecated, empty, and waited for for up to 4 s before Flutter started) is taken out.
+- `index.html` asks for the archive with `?v=<version>`, and paints the web shell first (below).
+
+At 18 Mbit/s a first visit is ready in 11.6 s (16.2 s before these); a repeat visit in about 1 s, where it took 4.
 `[tool.flet.web]` in `pyproject.toml` sets the `/timtapper/` base path and `#` routes, so a reload on any screen only
 ever asks the host for `index.html`.
 
-**The web shell.** Even with everything cached, Python takes about 4 s to start in the browser, so the page doesn't
-wait for it. `index.html` carries `scripts/shell/` inline and paints a read-only copy of the app's screens at once:
+**The web shell.** On a first visit Python takes seconds to start in the browser, so the page doesn't wait for
+it. `index.html` carries `scripts/shell/` inline and paints a read-only copy of the app's screens at once:
 what the app saved on the last visit, or on a first visit the empty app, built with the site in light and dark.
 `ui/shell.py` writes that copy: after every change (a commit that wrote, a new language or theme, a screen change) it
 builds each screen the app can open at startup — the three tabs and every event — with the app's own `build_view`,
@@ -121,9 +148,9 @@ that's another one, and fades the copy out. The driven test builds go without it
 nothing in them says when they're ready. `tests/web` checks it in Chrome: the empty app on a first visit, your events
 on the next, opening one in the copy, the tabs and *New event*.
 
-Every package imported before the first screen is unpacked and compiled in the browser while the visitor waits, so
-PIL (leader updates and share cards only) is imported where it's used, not at module level in `catalog/portraits.py`
-or the share views; `tests/test_startup_imports.py` fails if it, or a library test suite, comes back into startup.
+PIL is imported only where it's used (a share card through `AppContext.share_card`, a leader update), never at
+module level: the web archive doesn't carry it. `tests/test_startup_imports.py` fails if it, or a library test suite,
+comes back into the startup path of the app or of the driven test app.
 
 `--publish` pushes the site as the single commit of the `pages` branch on `github`, `gitlab` and `codeberg`, served at
 [timtapper.breren.com](https://timtapper.breren.com/), [ran-n.codeberg.page/timtapper](https://ran-n.codeberg.page/timtapper/)

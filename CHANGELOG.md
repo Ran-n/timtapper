@@ -12,9 +12,20 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+
+- Added a quick start to every visit of the web version after the first: it keeps a ready-started copy of its Python engine and its own files in the browser, and is ready in about a second instead of four
+- Added background updates to the web version: a new release downloads while you use the app and takes over on a later visit
+
+### Changed
+
+- Made the web version start Python as the page opens instead of once its graphics engine has loaded: a first visit is ready in about 12 s instead of 16 at 18 Mbit/s
+- Made the web version download 2.3 MB less on a first visit: its image library and the leader portraits load only when needed
+
 ### Fixed
 
 - Fixed the web version showing no text after an update when the browser had stored a font file badly: each release now asks for its own copy of the fonts
+- Fixed the web version waiting up to 4 s for Flutter's unused service worker before starting
 
 ## [1.4.0] — 2026-10-14
 

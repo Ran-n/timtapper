@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.068656 )
-[//]: # (+ Revised: 	2026/10/14 17:09:23.752087 )
+[//]: # (+ Revised: 	2026/10/15 01:26:05.592309 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Features in detail
@@ -102,10 +102,11 @@ the app's Python runs in the page itself.
   new set's release date only arrives with the next release of timtapper.
 - **Opens at once.** The page shows your events the moment it opens, as you left them: a copy the app saves after
   every change. You can look through it straight away — the tabs, each event and its rounds — while the app starts
-  behind it (a few seconds), then the app takes over on the screen you're on. Editing waits for the app: tapping a
+  behind it (about a second; a few more on a first visit), then the app takes over on the screen you're on. Editing waits for the app: tapping a
   field or a button shows *Opening…* until it's ready, and *New event* opens the new event as soon as it is. A first
   visit shows the empty app the same way.
-- **First visit** downloads about 20 MB (the app and Python); after that the browser keeps it.
+- **First visit** downloads about 19 MB (the app and Python); after that the browser keeps it, and a new version
+  arrives in the background, taking over on a later visit.
 
 ## Backup
 

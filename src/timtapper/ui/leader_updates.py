@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 17:20:11.971755
-Revised: 2026/10/13 11:42:03.522264
+Revised: 2026/10/15 00:58:28.302367
 
 Keeps the leader catalogue current. The Settings button calls run(); at
 startup run_if_due() checks in the background, at most once a day, whether
@@ -48,6 +48,10 @@ class LeaderUpdater:
     async def run(self) -> SyncResult:
         """Full update (leaders, portraits, set ids). Raises CatalogError when offline."""
         async with self._lock:
+            try:
+                await self.ctx.render_ready()  # new leaders' portraits are cropped with Pillow
+            except Exception as exc:  # on the web, fetched from Pyodide's CDN: offline, like the sync itself
+                raise CatalogError(f"could not load what cropping portraits needs: {exc}") from exc
             result = await asyncio.to_thread(sync_leaders, self.ctx.leader_repo)
             self.ctx.invalidate_leaders()
             await self._remember(result.sources)

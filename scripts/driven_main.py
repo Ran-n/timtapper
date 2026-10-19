@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/13 23:11:03.555531
-Revised: 2026/10/14 01:08:29.128330
+Revised: 2026/10/15 01:12:58.361062
 
 Entry point of the driven web and Android builds (scripts/build_driven.py): the real app on the demo data
 (scripts/demo_driver.py), taking its commands from the rendered-test harness instead of a person. It polls the
@@ -32,9 +32,11 @@ RETRY_DELAY = 1.0
 
 def driver_url() -> str:
     if IS_WEB:  # pragma: no cover - only inside Pyodide: the harness serves the site itself, same origin
-        import js
+        # run_js, not the js module: a Pyodide made to be snapshotted (scripts/prestart/worker.js) fails reading
+        # js.location ("Illegal invocation")
+        from pyodide.code import run_js
 
-        return f"{js.location.origin}{POLL_PATH}"
+        return f"{run_js('location.origin')}{POLL_PATH}"
     return f"http://127.0.0.1:{DRIVER_PORT}{POLL_PATH}"
 
 

@@ -2,7 +2,7 @@
 """
 Authors: Ran# <ran.hash@proton.me>
 Created: 2026/10/11 16:23:44.640062
-Revised: 2026/10/14 16:30:40.243126
+Revised: 2026/10/15 01:26:05.407156
 """
 
 import datetime as dt
@@ -310,6 +310,64 @@ async def test_share_file_delivery_failure(ctx, monkeypatch, page, tmp_path):
     monkeypatch.setattr(context_mod, "deliver", failing)
     await ctx.share_file(lambda: tmp_path, title="t")
     assert "PermissionError" in page.dialogs[-1].content.value
+
+
+class ReadyDeps:
+    """A RenderDeps whose ready() records the call, or raises `error`."""
+
+    def __init__(self, error=None):
+        self.error, self.calls, self.prefetched = error, 0, 0
+
+    async def ready(self):
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+
+    def prefetch(self):
+        self.prefetched += 1
+
+
+async def test_share_card_waits_for_what_drawing_needs_then_draws_with_share_render(ctx, monkeypatch, tmp_path):
+    from share import render
+
+    shared = []
+
+    async def fake_share(draw, *, title, mime_type="image/png"):
+        shared.append((draw(), title))
+
+    ctx.render_deps = ReadyDeps()
+    monkeypatch.setattr(ctx, "share_file", fake_share)
+    await ctx.share_card(lambda module: (module, tmp_path), title="Card")
+    assert ctx.render_deps.calls == 1
+    assert shared == [((render, tmp_path), "Card")]
+
+
+async def test_share_card_reports_what_drawing_needs_failing_to_load(ctx, page, monkeypatch):
+    async def never(draw, **kw):
+        raise AssertionError("shared")
+
+    ctx.render_deps = ReadyDeps(OSError("offline"))
+    monkeypatch.setattr(ctx, "share_file", never)
+    await ctx.share_card(lambda module: module, title="Card")
+    assert page.dialogs[-1].content.value == "Could not create the file (OSError)"
+
+
+async def test_render_ready_is_at_once_off_the_web(ctx):
+    assert ctx.render_deps is None
+    await ctx.render_ready()
+
+
+async def test_web_start_fetches_the_bundled_portraits_in_the_background(page, monkeypatch):
+    made = []
+
+    def deps(fetch_portraits):
+        made.append(ReadyDeps())
+        return made[-1]
+
+    monkeypatch.setattr(main, "RenderDeps", deps)
+    await web_main(page, monkeypatch)
+    assert made[0].prefetched == 1 and made[0].calls == 0  # Pillow waits for a picture to draw
+    page.on_disconnect(None)
 
 
 def test_leader_cache_invalidation(ctx, leaders):
@@ -756,3 +814,9 @@ def test_and_then_runs_both_or_just_the_second():
     main._and_then(lambda e: calls.append(("first", e)), lambda: calls.append("then"))("event")
     main._and_then(None, lambda: calls.append("only"))()
     assert calls == [("first", "event"), "then", "only"]
+
+
+def test_render_deps_are_the_web_builds_only(monkeypatch):
+    assert main.render_deps() is None
+    monkeypatch.setattr(main, "IS_WEB", True)
+    assert isinstance(main.render_deps(), main.RenderDeps)
