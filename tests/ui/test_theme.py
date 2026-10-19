@@ -16,7 +16,7 @@ import pytest
 
 from ui import context as context_mod
 from ui.app import install_routing
-from ui.theme import DEFAULT_THEME, THEMES, Scheme, apply_theme, get_theme, is_dark, mix
+from ui.theme import DEFAULT_THEME, FONTS, THEMES, Scheme, apply_theme, get_theme, is_dark, mix, page_fonts
 
 HEX = re.compile(r"^#[0-9a-f]{6}$")
 SCHEMES = [(t.key, dark) for t in THEMES.values() for dark in (False, True)]
@@ -108,7 +108,7 @@ def test_apply_theme(page):
     assert page.theme_mode == ft.ThemeMode.LIGHT
     assert page.theme.color_scheme.primary == THEMES["nord"].light.primary
     assert page.dark_theme.color_scheme.primary == THEMES["nord"].dark.primary
-    assert set(page.fonts) == {"Poppins", "PoppinsSemiBold", "PoppinsExtraBold"}
+    assert page.fonts == FONTS  # off the web: the bundled files, as they are
     apply_theme(page, THEMES["nord"], "bogus")
     assert page.theme_mode == ft.ThemeMode.SYSTEM
 
@@ -176,3 +176,23 @@ def test_device_brightness_rebuilds_only_when_following_system(ctx, page, mode, 
     before = page.views[-1]
     page.on_platform_brightness_change(None)
     assert (page.views[-1] is not before) is rebuilt
+
+
+@pytest.mark.regression
+def test_the_web_asks_for_each_releases_fonts_at_their_own_address():
+    """A browser's WebView drew no text at all after an update: fonts it had stored badly kept being used. Each
+    release now asks for its fonts at an address of its own."""
+    fonts = page_fonts(web=True, version="1.4.1")
+    assert fonts == {family: f"{path}?v=1.4.1" for family, path in FONTS.items()}
+    assert page_fonts(web=False) == FONTS
+
+
+@pytest.mark.regression
+def test_the_web_shell_never_shares_the_apps_font_files():
+    """The shell's own font requests left the stored copy the app then read; they now go to other addresses."""
+    from pathlib import Path
+
+    css = (Path(__file__).resolve().parents[2] / "scripts" / "shell" / "shell.css").read_text(encoding="utf-8")
+    urls = re.findall(r'url\("([^"]+)"\)', css)
+    assert all(url.endswith("?shell") for url in urls if url.startswith("fonts/"))
+    assert not set(urls) & set(page_fonts(web=True).values()) and not set(urls) & set(FONTS.values())

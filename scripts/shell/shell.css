@@ -1,8 +1,9 @@
 /* The web shell (shell.js): a read-only copy of the app's screens, painted before the app is ready. Sizes follow
-   Flutter's Material 3 defaults, as the app's own controls get them. */
-@font-face { font-family: "TtPoppins"; src: url("fonts/Poppins-Regular.ttf"); font-display: swap; }
-@font-face { font-family: "TtPoppinsSemi"; src: url("fonts/Poppins-SemiBold.ttf"); font-display: swap; }
-@font-face { font-family: "TtPoppinsHeavy"; src: url("fonts/Poppins-ExtraBold.ttf"); font-display: swap; }
+   Flutter's Material 3 defaults, as the app's own controls get them. Its fonts are its own copies (?shell): the app
+   loads the same files at other addresses (?v=<version>), so no stored response is shared between the two. */
+@font-face { font-family: "TtPoppins"; src: url("fonts/Poppins-Regular.ttf?shell"); font-display: swap; }
+@font-face { font-family: "TtPoppinsSemi"; src: url("fonts/Poppins-SemiBold.ttf?shell"); font-display: swap; }
+@font-face { font-family: "TtPoppinsHeavy"; src: url("fonts/Poppins-ExtraBold.ttf?shell"); font-display: swap; }
 @font-face { font-family: "TtIcons"; src: url("assets/fonts/MaterialIcons-Regular.otf"); font-display: block; }
 
 #tt-shell {

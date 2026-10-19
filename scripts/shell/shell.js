@@ -11,7 +11,8 @@
 (() => {
   "use strict";
   const config = window.TIMTAPPER_SHELL;
-  if (!config) return;
+  // ?noshell: the page as it was before the shell, to tell whether a browser's trouble comes from it
+  if (!config || new URLSearchParams(location.search).has("noshell")) return;
   const READY_FADE_DELAY = 250; // ms after "ready": Flutter paints the app's first frame meanwhile
   const LOAD_TIMEOUT = 400; // ms to wait for the saved copy before showing the first-visit one
 

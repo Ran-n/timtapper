@@ -18,6 +18,8 @@ from dataclasses import dataclass
 import flet as ft
 
 from core.card_colors import rgb
+from core.version import VERSION
+from core.web import IS_WEB
 from i18n import Translate
 
 FONT = "Poppins"
@@ -459,8 +461,15 @@ def is_dark(page: ft.Page, mode: str) -> bool:
     return getattr(page, "platform_brightness", None) == ft.Brightness.DARK
 
 
+def page_fonts(web: bool = IS_WEB, version: str = VERSION) -> dict[str, str]:
+    """The fonts as the page loads them. In a browser each release asks for them at its own address
+    (fonts/Poppins-Regular.ttf?v=1.4.1): a font file the browser stored badly would otherwise stay broken for good
+    (a WebView drew no text at all with one), and the web shell's copies (?shell) never share a stored response."""
+    return {family: f"{path}?v={version}" for family, path in FONTS.items()} if web else FONTS
+
+
 def apply_theme(page: ft.Page, theme: AppTheme, mode: str) -> None:
-    page.fonts = FONTS
+    page.fonts = page_fonts()
     page.theme = theme.light.theme()
     page.dark_theme = theme.dark.theme()
     page.theme_mode = THEME_MODES.get(mode, THEME_MODES[DEFAULT_MODE])
