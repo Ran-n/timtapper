@@ -21,6 +21,7 @@ This project adheres to [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 - Made the web version start Python as the page opens instead of once its graphics engine has loaded: a first visit is ready in about 12 s instead of 16 at 18 Mbit/s
 - Made the web version download 2.3 MB less on a first visit: its image library and the leader portraits load only when needed
+- Added the release date of EB05 to the bundled leader catalogue
 
 ### Fixed
 
