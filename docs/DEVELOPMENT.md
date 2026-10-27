@@ -1,7 +1,7 @@
 [//]: # ( ---------------------------------------------------------------------- )
 [//]: # (+ Authors: 	Ran# <ran.hash@proton.me> )
 [//]: # (+ Created: 	2026/10/13 16:19:34.144622 )
-[//]: # (+ Revised: 	2026/10/15 01:26:05.498810 )
+[//]: # (+ Revised: 	2026/10/27 21:52:30.328107 )
 [//]: # ( ---------------------------------------------------------------------- )
 
 # Development
@@ -186,7 +186,9 @@ uv run ruff format src scripts tests && uv run ruff check src scripts tests
 **CI.** `scripts/ci.sh` runs what CI runs on every push to `main` and every pull/merge request on GitHub
 (`.github/workflows/ci.yml`), GitLab (`.gitlab-ci.yml`) and Codeberg (`.forgejo/workflows/ci.yml`, once Actions is
 enabled): a locked `uv sync`, `ruff format --check`, `ruff check` and `pytest --cov`. The `live`, `desktop`, `web`
-and `android` tests stay local; all of them pass before a version bump.
+and `android` tests stay out of it; all of them pass before a version bump. The `android` and `desktop` tests can
+also run on GitHub, started by hand from the Actions tab (`.github/workflows/ui-tests.yml`): Android on an emulator
+on a Linux runner, against a debug-signed x86_64 APK the workflow builds; desktop in a window on a Windows runner.
 
 **Live tests** check what mocks can't: that the card lists still parse and still hold every bundled leader and set,
 that card images still download and crop, that a full sync fills a real database, and that Update leaders and the
